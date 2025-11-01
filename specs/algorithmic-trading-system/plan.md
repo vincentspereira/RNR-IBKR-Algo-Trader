@@ -702,6 +702,54 @@ graph TB
 
 ### Integration Points
 
+```mermaid
+graph TB
+    subgraph "External System Integration"
+        IBKR_INTEGRATION[Interactive Brokers Integration<br/>Primary Broker Connection]
+        DATA_INTEGRATION[Market Data Integration<br/>Multi-source Aggregation]
+        AI_INTEGRATION[AI Service Integration<br/>LLM Provider Management]
+        CLOUD_INTEGRATION[Cloud Service Integration<br/>Infrastructure Management]
+    end
+    
+    subgraph "IBKR Integration Details"
+        IBKR_API[IBKR TWS API<br/>Trading Workstation]
+        IBKR_GATEWAY[IBKR Gateway<br/>Headless Connection]
+        PAPER_ACCOUNT[Paper Trading<br/>Risk-free Testing]
+        LIVE_ACCOUNT[Live Trading<br/>Real Capital]
+    end
+    
+    subgraph "Data Provider Ecosystem"
+        PRIMARY[Yahoo Finance<br/>Primary Free Source]
+        BACKUP1[Alpha Vantage<br/>API-based Backup]
+        BACKUP2[Finnhub<br/>Professional Data]
+        BACKUP3[Twelve Data<br/>Alternative Source]
+        LIVE_DATA[IBKR Market Data<br/>Live Trading Feed]
+    end
+    
+    subgraph "AI Service Providers"
+        OPENAI[OpenAI GPT-4<br/>Strategy Generation]
+        ANTHROPIC[Anthropic Claude<br/>Risk Analysis]
+        LOCAL_MODELS[Local Models<br/>Offline Processing]
+        EMBEDDING[Embedding Services<br/>Vector Generation]
+    end
+    
+    IBKR_INTEGRATION --> IBKR_API
+    IBKR_INTEGRATION --> IBKR_GATEWAY
+    IBKR_API --> PAPER_ACCOUNT
+    IBKR_API --> LIVE_ACCOUNT
+    
+    DATA_INTEGRATION --> PRIMARY
+    DATA_INTEGRATION --> BACKUP1
+    DATA_INTEGRATION --> BACKUP2
+    DATA_INTEGRATION --> BACKUP3
+    DATA_INTEGRATION --> LIVE_DATA
+    
+    AI_INTEGRATION --> OPENAI
+    AI_INTEGRATION --> ANTHROPIC
+    AI_INTEGRATION --> LOCAL_MODELS
+    AI_INTEGRATION --> EMBEDDING
+```
+
 - **Interactive Brokers API**: Primary broker integration for order execution
 - **Multiple Data Providers**: Yahoo Finance, Alpha Vantage, Finnhub with fallback chains
 - **AI/ML Services**: OpenAI, Anthropic for natural language processing
@@ -710,13 +758,443 @@ graph TB
 
 ### Security Architecture
 
+```mermaid
+graph TB
+    subgraph "Security Perimeter"
+        INTERNET[Internet Traffic]
+        WAF[Web Application Firewall<br/>DDoS Protection<br/>Rate Limiting]
+        LOAD_BALANCER[Load Balancer<br/>SSL Termination<br/>Health Checks]
+    end
+    
+    subgraph "Authentication Layer"
+        KEYCLOAK[Keycloak Identity Provider<br/>OAuth 2.0/OIDC<br/>Multi-Factor Authentication]
+        LDAP[Enterprise LDAP<br/>User Directory<br/>Group Management]
+        SCIM[SCIM Provisioning<br/>Automated User Sync<br/>Role Assignment]
+    end
+    
+    subgraph "Authorization & Access Control"
+        RBAC[Role-Based Access Control<br/>Fine-grained Permissions<br/>Resource-level Security]
+        API_GATEWAY[API Gateway<br/>JWT Validation<br/>Rate Limiting<br/>Request Routing]
+        SERVICE_MESH[Istio Service Mesh<br/>mTLS Communication<br/>Network Policies]
+    end
+    
+    subgraph "Data Protection"
+        VAULT[HashiCorp Vault<br/>Secrets Management<br/>Dynamic Credentials<br/>Key Rotation]
+        ENCRYPTION[Data Encryption<br/>AES-256 at Rest<br/>TLS 1.3 in Transit]
+        KEY_MGMT[Key Management<br/>Hardware Security Modules<br/>Certificate Authority]
+    end
+    
+    subgraph "Monitoring & Compliance"
+        SIEM[Security Information<br/>Event Management<br/>Real-time Analysis]
+        AUDIT_LOGS[Immutable Audit Logs<br/>Apache Iceberg<br/>Compliance Reporting]
+        THREAT_DETECTION[Threat Detection<br/>Anomaly Detection<br/>Incident Response]
+    end
+    
+    INTERNET --> WAF
+    WAF --> LOAD_BALANCER
+    LOAD_BALANCER --> KEYCLOAK
+    
+    KEYCLOAK --> LDAP
+    KEYCLOAK --> SCIM
+    KEYCLOAK --> RBAC
+    
+    RBAC --> API_GATEWAY
+    API_GATEWAY --> SERVICE_MESH
+    
+    SERVICE_MESH --> VAULT
+    VAULT --> ENCRYPTION
+    ENCRYPTION --> KEY_MGMT
+    
+    KEY_MGMT --> SIEM
+    SIEM --> AUDIT_LOGS
+    AUDIT_LOGS --> THREAT_DETECTION
+```
+
 - **Zero-Trust Network**: All communications encrypted with mTLS
 - **Authentication**: OAuth 2.0/OIDC via Keycloak with MFA
-- **Authorization**: RBAC with fine-grained permissions
-- **Audit Logging**: Immutable logs in Apache Iceberg
-- **Data Encryption**: AES-256 at rest, TLS 1.3 in transit
+- **Authorization**: RBAC with fine-grained permissions and resource-level security
+- **Data Protection**: AES-256 encryption at rest, TLS 1.3 in transit
+- **Secrets Management**: HashiCorp Vault with dynamic credentials and key rotation
+- **Monitoring**: SIEM integration with real-time threat detection and incident response
+
+### Deployment Architecture
+
+```mermaid
+graph TB
+    subgraph "Development Environment"
+        DEV_LOCAL[Local Development<br/>Docker Compose<br/>Minimal Resources]
+        DEV_TOOLS[Development Tools<br/>Hot Reload<br/>Debug Mode<br/>Test Data]
+        DEV_DB[Local Databases<br/>PostgreSQL<br/>Redis<br/>Lightweight Setup]
+    end
+    
+    subgraph "Staging Environment"
+        STAGING_K8S[Kubernetes Cluster<br/>Cost-Optimized<br/>Shared Resources]
+        STAGING_DB[Managed Databases<br/>Reduced Capacity<br/>Backup Enabled]
+        STAGING_MONITOR[Basic Monitoring<br/>Essential Metrics<br/>Limited Retention]
+    end
+    
+    subgraph "Production Environment"
+        PROD_K8S[Production Kubernetes<br/>High Availability<br/>Multi-Zone Deployment]
+        PROD_DB[Enterprise Databases<br/>Full Capacity<br/>Disaster Recovery]
+        PROD_MONITOR[Full Observability<br/>Comprehensive Metrics<br/>Long-term Storage]
+        PROD_SECURITY[Enterprise Security<br/>Zero-Trust Network<br/>Compliance Controls]
+    end
+    
+    subgraph "CI/CD Pipeline"
+        SOURCE[Source Code<br/>Git Repository<br/>Feature Branches]
+        BUILD[Build Pipeline<br/>Automated Testing<br/>Security Scanning]
+        DEPLOY[Deployment Pipeline<br/>GitOps with ArgoCD<br/>Blue-Green Deployment]
+        VALIDATE[Validation Pipeline<br/>Smoke Tests<br/>Performance Validation]
+    end
+    
+    DEV_LOCAL --> SOURCE
+    SOURCE --> BUILD
+    BUILD --> DEPLOY
+    
+    DEPLOY --> DEV_TOOLS
+    DEPLOY --> STAGING_K8S
+    DEPLOY --> PROD_K8S
+    
+    VALIDATE --> STAGING_MONITOR
+    VALIDATE --> PROD_MONITOR
+```
+
+### Microservices Communication Patterns
+
+```mermaid
+sequenceDiagram
+    participant User
+    participant Gateway as API Gateway
+    participant Auth as Authentication
+    participant Trading as Trading Service
+    participant Market as Market Data
+    participant Risk as Risk Management
+    participant AI as AI Assistant
+    participant Kafka as Event Bus
+    participant DB as Database
+    
+    Note over User, DB: Complete Trading Workflow with Event-Driven Architecture
+    
+    User->>Gateway: Create Trading Strategy Request
+    Gateway->>Auth: Validate JWT Token
+    Auth-->>Gateway: Token Valid + User Permissions
+    
+    Gateway->>AI: Process Natural Language Request
+    AI->>AI: Parse Trading Intent
+    AI->>Kafka: Publish ai.strategy.requested event
+    
+    Note over AI, Trading: Asynchronous Strategy Generation
+    Trading->>Kafka: Subscribe to ai.strategy.requested
+    Trading->>Market: Request Historical Data
+    Market->>DB: Query Time-series Data
+    DB-->>Market: Historical OHLCV Data
+    Market-->>Trading: Formatted Market Data
+    
+    Trading->>Trading: Generate Strategy Logic
+    Trading->>DB: Store Strategy Definition
+    Trading->>Kafka: Publish strategy.created event
+    
+    Note over AI, User: Strategy Validation and Backtesting
+    AI->>Kafka: Subscribe to strategy.created
+    AI->>Trading: Request Backtest Execution
+    Trading->>Trading: Run Historical Simulation
+    Trading->>DB: Store Backtest Results
+    Trading->>Kafka: Publish backtest.completed event
+    
+    Gateway->>Kafka: Subscribe to backtest.completed
+    Gateway-->>User: Strategy Performance Report
+    
+    Note over User, Risk: Paper Trading Deployment
+    User->>Gateway: Deploy to Paper Trading
+    Gateway->>Risk: Validate Risk Parameters
+    Risk->>DB: Check User Risk Limits
+    Risk-->>Gateway: Risk Validation Result
+    
+    Gateway->>Trading: Deploy Strategy to Paper Account
+    Trading->>Kafka: Publish strategy.deployed event
+    
+    Note over Market, Trading: Real-time Market Processing
+    Market->>Kafka: Publish market.tick events (continuous)
+    Trading->>Kafka: Subscribe to market.tick
+    Trading->>Trading: Process Strategy Signals
+    
+    alt Signal Generated
+        Trading->>Risk: Pre-trade Risk Check
+        Risk->>Risk: Calculate Position Impact
+        Risk-->>Trading: Risk Approval/Rejection
+        
+        alt Risk Approved
+            Trading->>Kafka: Publish order.created event
+            Trading->>DB: Store Order Details
+            Trading->>Gateway: Order Execution Notification
+            Gateway-->>User: Real-time Trade Update
+        else Risk Rejected
+            Risk->>Kafka: Publish risk.violation event
+            Gateway->>User: Risk Limit Warning
+        end
+    end
+```
+
+### Data Architecture Deep Dive
+
+```mermaid
+graph TB
+    subgraph "Data Ingestion Layer"
+        REAL_TIME[Real-time Ingestion<br/>Kafka Streams<br/>Market Data Feeds]
+        BATCH[Batch Ingestion<br/>Historical Data<br/>ETL Pipelines]
+        STREAMING[Stream Processing<br/>Apache Kafka<br/>Event Sourcing]
+    end
+    
+    subgraph "Data Storage Layer"
+        TRANSACTIONAL[Transactional Storage<br/>PostgreSQL + pgvector<br/>ACID Compliance<br/>Vector Embeddings]
+        TIME_SERIES[Time-series Storage<br/>ClickHouse<br/>Columnar Format<br/>High Compression]
+        GRAPH[Graph Storage<br/>Neo4j<br/>Relationship Queries<br/>Knowledge Graph]
+        CACHE[Cache Layer<br/>Redis Cluster<br/>Session Storage<br/>Real-time Data]
+        OBJECT[Object Storage<br/>MinIO S3<br/>Large Files<br/>Backup Archives]
+        AUDIT[Audit Storage<br/>Apache Iceberg<br/>Immutable Logs<br/>Time Travel]
+    end
+    
+    subgraph "Data Processing Layer"
+        ANALYTICS[Analytics Engine<br/>ClickHouse Queries<br/>OLAP Operations<br/>Aggregations]
+        ML_PIPELINE[ML Pipeline<br/>Feature Engineering<br/>Model Training<br/>Inference]
+        SEARCH[Search Engine<br/>Elasticsearch<br/>Full-text Search<br/>Log Analysis]
+    end
+    
+    subgraph "Data Access Layer"
+        API_LAYER[API Layer<br/>GraphQL + REST<br/>Data Federation<br/>Query Optimization]
+        CACHE_LAYER[Caching Layer<br/>Redis + CDN<br/>Query Results<br/>Static Content]
+        STREAMING_API[Streaming API<br/>WebSocket + SSE<br/>Real-time Updates<br/>Live Data]
+    end
+    
+    REAL_TIME --> STREAMING
+    BATCH --> STREAMING
+    STREAMING --> TRANSACTIONAL
+    STREAMING --> TIME_SERIES
+    STREAMING --> CACHE
+    
+    TRANSACTIONAL --> ANALYTICS
+    TIME_SERIES --> ANALYTICS
+    GRAPH --> ML_PIPELINE
+    CACHE --> SEARCH
+    
+    ANALYTICS --> API_LAYER
+    ML_PIPELINE --> CACHE_LAYER
+    SEARCH --> STREAMING_API
+    
+    OBJECT --> AUDIT
+    AUDIT --> API_LAYER
+```
+
+### AI/ML Architecture
+
+```mermaid
+graph TB
+    subgraph "AI Interface Layer"
+        CHAT_UI[LobeChat Interface<br/>Multi-modal Input<br/>Voice + Text + Images]
+        API_INTERFACE[API Interface<br/>RESTful Endpoints<br/>Programmatic Access]
+        WEBHOOK[Webhook Interface<br/>Event-driven Triggers<br/>External Integrations]
+    end
+    
+    subgraph "AI Orchestration Layer"
+        LANGGRAPH[LangGraph Orchestrator<br/>Workflow Management<br/>Agent Coordination]
+        ROUTER[Intent Router<br/>Query Classification<br/>Agent Selection]
+        CONTEXT_MGR[Context Manager<br/>Conversation Memory<br/>Session State]
+        TOOL_REGISTRY[Tool Registry<br/>Available Functions<br/>Capability Mapping]
+    end
+    
+    subgraph "Specialized AI Agents"
+        MARKET_ANALYST[Market Analyst Agent<br/>Technical Analysis<br/>Pattern Recognition<br/>Trend Identification]
+        STRATEGY_AGENT[Strategy Agent<br/>Algorithm Generation<br/>Parameter Optimization<br/>Backtesting Coordination]
+        RISK_AGENT[Risk Agent<br/>Risk Assessment<br/>Limit Validation<br/>Compliance Checking]
+        PORTFOLIO_AGENT[Portfolio Agent<br/>Asset Allocation<br/>Rebalancing Logic<br/>Performance Analysis]
+        RESEARCH_AGENT[Research Agent<br/>Market Research<br/>News Analysis<br/>Sentiment Processing]
+        EDUCATION_AGENT[Education Agent<br/>User Guidance<br/>Tutorial Generation<br/>Best Practices]
+    end
+    
+    subgraph "AI Infrastructure"
+        RAG_PIPELINE[RAG Pipeline<br/>Document Retrieval<br/>Context Augmentation<br/>Response Grounding]
+        VECTOR_DB[Vector Database<br/>Embedding Storage<br/>Similarity Search<br/>Semantic Retrieval]
+        LLM_GATEWAY[LLM Gateway<br/>Model Management<br/>Load Balancing<br/>Fallback Handling]
+        MEMORY_SYSTEM[Memory System<br/>Long-term Context<br/>User Preferences<br/>Learning History]
+    end
+    
+    subgraph "Knowledge Sources"
+        MARKET_DATA_KB[Market Data KB<br/>Real-time Prices<br/>Historical Data<br/>Technical Indicators]
+        STRATEGY_KB[Strategy KB<br/>Algorithm Library<br/>Performance History<br/>Best Practices]
+        REGULATORY_KB[Regulatory KB<br/>Compliance Rules<br/>Risk Guidelines<br/>Legal Requirements]
+        USER_KB[User KB<br/>Preferences<br/>Trading History<br/>Risk Profile]
+    end
+    
+    CHAT_UI --> LANGGRAPH
+    API_INTERFACE --> LANGGRAPH
+    WEBHOOK --> LANGGRAPH
+    
+    LANGGRAPH --> ROUTER
+    ROUTER --> CONTEXT_MGR
+    CONTEXT_MGR --> TOOL_REGISTRY
+    
+    ROUTER --> MARKET_ANALYST
+    ROUTER --> STRATEGY_AGENT
+    ROUTER --> RISK_AGENT
+    ROUTER --> PORTFOLIO_AGENT
+    ROUTER --> RESEARCH_AGENT
+    ROUTER --> EDUCATION_AGENT
+    
+    MARKET_ANALYST --> RAG_PIPELINE
+    STRATEGY_AGENT --> RAG_PIPELINE
+    RISK_AGENT --> RAG_PIPELINE
+    PORTFOLIO_AGENT --> RAG_PIPELINE
+    RESEARCH_AGENT --> RAG_PIPELINE
+    EDUCATION_AGENT --> RAG_PIPELINE
+    
+    RAG_PIPELINE --> VECTOR_DB
+    RAG_PIPELINE --> LLM_GATEWAY
+    RAG_PIPELINE --> MEMORY_SYSTEM
+    
+    VECTOR_DB --> MARKET_DATA_KB
+    VECTOR_DB --> STRATEGY_KB
+    VECTOR_DB --> REGULATORY_KB
+    VECTOR_DB --> USER_KB
+```
+
+### Performance Optimization Strategy
+
+```mermaid
+graph TB
+    subgraph "Application Performance"
+        RUST_CORE[Rust Core Components<br/>Zero-cost Abstractions<br/>Memory Safety<br/>Concurrent Processing]
+        ASYNC_PYTHON[Async Python<br/>Non-blocking I/O<br/>Event Loop Optimization<br/>Connection Pooling]
+        CACHING[Multi-level Caching<br/>Redis Cluster<br/>Application Cache<br/>CDN Integration]
+        COMPRESSION[Data Compression<br/>gRPC Protocol<br/>Binary Serialization<br/>Bandwidth Optimization]
+    end
+    
+    subgraph "Database Performance"
+        QUERY_OPT[Query Optimization<br/>Index Strategies<br/>Execution Plans<br/>Query Caching]
+        PARTITIONING[Data Partitioning<br/>Horizontal Sharding<br/>Time-based Splits<br/>Geographic Distribution]
+        REPLICATION[Read Replicas<br/>Write/Read Splitting<br/>Load Distribution<br/>Consistency Management]
+        CONNECTION_POOL[Connection Pooling<br/>Resource Management<br/>Connection Reuse<br/>Timeout Handling]
+    end
+    
+    subgraph "Network Performance"
+        LOAD_BALANCING[Load Balancing<br/>Traffic Distribution<br/>Health Monitoring<br/>Failover Management]
+        EDGE_COMPUTING[Edge Computing<br/>Geographic Distribution<br/>Latency Reduction<br/>Regional Caching]
+        PROTOCOL_OPT[Protocol Optimization<br/>HTTP/2 + HTTP/3<br/>WebSocket Efficiency<br/>gRPC Streaming]
+        BANDWIDTH_MGMT[Bandwidth Management<br/>Traffic Shaping<br/>QoS Policies<br/>Compression]
+    end
+    
+    subgraph "Infrastructure Performance"
+        AUTO_SCALING[Auto-scaling<br/>Horizontal Scaling<br/>Resource Optimization<br/>Cost Management]
+        RESOURCE_TUNING[Resource Tuning<br/>CPU/Memory Optimization<br/>Container Limits<br/>Garbage Collection]
+        MONITORING[Performance Monitoring<br/>Real-time Metrics<br/>Alerting Systems<br/>Bottleneck Detection]
+        PROFILING[Performance Profiling<br/>Code Analysis<br/>Memory Profiling<br/>Continuous Optimization]
+    end
+    
+    RUST_CORE --> QUERY_OPT
+    ASYNC_PYTHON --> PARTITIONING
+    CACHING --> REPLICATION
+    COMPRESSION --> CONNECTION_POOL
+    
+    QUERY_OPT --> LOAD_BALANCING
+    PARTITIONING --> EDGE_COMPUTING
+    REPLICATION --> PROTOCOL_OPT
+    CONNECTION_POOL --> BANDWIDTH_MGMT
+    
+    LOAD_BALANCING --> AUTO_SCALING
+    EDGE_COMPUTING --> RESOURCE_TUNING
+    PROTOCOL_OPT --> MONITORING
+    BANDWIDTH_MGMT --> PROFILING
+```
+
+### Disaster Recovery & Business Continuity
+
+```mermaid
+graph TB
+    subgraph "Backup Strategy"
+        CONTINUOUS[Continuous Backup<br/>Real-time Replication<br/>Point-in-time Recovery<br/>Cross-region Sync]
+        INCREMENTAL[Incremental Backup<br/>Delta Changes<br/>Storage Optimization<br/>Fast Recovery]
+        FULL_BACKUP[Full Backup<br/>Complete System State<br/>Weekly Schedule<br/>Long-term Retention]
+    end
+    
+    subgraph "Disaster Recovery"
+        HOT_STANDBY[Hot Standby<br/>Active-Active Setup<br/>Immediate Failover<br/>Zero Data Loss]
+        WARM_STANDBY[Warm Standby<br/>Active-Passive Setup<br/>Quick Recovery<br/>Minimal Data Loss]
+        COLD_STANDBY[Cold Standby<br/>Backup Infrastructure<br/>Cost-effective<br/>Longer Recovery]
+    end
+    
+    subgraph "Recovery Procedures"
+        AUTO_FAILOVER[Automatic Failover<br/>Health Monitoring<br/>Instant Switching<br/>Service Continuity]
+        MANUAL_FAILOVER[Manual Failover<br/>Controlled Switch<br/>Validation Steps<br/>Rollback Capability]
+        DATA_RECOVERY[Data Recovery<br/>Point-in-time Restore<br/>Selective Recovery<br/>Integrity Validation]
+    end
+    
+    subgraph "Business Continuity"
+        TRADING_CONTINUITY[Trading Continuity<br/>Market Hours Coverage<br/>Order Execution<br/>Risk Management]
+        COMMUNICATION[Communication Plan<br/>Stakeholder Notification<br/>Status Updates<br/>Recovery Progress]
+        TESTING[DR Testing<br/>Regular Drills<br/>Recovery Validation<br/>Process Improvement]
+    end
+    
+    CONTINUOUS --> HOT_STANDBY
+    INCREMENTAL --> WARM_STANDBY
+    FULL_BACKUP --> COLD_STANDBY
+    
+    HOT_STANDBY --> AUTO_FAILOVER
+    WARM_STANDBY --> MANUAL_FAILOVER
+    COLD_STANDBY --> DATA_RECOVERY
+    
+    AUTO_FAILOVER --> TRADING_CONTINUITY
+    MANUAL_FAILOVER --> COMMUNICATION
+    DATA_RECOVERY --> TESTING
+```
 
 ## Technology Stack
+
+### Technology Selection Matrix
+
+```mermaid
+graph TB
+    subgraph "Programming Languages"
+        PYTHON[Python 3.11+<br/>Business Logic<br/>AI/ML Libraries<br/>Rapid Development]
+        RUST[Rust 1.75+<br/>Performance Critical<br/>Memory Safety<br/>Concurrency]
+        TYPESCRIPT[TypeScript 5.0+<br/>Frontend Development<br/>Type Safety<br/>Developer Experience]
+        GO[Go 1.21+<br/>Infrastructure Services<br/>Concurrency<br/>Cloud Native]
+    end
+    
+    subgraph "Core Frameworks"
+        NAUTILUS[NautilusTrader<br/>Trading Engine<br/>Event-driven<br/>Multi-asset Support]
+        FASTAPI[FastAPI<br/>API Framework<br/>Async Support<br/>Auto Documentation]
+        NEXTJS[Next.js<br/>React Framework<br/>SSR/SSG<br/>Performance Optimized]
+        LANGCHAIN[LangChain/LangGraph<br/>AI Orchestration<br/>Agent Framework<br/>Tool Integration]
+    end
+    
+    subgraph "Data & Messaging"
+        KAFKA[Apache Kafka<br/>Event Streaming<br/>High Throughput<br/>Fault Tolerant]
+        POSTGRES[PostgreSQL<br/>Relational Database<br/>ACID Compliance<br/>Vector Support]
+        CLICKHOUSE[ClickHouse<br/>Columnar Database<br/>Analytics Workloads<br/>High Performance]
+        REDIS[Redis<br/>In-memory Cache<br/>Session Storage<br/>Real-time Data]
+    end
+    
+    subgraph "Infrastructure"
+        KUBERNETES[Kubernetes<br/>Container Orchestration<br/>Auto-scaling<br/>Service Discovery]
+        ISTIO[Istio<br/>Service Mesh<br/>Security<br/>Observability]
+        PROMETHEUS[Prometheus<br/>Metrics Collection<br/>Alerting<br/>Time Series DB]
+        GRAFANA[Grafana<br/>Visualization<br/>Dashboards<br/>Monitoring]
+    end
+    
+    PYTHON --> NAUTILUS
+    RUST --> FASTAPI
+    TYPESCRIPT --> NEXTJS
+    GO --> LANGCHAIN
+    
+    NAUTILUS --> KAFKA
+    FASTAPI --> POSTGRES
+    NEXTJS --> CLICKHOUSE
+    LANGCHAIN --> REDIS
+    
+    KAFKA --> KUBERNETES
+    POSTGRES --> ISTIO
+    CLICKHOUSE --> PROMETHEUS
+    REDIS --> GRAFANA
+```
 
 ### Core Technologies
 
