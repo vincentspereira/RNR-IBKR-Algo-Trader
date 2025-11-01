@@ -574,6 +574,345 @@ graph TB
 - **SC-014**: AI-generated strategies achieve >70% success rate in backtesting validation
 - **SC-015**: System reduces time-to-market for new strategies by 80% compared to traditional development
 
+### Advanced User Stories
+
+### User Story 7 - Advanced Portfolio Analytics (Priority: P2)
+
+```mermaid
+graph TB
+    subgraph "Performance Attribution Analysis"
+        FACTOR_ANALYSIS[Factor Analysis<br/>Style Factors<br/>Sector Attribution<br/>Country Attribution]
+        SECURITY_SELECTION[Security Selection<br/>Stock Picking Effect<br/>Timing Effect<br/>Interaction Effect]
+        BENCHMARK_ANALYSIS[Benchmark Analysis<br/>Active Return<br/>Tracking Error<br/>Information Ratio]
+    end
+    
+    subgraph "Risk Analytics"
+        VAR_ANALYSIS[VaR Analysis<br/>Historical VaR<br/>Monte Carlo VaR<br/>Parametric VaR]
+        STRESS_TESTING[Stress Testing<br/>Historical Scenarios<br/>Hypothetical Scenarios<br/>Sensitivity Analysis]
+        CORRELATION_ANALYSIS[Correlation Analysis<br/>Asset Correlation<br/>Time-varying Correlation<br/>Tail Dependence]
+    end
+    
+    subgraph "Optimization Engine"
+        PORTFOLIO_OPTIMIZATION[Portfolio Optimization<br/>Mean-Variance<br/>Black-Litterman<br/>Risk Parity]
+        REBALANCING[Rebalancing<br/>Threshold-based<br/>Calendar-based<br/>Volatility-based]
+        SCENARIO_ANALYSIS[Scenario Analysis<br/>What-if Analysis<br/>Stress Scenarios<br/>Monte Carlo Simulation]
+    end
+    
+    FACTOR_ANALYSIS --> VAR_ANALYSIS
+    SECURITY_SELECTION --> STRESS_TESTING
+    BENCHMARK_ANALYSIS --> CORRELATION_ANALYSIS
+    
+    VAR_ANALYSIS --> PORTFOLIO_OPTIMIZATION
+    STRESS_TESTING --> REBALANCING
+    CORRELATION_ANALYSIS --> SCENARIO_ANALYSIS
+```
+
+A portfolio manager needs comprehensive analytics to understand performance drivers, assess risk, and optimize asset allocation. The system provides advanced attribution analysis, risk metrics, and optimization tools for institutional-grade portfolio management.
+
+**Why this priority**: Essential for professional portfolio management and institutional users who need sophisticated analytics beyond basic P&L tracking.
+
+**Independent Test**: Can be tested by creating a multi-asset portfolio, running performance attribution analysis, and generating risk reports with VaR calculations.
+
+**Acceptance Scenarios**:
+
+1. **Given** a portfolio with multiple positions, **When** the user requests performance attribution, **Then** the system breaks down returns by factors, sectors, and security selection
+2. **Given** historical portfolio data, **When** the user runs stress testing, **Then** the system shows portfolio performance under various market scenarios
+3. **Given** current portfolio weights, **When** the user requests optimization, **Then** the system suggests rebalancing to improve risk-adjusted returns
+
+---
+
+### User Story 8 - Advanced Order Types & Execution (Priority: P2)
+
+```mermaid
+sequenceDiagram
+    participant User
+    participant OrderEngine as Order Engine
+    participant RiskMgr as Risk Manager
+    participant SmartRouter as Smart Router
+    participant Venue1 as Exchange 1
+    participant Venue2 as Exchange 2
+    participant Venue3 as Dark Pool
+    
+    Note over User, Venue3: Advanced Order Execution Flow
+    
+    User->>OrderEngine: Submit Iceberg Order (10,000 shares, 500 slice)
+    OrderEngine->>RiskMgr: Pre-trade risk check
+    RiskMgr-->>OrderEngine: Risk approved
+    
+    OrderEngine->>SmartRouter: Route order slice (500 shares)
+    SmartRouter->>SmartRouter: Analyze liquidity across venues
+    SmartRouter->>Venue1: Send 200 shares (best price)
+    SmartRouter->>Venue2: Send 200 shares (size available)
+    SmartRouter->>Venue3: Send 100 shares (minimal impact)
+    
+    Venue1-->>SmartRouter: Partial fill (150 shares)
+    Venue2-->>SmartRouter: Full fill (200 shares)
+    Venue3-->>SmartRouter: Partial fill (50 shares)
+    
+    SmartRouter-->>OrderEngine: Slice execution report (400/500 filled)
+    OrderEngine->>OrderEngine: Calculate remaining quantity
+    OrderEngine->>SmartRouter: Route next slice (500 shares)
+    
+    Note over OrderEngine: Continue until order complete
+```
+
+A professional trader needs advanced order types including iceberg orders, TWAP/VWAP algorithms, and smart routing across multiple venues to minimize market impact and achieve best execution.
+
+**Why this priority**: Critical for institutional trading and large orders that require sophisticated execution strategies to minimize costs and market impact.
+
+**Independent Test**: Can be tested by placing a large iceberg order and verifying it's executed in small slices with minimal market impact.
+
+**Acceptance Scenarios**:
+
+1. **Given** a large order that could impact the market, **When** the user selects iceberg execution, **Then** the system breaks it into small slices and executes them over time
+2. **Given** multiple trading venues with different liquidity, **When** an order is submitted, **Then** the smart router finds the best combination of venues for execution
+3. **Given** a TWAP algorithm is selected, **When** the order executes, **Then** the system spreads execution evenly over the specified time period
+
+---
+
+### User Story 9 - Regulatory Compliance & Reporting (Priority: P1)
+
+```mermaid
+graph LR
+    subgraph "Compliance Monitoring"
+        POSITION_LIMITS[Position Limits<br/>Regulatory Limits<br/>Internal Limits<br/>Real-time Monitoring]
+        TRADE_SURVEILLANCE[Trade Surveillance<br/>Pattern Detection<br/>Unusual Activity<br/>Market Manipulation]
+        BEST_EXECUTION[Best Execution<br/>Venue Analysis<br/>Price Improvement<br/>Execution Quality]
+    end
+    
+    subgraph "Regulatory Reporting"
+        TRANSACTION_REPORTING[Transaction Reporting<br/>MiFID II<br/>EMIR<br/>Dodd-Frank]
+        POSITION_REPORTING[Position Reporting<br/>Large Position Disclosure<br/>Beneficial Ownership<br/>Concentration Limits]
+        RISK_REPORTING[Risk Reporting<br/>Capital Requirements<br/>Leverage Ratios<br/>Liquidity Coverage]
+    end
+    
+    subgraph "Audit & Documentation"
+        AUDIT_TRAILS[Audit Trails<br/>Complete Transaction History<br/>Decision Rationale<br/>System Changes]
+        RECORD_KEEPING[Record Keeping<br/>Communication Records<br/>Research Records<br/>Compliance Documentation]
+        REGULATORY_FILINGS[Regulatory Filings<br/>Automated Generation<br/>Deadline Tracking<br/>Submission Confirmation]
+    end
+    
+    POSITION_LIMITS --> TRANSACTION_REPORTING
+    TRADE_SURVEILLANCE --> POSITION_REPORTING
+    BEST_EXECUTION --> RISK_REPORTING
+    
+    TRANSACTION_REPORTING --> AUDIT_TRAILS
+    POSITION_REPORTING --> RECORD_KEEPING
+    RISK_REPORTING --> REGULATORY_FILINGS
+```
+
+A compliance officer needs comprehensive monitoring and reporting capabilities to ensure all trading activities comply with regulatory requirements including MiFID II, EMIR, and Dodd-Frank regulations.
+
+**Why this priority**: Mandatory for institutional users and required for regulatory approval to operate in regulated markets.
+
+**Independent Test**: Can be tested by executing trades and verifying all required regulatory reports are generated automatically with complete audit trails.
+
+**Acceptance Scenarios**:
+
+1. **Given** trading activities across multiple jurisdictions, **When** trades are executed, **Then** the system automatically generates required regulatory reports for each jurisdiction
+2. **Given** position limits are configured, **When** positions approach limits, **Then** the system prevents violations and generates compliance alerts
+3. **Given** audit requirements, **When** regulators request information, **Then** the system provides complete audit trails with immutable records
+
+---
+
+### User Story 10 - Market Making & Liquidity Provision (Priority: P3)
+
+```mermaid
+graph TB
+    subgraph "Market Making Strategy"
+        BID_ASK_MANAGEMENT[Bid-Ask Management<br/>Dynamic Spreads<br/>Inventory Management<br/>Risk Control]
+        LIQUIDITY_PROVISION[Liquidity Provision<br/>Order Book Depth<br/>Market Impact Minimization<br/>Rebate Optimization]
+        INVENTORY_RISK[Inventory Risk<br/>Position Limits<br/>Hedging Strategies<br/>Risk Metrics]
+    end
+    
+    subgraph "Pricing Engine"
+        FAIR_VALUE[Fair Value Calculation<br/>Theoretical Price<br/>Volatility Surface<br/>Greeks Calculation]
+        SKEW_MANAGEMENT[Skew Management<br/>Volatility Skew<br/>Term Structure<br/>Risk Adjustment]
+        DYNAMIC_HEDGING[Dynamic Hedging<br/>Delta Hedging<br/>Gamma Hedging<br/>Vega Hedging]
+    end
+    
+    subgraph "Performance Optimization"
+        REBATE_CAPTURE[Rebate Capture<br/>Exchange Rebates<br/>Maker-Taker Model<br/>Fee Optimization]
+        LATENCY_OPTIMIZATION[Latency Optimization<br/>Co-location<br/>Direct Market Access<br/>Hardware Acceleration]
+        RISK_MANAGEMENT[Risk Management<br/>Real-time Monitoring<br/>Automated Stops<br/>Position Limits]
+    end
+    
+    BID_ASK_MANAGEMENT --> FAIR_VALUE
+    LIQUIDITY_PROVISION --> SKEW_MANAGEMENT
+    INVENTORY_RISK --> DYNAMIC_HEDGING
+    
+    FAIR_VALUE --> REBATE_CAPTURE
+    SKEW_MANAGEMENT --> LATENCY_OPTIMIZATION
+    DYNAMIC_HEDGING --> RISK_MANAGEMENT
+```
+
+A market maker needs sophisticated tools to provide liquidity while managing inventory risk and optimizing spreads. The system supports dynamic pricing, inventory management, and automated hedging for market making strategies.
+
+**Why this priority**: Specialized use case for advanced users, but represents significant revenue opportunity and market differentiation.
+
+**Independent Test**: Can be tested by deploying a market making strategy that maintains bid-ask quotes and manages inventory risk automatically.
+
+**Acceptance Scenarios**:
+
+1. **Given** a market making strategy is active, **When** market conditions change, **Then** the system adjusts bid-ask spreads dynamically to maintain profitability
+2. **Given** inventory positions exceed limits, **When** risk thresholds are breached, **Then** the system automatically hedges positions or adjusts quotes
+3. **Given** multiple market making opportunities, **When** evaluating venues, **Then** the system optimizes for rebates and minimizes adverse selection
+
+---
+
+### User Story 11 - Cross-Asset Arbitrage (Priority: P3)
+
+```mermaid
+sequenceDiagram
+    participant Scanner as Arbitrage Scanner
+    participant PriceEngine as Price Engine
+    participant RiskMgr as Risk Manager
+    participant Execution as Execution Engine
+    participant Venue1 as Exchange A
+    participant Venue2 as Exchange B
+    
+    Note over Scanner, Venue2: Cross-Asset Arbitrage Detection & Execution
+    
+    Scanner->>PriceEngine: Monitor price relationships
+    PriceEngine->>PriceEngine: Calculate theoretical spreads
+    PriceEngine->>Scanner: Identify arbitrage opportunity
+    
+    Scanner->>RiskMgr: Validate opportunity profitability
+    RiskMgr->>RiskMgr: Check position limits & capital
+    RiskMgr-->>Scanner: Opportunity approved
+    
+    Scanner->>Execution: Execute arbitrage strategy
+    
+    par Simultaneous Execution
+        Execution->>Venue1: Buy undervalued asset
+        Execution->>Venue2: Sell overvalued asset
+    end
+    
+    Venue1-->>Execution: Fill confirmation (buy side)
+    Venue2-->>Execution: Fill confirmation (sell side)
+    
+    Execution->>RiskMgr: Update positions & P&L
+    Execution->>Scanner: Report arbitrage profit
+```
+
+A quantitative trader identifies and exploits price discrepancies across related assets, exchanges, or time periods. The system automatically scans for arbitrage opportunities and executes simultaneous trades to capture risk-free profits.
+
+**Why this priority**: Advanced strategy that requires sophisticated technology but offers attractive risk-adjusted returns for skilled practitioners.
+
+**Independent Test**: Can be tested by identifying price discrepancies between related assets and executing simultaneous trades to capture the spread.
+
+**Acceptance Scenarios**:
+
+1. **Given** price feeds from multiple exchanges, **When** arbitrage opportunities arise, **Then** the system detects them within milliseconds and alerts the user
+2. **Given** an arbitrage opportunity is identified, **When** the user approves execution, **Then** the system simultaneously executes both legs of the trade
+3. **Given** market conditions change rapidly, **When** arbitrage opportunities disappear, **Then** the system cancels pending orders to prevent losses
+
+---
+
+### Advanced Technical Requirements
+
+### Extended Functional Requirements
+
+- **FR-021**: System MUST support market making strategies with dynamic bid-ask spread management
+- **FR-022**: System MUST implement cross-asset arbitrage detection with sub-millisecond opportunity identification
+- **FR-023**: System MUST provide advanced order types including iceberg, TWAP, VWAP, and implementation shortfall algorithms
+- **FR-024**: System MUST support options trading with real-time Greeks calculation and volatility surface modeling
+- **FR-025**: System MUST implement regulatory compliance monitoring for MiFID II, EMIR, and Dodd-Frank requirements
+- **FR-026**: System MUST provide performance attribution analysis with factor decomposition and benchmark comparison
+- **FR-027**: System MUST support cryptocurrency trading including spot, futures, and DeFi protocol integration
+- **FR-028**: System MUST implement smart order routing across multiple venues with latency optimization
+- **FR-029**: System MUST provide stress testing capabilities with historical and hypothetical scenario analysis
+- **FR-030**: System MUST support portfolio optimization using modern portfolio theory and alternative risk models
+
+### Advanced Data Model
+
+```mermaid
+erDiagram
+    USER ||--o{ STRATEGY : creates
+    USER ||--o{ PORTFOLIO : owns
+    USER ||--o{ RISK_PROFILE : has
+    USER ||--o{ USER_SESSION : maintains
+    USER ||--o{ COMPLIANCE_PROFILE : requires
+    
+    STRATEGY ||--o{ BACKTEST_RESULT : generates
+    STRATEGY ||--o{ ORDER : produces
+    STRATEGY }|--|| AI_ASSISTANT_CONTEXT : uses
+    STRATEGY ||--o{ PERFORMANCE_ATTRIBUTION : tracks
+    
+    PORTFOLIO ||--o{ POSITION : contains
+    PORTFOLIO ||--o{ ORDER : executes
+    PORTFOLIO ||--o{ RISK_METRICS : calculates
+    PORTFOLIO ||--o{ REBALANCING_EVENT : triggers
+    
+    ORDER ||--o{ EXECUTION : results_in
+    ORDER ||--o{ COMPLIANCE_CHECK : requires
+    ORDER }|--|| SMART_ROUTING : uses
+    
+    POSITION ||--o{ MARK_TO_MARKET : valued_by
+    POSITION ||--o{ CORPORATE_ACTION : affected_by
+    POSITION ||--o{ MARGIN_REQUIREMENT : determines
+    
+    MARKET_DATA ||--o{ PRICE_TICK : contains
+    MARKET_DATA ||--o{ VOLATILITY_SURFACE : includes
+    MARKET_DATA ||--o{ ORDER_BOOK : provides
+    
+    RISK_METRICS ||--o{ VAR_CALCULATION : includes
+    RISK_METRICS ||--o{ STRESS_TEST_RESULT : contains
+    RISK_METRICS ||--o{ CORRELATION_MATRIX : uses
+    
+    COMPLIANCE_CHECK ||--o{ REGULATORY_REPORT : generates
+    COMPLIANCE_CHECK ||--o{ AUDIT_TRAIL : creates
+    COMPLIANCE_CHECK ||--o{ VIOLATION_ALERT : triggers
+    
+    AI_ASSISTANT_CONTEXT ||--o{ CONVERSATION_HISTORY : maintains
+    AI_ASSISTANT_CONTEXT ||--o{ USER_PREFERENCE : learns
+    AI_ASSISTANT_CONTEXT ||--o{ RECOMMENDATION : generates
+```
+
+### Advanced Success Criteria
+
+### Extended Success Metrics Dashboard
+
+```mermaid
+graph TB
+    subgraph "Advanced Performance Metrics"
+        PERF4[Options Pricing Accuracy<br/>Target: <1% error<br/>Measure: Theoretical vs Market Price]
+        PERF5[Arbitrage Detection Speed<br/>Target: <1ms<br/>Measure: Opportunity identification time]
+        PERF6[Smart Routing Efficiency<br/>Target: >95%<br/>Measure: Best execution achievement]
+    end
+    
+    subgraph "Compliance Metrics"
+        COMP1[Regulatory Reporting<br/>Target: 100% accuracy<br/>Measure: Report validation success]
+        COMP2[Audit Trail Completeness<br/>Target: 100%<br/>Measure: Transaction coverage]
+        COMP3[Compliance Violation Prevention<br/>Target: 100%<br/>Measure: Limit enforcement success]
+    end
+    
+    subgraph "Advanced Business Metrics"
+        BIZ4[Market Making Profitability<br/>Target: >80% profitable days<br/>Measure: Daily P&L positive ratio]
+        BIZ5[Arbitrage Capture Rate<br/>Target: >90%<br/>Measure: Opportunities successfully executed]
+        BIZ6[Portfolio Optimization Improvement<br/>Target: >15% Sharpe ratio improvement<br/>Measure: Risk-adjusted return enhancement]
+    end
+    
+    subgraph "User Experience Metrics"
+        UX4[Advanced Feature Adoption<br/>Target: >60%<br/>Measure: Professional users using advanced features]
+        UX5[Compliance Workflow Efficiency<br/>Target: 80% time reduction<br/>Measure: Manual compliance work reduction]
+        UX6[Cross-Asset Strategy Success<br/>Target: >75%<br/>Measure: Multi-asset strategy profitability]
+    end
+```
+
+### Extended Measurable Outcomes
+
+- **SC-016**: Options strategies achieve theoretical pricing accuracy within 1% of market prices
+- **SC-017**: Arbitrage opportunities are detected and flagged within 1 millisecond of price discrepancy
+- **SC-018**: Smart order routing achieves best execution in >95% of trades across all supported venues
+- **SC-019**: Regulatory reports are generated automatically with 100% accuracy and submitted on time
+- **SC-020**: Market making strategies achieve profitability on >80% of trading days with controlled risk
+- **SC-021**: Portfolio optimization recommendations improve Sharpe ratios by >15% on average
+- **SC-022**: Cross-asset arbitrage strategies capture >90% of identified opportunities before they disappear
+- **SC-023**: Compliance workflows reduce manual oversight time by 80% while maintaining 100% accuracy
+- **SC-024**: Advanced users adopt sophisticated features (options, arbitrage, market making) at >60% rate
+- **SC-025**: System supports institutional-grade order sizes (>$10M) without significant market impact
+
 ### Assumptions
 
 ```mermaid
@@ -584,29 +923,40 @@ mindmap
       Financial market understanding
       Risk awareness
       Technology comfort
+      Advanced trading strategies
+      Regulatory requirements
     Technical Infrastructure
       Reliable internet connectivity
       Sufficient hardware resources
       Browser compatibility
       Mobile device support
+      Low-latency network access
+      Co-location capabilities
     External Dependencies
       Interactive Brokers API stability
       Market data provider reliability
       Cloud service availability
       AI model API access
+      Exchange connectivity
+      Regulatory data feeds
     Regulatory Environment
       Stable regulatory framework
       Compliance requirements clarity
       Cross-border trading permissions
       Data privacy regulations
+      Market structure stability
+      Reporting standards consistency
     Market Conditions
       Normal market volatility
       Adequate liquidity
       Standard trading hours
       Reasonable spreads
+      Efficient price discovery
+      Arbitrage opportunities
 ```
 
 - Users have basic understanding of financial markets and trading concepts
+- Advanced users understand sophisticated strategies like options, arbitrage, and market making
 - Interactive Brokers API will remain stable and accessible for integration
 - Market data providers will maintain reliable feeds with acceptable latency
 - Users will have sufficient hardware resources for running the platform locally during development
@@ -616,3 +966,7 @@ mindmap
 - AI model APIs will remain accessible and cost-effective for strategy generation
 - Network connectivity will be sufficient for real-time trading operations
 - Users will provide necessary authentication credentials for broker account integration
+- Exchange connectivity will be available for direct market access and co-location
+- Regulatory reporting requirements will remain stable and well-documented
+- Market structure will continue to support electronic trading and algorithmic strategies
+- Liquidity will be sufficient to support market making and arbitrage strategies
