@@ -1,6 +1,6 @@
 # Implementation Plan: [FEATURE NAME]
 
-**Branch**: `[feature-name]` | **Date**: [DATE] | **Spec**: [link to spec.md]
+**Branch**: `[feature-name]` | **Date**: 01 November 2025 | **Spec**: [link to spec.md]
 **Input**: Feature specification from `/specs/[feature-name]/spec.md`
 
 ## Summary

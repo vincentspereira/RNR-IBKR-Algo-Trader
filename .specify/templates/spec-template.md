@@ -1,7 +1,7 @@
 # Feature Specification: [FEATURE NAME]
 
 **Feature Branch**: `[###-feature-name]`  
-**Created**: [DATE]  
+**Created**: 01 November 2025  
 **Status**: Draft  
 **Input**: User description: "$ARGUMENTS"
 

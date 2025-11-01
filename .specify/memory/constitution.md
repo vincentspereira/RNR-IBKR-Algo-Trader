@@ -1,8 +1,8 @@
 # Algorithmic Trading System Constitution
 
 **Version**: 1.1.0  
-**Ratified**: 27 January 2025  
-**Last Amended**: 27 January 2025
+**Ratified**: 01 November 2025  
+**Last Amended**: 01 November 2025
 
 ## System Architecture Overview
 
