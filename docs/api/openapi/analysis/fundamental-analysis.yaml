@@ -1,0 +1,729 @@
+openapi: 3.0.3
+
+info:
+  title: Fundamental Analysis API
+  version: 1.0.0
+  description: |
+    **Fundamental Analysis Service** - Comprehensive fundamental analysis engine (Phase 15.5).
+    
+    **Capabilities**:
+    - 50+ Financial Ratios (liquidity, profitability, leverage, efficiency, valuation)
+    - Valuation Models (DCF, DDM, Graham Number, PEG, EV multiples)
+    - Quality Scores (Piotroski F-Score, Altman Z-Score, Beneish M-Score)
+    - Earnings Analysis (surprises, quality, guidance tracking)
+    - Insider Trading Analysis (Form 4 parsing, sentiment)
+    - ESG Scoring (Environmental, Social, Governance metrics)
+    - Industry Analysis (sector rotation, peer comparison)
+    - Health Monitoring (early warnings, bankruptcy prediction)
+    
+    **Data Sources**:
+    - Alpha Vantage API (primary)
+    - Yahoo Finance (fallback)
+    - Financial Modeling Prep (optional premium)
+    - SEC EDGAR (direct filing parser)
+    - OpenInsider.com (insider transactions)
+    
+    **Update Frequency**:
+    - Financial statements: Quarterly
+    - Stock prices: Real-time
+    - Earnings: Within minutes of announcement
+    - Insider transactions: Daily
+    - ESG scores: Monthly
+  
+  contact:
+    name: Fundamental Analysis Team
+    email: fundamental@trading.com
+
+servers:
+  - url: http://localhost:8003/api/v1
+    description: Local development
+  - url: http://fundamental-analysis:8003/api/v1
+    description: Docker internal
+  - url: https://api.trading.com/fundamental/v1
+    description: Production
+
+tags:
+  - name: Fundamentals
+    description: Core fundamental data operations
+  - name: Ratios
+    description: Financial ratio calculations
+  - name: Valuation
+    description: Valuation model operations
+  - name: Quality Scores
+    description: Company quality scoring
+  - name: Earnings
+    description: Earnings analysis
+  - name: Insider Trading
+    description: Insider transaction tracking
+  - name: ESG
+    description: ESG scoring and analysis
+  - name: Screening
+    description: Fundamental stock screening
+  - name: Health
+    description: Service health
+
+paths:
+  /fundamentals/{symbol}:
+    get:
+      summary: Get complete fundamental data
+      description: Retrieve all fundamental data for a symbol (ratios, valuation, scores)
+      operationId: getFundamentals
+      tags: [Fundamentals]
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/Symbol'
+        - name: include
+          in: query
+          schema:
+            type: array
+            items:
+              type: string
+              enum: [ratios, valuation, quality_scores, earnings, insider, esg]
+          description: Data sections to include (default: all)
+        - name: period
+          in: query
+          schema:
+            type: string
+            enum: [annual, quarterly, ttm]
+            default: ttm
+          description: Financial period
+      responses:
+        '200':
+          description: Fundamental data retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FundamentalData'
+        '404':
+          description: Symbol not found
+        '429':
+          description: Rate limit exceeded
+
+  /fundamentals/{symbol}/ratios:
+    get:
+      summary: Get financial ratios
+      description: Calculate and retrieve all 50+ financial ratios
+      operationId: getRatios
+      tags: [Ratios]
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/Symbol'
+        - name: category
+          in: query
+          schema:
+            type: string
+            enum: [liquidity, profitability, leverage, efficiency, valuation, all]
+            default: all
+        - name: period
+          in: query
+          schema:
+            type: string
+            enum: [annual, quarterly, ttm]
+            default: ttm
+      responses:
+        '200':
+          description: Financial ratios
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FinancialRatios'
+        '404':
+          description: Symbol not found
+
+  /fundamentals/{symbol}/valuation:
+    get:
+      summary: Get valuation models
+      description: Calculate multiple valuation models (DCF, DDM, Graham, PEG, EV multiples)
+      operationId: getValuation
+      tags: [Valuation]
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/Symbol'
+        - name: models
+          in: query
+          schema:
+            type: array
+            items:
+              type: string
+              enum: [dcf, ddm, graham, peg, ev_multiples, all]
+          description: Valuation models to calculate
+      responses:
+        '200':
+          description: Valuation results
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ValuationModels'
+
+  /fundamentals/{symbol}/quality-scores:
+    get:
+      summary: Get quality scores
+      description: Calculate Piotroski F-Score, Altman Z-Score, Beneish M-Score
+      operationId: getQualityScores
+      tags: [Quality Scores]
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/Symbol'
+      responses:
+        '200':
+          description: Quality scores
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/QualityScores'
+          examples:
+            appleScores:
+              summary: Apple (AAPL) Quality Scores
+              value:
+                symbol: "AAPL"
+                piotroski_score: 8
+                altman_z_score: 5.2
+                beneish_m_score: -2.1
+                composite_quality: 85
+                interpretation:
+                  piotroski: "Strong (8/9)"
+                  altman: "Safe Zone (>2.99)"
+                  beneish: "Low manipulation risk (<-2.22)"
+                as_of_date: "2024-09-30"
+
+  /fundamentals/{symbol}/earnings:
+    get:
+      summary: Get earnings analysis
+      description: Retrieve earnings history, surprises, and quality metrics
+      operationId: getEarnings
+      tags: [Earnings]
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/Symbol'
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 4
+            maximum: 20
+          description: Number of quarters to retrieve
+      responses:
+        '200':
+          description: Earnings data
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EarningsData'
+
+  /fundamentals/{symbol}/insider:
+    get:
+      summary: Get insider trading data
+      description: Retrieve insider transactions and sentiment analysis
+      operationId: getInsiderTrading
+      tags: [Insider Trading]
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/Symbol'
+        - name: start_date
+          in: query
+          schema:
+            type: string
+            format: date
+        - name: end_date
+          in: query
+          schema:
+            type: string
+            format: date
+        - name: transaction_type
+          in: query
+          schema:
+            type: string
+            enum: [purchase, sale, all]
+            default: all
+      responses:
+        '200':
+          description: Insider trading data
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InsiderTradingData'
+
+  /fundamentals/{symbol}/esg:
+    get:
+      summary: Get ESG scores
+      description: Retrieve Environmental, Social, and Governance scores
+      operationId: getESG
+      tags: [ESG]
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/Symbol'
+      responses:
+        '200':
+          description: ESG scores
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ESGScores'
+
+  /screening/fundamental:
+    post:
+      summary: Screen stocks by fundamental criteria
+      description: Run custom fundamental screens across universe
+      operationId: screenFundamental
+      tags: [Screening]
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ScreeningRequest'
+            examples:
+              valueScreen:
+                summary: Value Screen (Buffett-style)
+                value:
+                  criteria:
+                    - field: "piotroski_score"
+                      operator: ">="
+                      value: 7
+                    - field: "altman_z_score"
+                      operator: ">"
+                      value: 3.0
+                    - field: "pe_ratio"
+                      operator: "<"
+                      value: 15
+                    - field: "roe"
+                      operator: ">"
+                      value: 0.15
+                  universe: "SP500"
+                  limit: 50
+              growthScreen:
+                summary: Growth Screen
+                value:
+                  criteria:
+                    - field: "revenue_growth_yoy"
+                      operator: ">"
+                      value: 0.20
+                    - field: "earnings_growth_yoy"
+                      operator: ">"
+                      value: 0.25
+                    - field: "debt_to_equity"
+                      operator: "<"
+                      value: 0.5
+                  universe: "NASDAQ100"
+                  limit: 30
+      responses:
+        '200':
+          description: Screening results
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ScreeningResults'
+
+  /health:
+    get:
+      summary: Health check
+      operationId: healthCheck
+      tags: [Health]
+      responses:
+        '200':
+          description: Service is healthy
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                  version:
+                    type: string
+                  data_providers:
+                    type: object
+                    properties:
+                      alpha_vantage:
+                        type: string
+                      yahoo_finance:
+                        type: string
+                      sec_edgar:
+                        type: string
+
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  parameters:
+    Symbol:
+      name: symbol
+      in: path
+      required: true
+      schema:
+        type: string
+        pattern: '^[A-Z]{1,5}$'
+      description: Stock ticker symbol
+      example: "AAPL"
+
+  schemas:
+    FundamentalData:
+      type: object
+      properties:
+        symbol:
+          type: string
+        company_name:
+          type: string
+        sector:
+          type: string
+        industry:
+          type: string
+        market_cap:
+          type: number
+          format: double
+        ratios:
+          $ref: '#/components/schemas/FinancialRatios'
+        valuation:
+          $ref: '#/components/schemas/ValuationModels'
+        quality_scores:
+          $ref: '#/components/schemas/QualityScores'
+        earnings:
+          $ref: '#/components/schemas/EarningsData'
+        insider:
+          $ref: '#/components/schemas/InsiderTradingData'
+        esg:
+          $ref: '#/components/schemas/ESGScores'
+        last_updated:
+          type: string
+          format: date-time
+
+    FinancialRatios:
+      type: object
+      properties:
+        liquidity:
+          type: object
+          properties:
+            current_ratio:
+              type: number
+            quick_ratio:
+              type: number
+            cash_ratio:
+              type: number
+            working_capital:
+              type: number
+        
+        profitability:
+          type: object
+          properties:
+            gross_margin:
+              type: number
+            operating_margin:
+              type: number
+            net_margin:
+              type: number
+            roe:
+              type: number
+            roa:
+              type: number
+            roic:
+              type: number
+        
+        leverage:
+          type: object
+          properties:
+            debt_to_equity:
+              type: number
+            debt_to_assets:
+              type: number
+            interest_coverage:
+              type: number
+            debt_service_coverage:
+              type: number
+        
+        efficiency:
+          type: object
+          properties:
+            asset_turnover:
+              type: number
+            inventory_turnover:
+              type: number
+            receivables_turnover:
+              type: number
+            days_sales_outstanding:
+              type: number
+        
+        valuation:
+          type: object
+          properties:
+            pe_ratio:
+              type: number
+            pb_ratio:
+              type: number
+            ps_ratio:
+              type: number
+            peg_ratio:
+              type: number
+            ev_to_ebitda:
+              type: number
+            fcf_yield:
+              type: number
+
+    ValuationModels:
+      type: object
+      properties:
+        dcf_value:
+          type: number
+          description: Discounted Cash Flow valuation
+        ddm_value:
+          type: number
+          description: Dividend Discount Model valuation
+        graham_number:
+          type: number
+          description: Benjamin Graham's intrinsic value
+        peg_fair_value:
+          type: number
+          description: PEG ratio-based fair value
+        ev_multiples:
+          type: object
+          properties:
+            ev_to_sales:
+              type: number
+            ev_to_ebitda:
+              type: number
+            ev_to_fcf:
+              type: number
+        current_price:
+          type: number
+        upside_downside:
+          type: object
+          properties:
+            dcf_upside:
+              type: number
+              description: Percentage upside/downside vs DCF value
+            graham_upside:
+              type: number
+        assumptions:
+          type: object
+          description: Valuation model assumptions
+
+    QualityScores:
+      type: object
+      properties:
+        piotroski_score:
+          type: integer
+          minimum: 0
+          maximum: 9
+          description: Piotroski F-Score (0-9, higher is better)
+        altman_z_score:
+          type: number
+          description: Altman Z-Score (>2.99 = safe, 1.81-2.99 = grey, <1.81 = distress)
+        beneish_m_score:
+          type: number
+          description: Beneish M-Score (<-2.22 = low manipulation risk)
+        composite_quality:
+          type: number
+          minimum: 0
+          maximum: 100
+          description: Composite quality score (0-100)
+        interpretation:
+          type: object
+          properties:
+            piotroski:
+              type: string
+            altman:
+              type: string
+            beneish:
+              type: string
+        components:
+          type: object
+          description: Individual score components
+        as_of_date:
+          type: string
+          format: date
+
+    EarningsData:
+      type: object
+      properties:
+        symbol:
+          type: string
+        earnings_history:
+          type: array
+          items:
+            type: object
+            properties:
+              date:
+                type: string
+                format: date
+              period:
+                type: string
+              eps_actual:
+                type: number
+              eps_estimate:
+                type: number
+              eps_surprise:
+                type: number
+              eps_surprise_pct:
+                type: number
+              revenue_actual:
+                type: number
+              revenue_estimate:
+                type: number
+              revenue_surprise_pct:
+                type: number
+        earnings_quality:
+          type: object
+          properties:
+            earnings_consistency:
+              type: number
+            earnings_growth:
+              type: number
+            surprise_frequency:
+              type: number
+        next_earnings_date:
+          type: string
+          format: date
+
+    InsiderTradingData:
+      type: object
+      properties:
+        symbol:
+          type: string
+        transactions:
+          type: array
+          items:
+            type: object
+            properties:
+              insider_name:
+                type: string
+              title:
+                type: string
+              transaction_type:
+                type: string
+                enum: [purchase, sale, option_exercise, gift]
+              shares:
+                type: integer
+              price:
+                type: number
+              value:
+                type: number
+              date:
+                type: string
+                format: date
+              form_type:
+                type: string
+        sentiment:
+          type: object
+          properties:
+            net_buy_sell_ratio:
+              type: number
+            total_insider_buying:
+              type: number
+            total_insider_selling:
+              type: number
+            sentiment_score:
+              type: number
+              minimum: -1
+              maximum: 1
+              description: -1 (very bearish) to +1 (very bullish)
+
+    ESGScores:
+      type: object
+      properties:
+        symbol:
+          type: string
+        environmental_score:
+          type: number
+          minimum: 0
+          maximum: 100
+        social_score:
+          type: number
+          minimum: 0
+          maximum: 100
+        governance_score:
+          type: number
+          minimum: 0
+          maximum: 100
+        total_esg_score:
+          type: number
+          minimum: 0
+          maximum: 100
+        esg_rating:
+          type: string
+          enum: [AAA, AA, A, BBB, BB, B, CCC]
+        controversies:
+          type: array
+          items:
+            type: object
+        last_updated:
+          type: string
+          format: date
+
+    ScreeningRequest:
+      type: object
+      required:
+        - criteria
+      properties:
+        criteria:
+          type: array
+          items:
+            type: object
+            required:
+              - field
+              - operator
+              - value
+            properties:
+              field:
+                type: string
+              operator:
+                type: string
+                enum: [">", ">=", "<", "<=", "=", "!="]
+              value:
+                oneOf:
+                  - type: number
+                  - type: string
+        universe:
+          type: string
+          enum: [SP500, NASDAQ100, DOW30, RUSSELL2000, ALL]
+          default: SP500
+        limit:
+          type: integer
+          default: 50
+          maximum: 500
+        sort_by:
+          type: string
+        sort_order:
+          type: string
+          enum: [asc, desc]
+          default: desc
+
+    ScreeningResults:
+      type: object
+      properties:
+        results:
+          type: array
+          items:
+            type: object
+            properties:
+              symbol:
+                type: string
+              company_name:
+                type: string
+              market_cap:
+                type: number
+              matched_criteria:
+                type: array
+                items:
+                  type: string
+              score:
+                type: number
+        total_matches:
+          type: integer
+        criteria_applied:
+          type: object
+        execution_time_ms:
+          type: integer
+
+security:
+  - BearerAuth: []

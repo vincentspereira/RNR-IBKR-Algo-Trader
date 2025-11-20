@@ -1,0 +1,576 @@
+openapi: 3.0.3
+
+info:
+  title: Trading Engine API
+  version: 1.0.0
+  description: |
+    **Trading Engine Service** - Core execution engine using NautilusTrader.
+
+    Capabilities:
+    - Strategy creation and management
+    - Signal generation and monitoring
+    - Order execution coordination
+    - Strategy deployment (paper/live modes)
+    - Performance tracking
+
+    **Performance Targets**:
+    - Latency: <100μs (p95)
+    - Throughput: >10,000 orders/sec
+    - Uptime: 99.9% during market hours
+
+  contact:
+    name: Trading System Team
+    email: dev@trading.com
+
+servers:
+  - url: http://localhost:8001/api/v1
+    description: Local development
+  - url: http://trading-engine:8001/api/v1
+    description: Docker internal
+  - url: https://api.trading.com/trading/v1
+    description: Production
+
+tags:
+  - name: Strategies
+    description: Strategy lifecycle management
+  - name: Signals
+    description: Trading signal operations
+  - name: Deployment
+    description: Strategy deployment (paper/live)
+  - name: Performance
+    description: Performance metrics and analytics
+  - name: Health
+    description: Service health and status
+
+paths:
+  /strategies:
+    get:
+      summary: List all strategies
+      description: Retrieve all strategies for the authenticated user
+      operationId: listStrategies
+      tags: [Strategies]
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [active, inactive, deployed, backtesting]
+          description: Filter by strategy status
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 50
+            maximum: 200
+        - name: offset
+          in: query
+          schema:
+            type: integer
+            default: 0
+      responses:
+        "200":
+          description: Successfully retrieved strategies
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  strategies:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Strategy"
+                  total:
+                    type: integer
+                  limit:
+                    type: integer
+                  offset:
+                    type: integer
+        "401":
+          $ref: "#/components/responses/UnauthorizedError"
+        "500":
+          $ref: "#/components/responses/InternalServerError"
+
+    post:
+      summary: Create new strategy
+      description: Create a new trading strategy
+      operationId: createStrategy
+      tags: [Strategies]
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateStrategyRequest"
+            examples:
+              simpleMomentum:
+                summary: Simple Momentum Strategy
+                value:
+                  name: "Simple Momentum"
+                  description: "Buy on RSI oversold, sell on overbought"
+                  code: |
+                    def on_bar(self, bar):
+                        rsi = self.indicators.rsi(period=14)
+                        if rsi < 30:
+                            self.buy(quantity=100)
+                        elif rsi > 70:
+                            self.sell(quantity=100)
+                  parameters:
+                    rsi_period: 14
+                    oversold: 30
+                    overbought: 70
+      responses:
+        "201":
+          description: Strategy created successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Strategy"
+        "400":
+          $ref: "#/components/responses/BadRequestError"
+        "401":
+          $ref: "#/components/responses/UnauthorizedError"
+
+  /strategies/{strategy_id}:
+    get:
+      summary: Get strategy by ID
+      operationId: getStrategy
+      tags: [Strategies]
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/StrategyId"
+      responses:
+        "200":
+          description: Strategy details
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Strategy"
+        "404":
+          $ref: "#/components/responses/NotFoundError"
+
+    put:
+      summary: Update strategy
+      operationId: updateStrategy
+      tags: [Strategies]
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/StrategyId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateStrategyRequest"
+      responses:
+        "200":
+          description: Strategy updated successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Strategy"
+        "404":
+          $ref: "#/components/responses/NotFoundError"
+
+    delete:
+      summary: Delete strategy
+      operationId: deleteStrategy
+      tags: [Strategies]
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/StrategyId"
+      responses:
+        "204":
+          description: Strategy deleted successfully
+        "404":
+          $ref: "#/components/responses/NotFoundError"
+        "409":
+          description: Cannot delete deployed strategy
+
+  /strategies/{strategy_id}/deploy:
+    post:
+      summary: Deploy strategy
+      description: Deploy strategy to paper or live trading
+      operationId: deployStrategy
+      tags: [Deployment]
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/StrategyId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - mode
+              properties:
+                mode:
+                  type: string
+                  enum: [paper, live]
+                  description: Trading mode
+                capital:
+                  type: number
+                  format: double
+                  description: Initial capital allocation
+                  example: 10000.00
+                risk_limits:
+                  $ref: "#/components/schemas/RiskLimits"
+      responses:
+        "200":
+          description: Strategy deployed successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  deployment_id:
+                    type: string
+                    format: uuid
+                  strategy_id:
+                    type: string
+                  mode:
+                    type: string
+                  status:
+                    type: string
+                    enum: [deploying, deployed, failed]
+                  deployed_at:
+                    type: string
+                    format: date-time
+        "400":
+          description: Invalid deployment configuration
+        "403":
+          description: User not authorized for live trading
+
+  /strategies/{strategy_id}/stop:
+    post:
+      summary: Stop deployed strategy
+      operationId: stopStrategy
+      tags: [Deployment]
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/StrategyId"
+      responses:
+        "200":
+          description: Strategy stopped successfully
+        "404":
+          description: Strategy not found or not deployed
+
+  /strategies/{strategy_id}/signals:
+    get:
+      summary: Get strategy signals
+      description: Retrieve trading signals generated by strategy
+      operationId: getSignals
+      tags: [Signals]
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/StrategyId"
+        - name: start_time
+          in: query
+          schema:
+            type: string
+            format: date-time
+        - name: end_time
+          in: query
+          schema:
+            type: string
+            format: date-time
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 100
+      responses:
+        "200":
+          description: Trading signals
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  signals:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/TradingSignal"
+
+  /strategies/{strategy_id}/performance:
+    get:
+      summary: Get strategy performance metrics
+      operationId: getPerformance
+      tags: [Performance]
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/StrategyId"
+        - name: period
+          in: query
+          schema:
+            type: string
+            enum: [1d, 1w, 1m, 3m, 1y, all]
+            default: 1m
+      responses:
+        "200":
+          description: Performance metrics
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PerformanceMetrics"
+
+  /health:
+    get:
+      summary: Health check
+      operationId: healthCheck
+      tags: [Health]
+      responses:
+        "200":
+          description: Service is healthy
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    enum: [healthy, degraded, unhealthy]
+                  version:
+                    type: string
+                  uptime:
+                    type: integer
+                    description: Uptime in seconds
+                  dependencies:
+                    type: object
+                    properties:
+                      database:
+                        type: string
+                      kafka:
+                        type: string
+                      redis:
+                        type: string
+
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: JWT token obtained from authentication service
+
+  parameters:
+    StrategyId:
+      name: strategy_id
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+      description: Unique strategy identifier
+
+  schemas:
+    Strategy:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        user_id:
+          type: string
+          format: uuid
+        name:
+          type: string
+          maxLength: 100
+        description:
+          type: string
+          maxLength: 500
+        code:
+          type: string
+          description: Strategy Python code
+        parameters:
+          type: object
+          additionalProperties: true
+        status:
+          type: string
+          enum: [draft, active, inactive, deployed, archived]
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+        performance:
+          $ref: "#/components/schemas/PerformanceMetrics"
+
+    CreateStrategyRequest:
+      type: object
+      required:
+        - name
+        - code
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 100
+        description:
+          type: string
+          maxLength: 500
+        code:
+          type: string
+          description: Strategy implementation code
+        parameters:
+          type: object
+          additionalProperties: true
+
+    UpdateStrategyRequest:
+      type: object
+      properties:
+        name:
+          type: string
+          maxLength: 100
+        description:
+          type: string
+          maxLength: 500
+        code:
+          type: string
+        parameters:
+          type: object
+          additionalProperties: true
+        status:
+          type: string
+          enum: [active, inactive]
+
+    TradingSignal:
+      type: object
+      properties:
+        signal_id:
+          type: string
+          format: uuid
+        strategy_id:
+          type: string
+          format: uuid
+        symbol:
+          type: string
+          example: "AAPL"
+        signal_type:
+          type: string
+          enum: [buy, sell, hold]
+        confidence:
+          type: number
+          format: double
+          minimum: 0.0
+          maximum: 1.0
+        quantity:
+          type: integer
+          minimum: 1
+        price:
+          type: number
+          format: double
+        timestamp:
+          type: string
+          format: date-time
+        metadata:
+          type: object
+          additionalProperties: true
+
+    PerformanceMetrics:
+      type: object
+      properties:
+        total_return:
+          type: number
+          format: double
+          description: Total return percentage
+        sharpe_ratio:
+          type: number
+          format: double
+        max_drawdown:
+          type: number
+          format: double
+        win_rate:
+          type: number
+          format: double
+        profit_factor:
+          type: number
+          format: double
+        total_trades:
+          type: integer
+        winning_trades:
+          type: integer
+        losing_trades:
+          type: integer
+        avg_win:
+          type: number
+          format: double
+        avg_loss:
+          type: number
+          format: double
+
+    RiskLimits:
+      type: object
+      properties:
+        max_position_size:
+          type: number
+          format: double
+          description: Maximum position size as percentage of capital
+        max_daily_loss:
+          type: number
+          format: double
+        max_drawdown:
+          type: number
+          format: double
+        position_limits:
+          type: object
+          additionalProperties:
+            type: integer
+
+    Error:
+      type: object
+      properties:
+        error:
+          type: string
+        message:
+          type: string
+        details:
+          type: object
+          additionalProperties: true
+        timestamp:
+          type: string
+          format: date-time
+
+  responses:
+    BadRequestError:
+      description: Bad request - invalid input
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+
+    UnauthorizedError:
+      description: Unauthorized - missing or invalid JWT token
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+
+    NotFoundError:
+      description: Resource not found
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+
+    InternalServerError:
+      description: Internal server error
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+
+security:
+  - BearerAuth: []
