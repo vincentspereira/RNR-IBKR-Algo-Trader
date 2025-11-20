@@ -1,0 +1,1556 @@
+import asyncio
+import logging
+import math
+import threading
+from abc import ABC, abstractmethod
+from collections import defaultdict, deque
+from dataclasses import dataclass, field
+from datetime import datetime, timedelta, timezone
+from enum import Enum
+from typing import Any, Dict, List, Optional, Tuple, Union, Callable
+import numpy as np
+import pandas as pd
+from scipy import stats
+from scipy.signal import find_peaks
+from scipy.optimize import minimize_scalar
+
+# ""Volume Profile and Order Flow Analysis System - Advanced Smart Money Analytics"
+
+# This module provides comprehensive volume profile and order flow analysis capabilities
+# for institutional-grade smart money detection across all asset classes with sub-100μs performance.
+
+# Key Features:
+# - Volume Weighted Average Price (VWAP) analysis
+# - Market depth and order book analysis
+# - Bid/ask spread analysis and liquidity monitoring
+# - Time & sales analysis for large trades
+# - High-Volume Node (HVN) and Low-Volume Node (LVN) detection
+# - Volume profile based support/resistance levels
+# - Order flow imbalance detection
+# - Market microstructure analysis
+# - Real-time liquidity assessment
+# - Smart money footprint analysis
+
+# Author: Vincent S. Pereira
+# Version: 1.0.0 (Production Deployment)
+
+
+
+
+# try:
+#     from sklearn.cluster import DBSCAN
+#     from sklearn.preprocessing import StandardScaler
+#     SKLEARN_AVAILABLE = True
+# except ImportError:
+#     SKLEARN_AVAILABLE = False
+#     logging.warning("scikit-learn not available. Advanced clustering features will be limited.")
+
+# try:
+#     from numba import jit, njit, prange
+#     NUMBA_AVAILABLE = True
+# except ImportError:
+#     NUMBA_AVAILABLE = False
+#     logging.warning("Numba not available. Performance optimization will be limited.")
+
+# try:
+#     from infrastructure.config.master_config import get_config
+#     from infrastructure.wrappers.factory import WrapperFactory
+#     logger = get_logger(__name__)
+# except ImportError:
+#     import logging
+#     logger = logging.getLogger(__name__)
+
+# ===========================================
+# VOLUME PROFILE AND ORDER FLOW ENUMS
+# ===========================================
+
+# class LiquidityLevel(Enum):
+#     "Liquidity level classification"
+#     ABUNDANT = "abundant"
+#     NORMAL = "normal"
+#     THIN = "thin"
+#     VERY_THIN = "very_thin"
+#     ILLIQUID = "illiquid"
+
+# class OrderFlowType(Enum):
+#     "Order flow imbalance types"
+#     STRONG_BUYING = "strong_buying"
+#     BUYING = "buying"
+#     BALANCED = "balanced"
+#     SELLING = "selling"
+#     STRONG_SELLING = "strong_selling"
+
+# class VolumeNodeType(Enum):
+#     "Volume node significance levels"
+#     HIGH_VOLUME_NODE = "hvn"  # High Volume Node
+#     LOW_VOLUME_NODE = "lvn"   # Low Volume Node
+#     POINT_OF_CONTROL = "poc"  # Point of Control (highest volume)
+#     VALUE_AREA_HIGH = "vah"   # Value Area High
+#     VALUE_AREA_LOW = "val"    # Value Area Low
+
+# class MarketMicrostructureType(Enum):
+#     "Market microstructure patterns"
+#     AUCTION_MARKET = "auction_market"
+#     DEALER_MARKET = "dealer_market"
+#     ORDER_DRIVEN = "order_driven"
+#     QUOTE_DRIVEN = "quote_driven"
+#     HYBRID = "hybrid"
+
+# ===========================================
+# CORE DATA STRUCTURES
+# ===========================================
+
+# @dataclass
+# class VolumeLevel:
+#     "Represents a volume level in the volume profile"
+#     price: float
+#     volume: float
+#     trades_count: int
+#     buy_volume: float
+#     sell_volume: float
+#     timestamp: datetime
+
+    # Calculated metrics
+#     volume_ratio: float = 0.0  # Volume ratio to total volume
+#     imbalance_score: float = 0.0  # Buy/sell imbalance
+#     node_type: Optional[VolumeNodeType] = None
+#     significance: float = 0.0  # 0-1 significance score
+
+# @dataclass
+# class VolumeProfile:
+#     "Complete volume profile for analysis"
+#     symbol: str
+#     asset_class: str
+#     timeframe: str
+#     start_time: datetime
+#     end_time: datetime
+
+    # Profile data
+#     volume_levels: List[VolumeLevel] = field(default_factory=list)
+#     total_volume: float = 0.0
+#     total_trades: int = 0
+
+    # Key levels
+#     point_of_control: Optional[float] = None
+#     value_area_high: Optional[float] = None
+#     value_area_low: Optional[float] = None
+#     value_area_volume_ratio: float = 0.7  # Standard 70% value area
+
+    # High and low volume nodes
+#     high_volume_nodes: List[float] = field(default_factory=list)
+#     low_volume_nodes: List[float] = field(default_factory=list)
+
+    # VWAP calculations
+#     vwap: Optional[float] = None
+#     standard_deviation_1: Optional[float] = None
+#     standard_deviation_2: Optional[float] = None
+
+    # Profile metrics
+#     profile_range: float = 0.0  # High - Low
+#     volume_weighted_price: float = 0.0
+#     skewness: float = 0.0
+#     kurtosis: float = 0.0
+
+# @dataclass
+# class OrderFlowData:
+#     "Individual order flow data point"
+#     timestamp: datetime
+#     price: float
+#     volume: float
+#     side: str  # 'buy', 'sell', 'unknown'
+#     aggressor: bool  # True if aggressive order
+#     order_type: str  # 'market', 'limit', 'stop'
+#     exchange: Optional[str] = None
+
+    # Calculated metrics
+#     price_level: Optional[float] = None
+#     volume_at_price: float = 0.0
+#     impact_score: float = 0.0
+
+# @dataclass
+# class OrderFlowMetrics:
+#     "Order flow analysis metrics"
+#     symbol: str
+#     timestamp: datetime
+#     timeframe: str
+
+    # Flow imbalance
+#     buy_volume_ratio: float  # Buy volume / total volume
+#     sell_volume_ratio: float  # Sell volume / total volume
+#     net_flow_imbalance: float  # Buy - sell normalized
+#     flow_type: OrderFlowType
+
+    # Aggression metrics
+#     aggressive_buy_ratio: float
+#     aggressive_sell_ratio: float
+#     passive_ratio: float
+
+    # Large order analysis
+#     large_order_frequency: float  # Large orders per minute
+#     whale_activity_detected: bool
+#     institutional_footprint: float  # 0-1 scale
+
+    # Market depth
+#     bid_ask_spread: float
+#     spread_ratio: float  # Spread relative to price
+#     market_depth_ratio: float  # Depth at best prices
+#     liquidity_level: LiquidityLevel
+
+    # Microstructure
+#     microstructure_type: MarketMicrostructureType
+#     order_book_imbalance: float
+#     price_impact_estimate: float
+
+# @dataclass
+# class VWAPAnalysis:
+#     "VWAP analysis results"
+#     symbol: str
+#     timestamp: datetime
+#     timeframe: str
+
+    # VWAP calculations
+#     vwap: float
+#     deviation_1_upper: float
+#     deviation_1_lower: float
+#     deviation_2_upper: float
+#     deviation_2_lower: float
+#     deviation_3_upper: float
+#     deviation_3_lower: float
+
+    # VWAP bands
+#     current_price: float
+#     vwap_distance: float
+#     vwap_band: str  # 'above_1', 'above_2', 'at_vwap', 'below_1', 'below_2'
+#     vwap_trend: str  # 'rising', 'falling', 'sideways'
+
+    # Volume analysis
+#     cumulative_volume: float
+#     cumulative_value: float
+#     volume_weighted_deviation: float
+
+# @dataclass
+# class MarketDepthData:
+#     "Market depth analysis data"
+#     symbol: str
+#     timestamp: datetime
+
+    # Order book snapshots
+#     bid_prices: List[float] = field(default_factory=list)
+#     bid_volumes: List[float] = field(default_factory=list)
+#     ask_prices: List[float] = field(default_factory=list)
+#     ask_volumes: List[float] = field(default_factory=list)
+
+    # Depth metrics
+#     total_bid_volume: float = 0.0
+#     total_ask_volume: float = 0.0
+#     bid_ask_spread: float = 0.0
+#     mid_price: float = 0.0
+#     order_book_imbalance: float = 0.0
+
+    # Depth levels
+#     depth_levels: int = 10
+#     wall_levels: List[Dict] = field(default_factory=list)  # Large order walls
+
+# @dataclass
+# class VolumeProfileConfig:
+#     "Configuration for volume profile and order flow analysis"
+
+    # Volume profile parameters
+#     price_precision: int = 2  # Decimal places for price levels
+#     volume_profile_periods: int = 100  # Number of periods for profile
+#     min_volume_threshold: float = 100.0  # Minimum volume for profile inclusion
+
+    # Value area calculation
+#     value_area_volume_ratio: float = 0.7  # 70% standard value area
+#     poc_min_volume_ratio: float = 0.05  # Minimum volume for POC consideration
+
+    # Volume node detection
+#     hvn_threshold_multiplier: float = 2.0  # HVN = 2x average volume
+#     lvn_threshold_multiplier: float = 0.5  # LVN = 0.5x average volume
+
+    # VWAP parameters
+#     vwap_periods: List[int] = field(default_factory=lambda: [5, 10, 20, 50])
+#     standard_deviations: List[float] = field(default_factory=lambda: [1.0, 2.0, 3.0])
+
+    # Order flow parameters
+#     order_flow_window: int = 100  # Number of trades for flow analysis
+#     large_order_threshold: float = 100000.0  # $100k for large orders
+#     whale_order_threshold: float = 1000000.0  # $1M for whale orders
+
+    # Market depth parameters
+#     depth_levels: int = 20  # Number of depth levels to track
+#     wall_detection_threshold: float = 10.0  # 10x average volume for wall detection
+#     spread_analysis_periods: int = 50
+
+    # Performance optimization
+#     enable_high_performance_mode: bool = True
+#     sub_100_microsecond_target: bool = True
+#     enable_real_time_updates: bool = True
+#     cache_profiles: bool = True
+
+    # Analysis features
+#     enable_volume_node_detection: bool = True
+#     enable_vwap_analysis: bool = True
+#     enable_order_flow_analysis: bool = True
+#     enable_market_depth_analysis: bool = True
+#     enable_smart_money_detection: bool = True
+
+# ===========================================
+# PERFORMANCE-OPTIMIZED CALCULATION FUNCTIONS
+# ===========================================
+
+# if NUMBA_AVAILABLE:
+#     @njit
+#     def calculate_vwap_numba(prices: np.ndarray, volumes: np.ndarray) -> float:
+#         "Numba-optimized VWAP calculation"
+#         total_value = np.sum(prices * volumes)
+#         total_volume = np.sum(volumes)
+#         return total_value / total_volume if total_volume > 0 else 0.0
+
+#     @njit
+#     def calculate_volume_imbalance_numba(buy_volumes: np.ndarray, sell_volumes: np.ndarray) -> float:
+#         "Numba-optimized volume imbalance calculation"
+#         total_buy = np.sum(buy_volumes)
+#         total_sell = np.sum(sell_volumes)
+#         total_volume = total_buy + total_sell
+#         return (total_buy - total_sell) / total_volume if total_volume > 0 else 0.0
+
+#     @njit
+#     def detect_volume_nodes_numba(volumes: np.ndarray, hvn_threshold: float,
+# lvn_threshold: float) -> Tuple[np.ndarray, np.ndarray]:
+#         "Numba-optimized volume node detection"
+#         avg_volume = np.mean(volumes)
+#         hvn_mask = volumes > (avg_volume * hvn_threshold)
+#         lvn_mask = volumes < (avg_volume * lvn_threshold)
+#         return hvn_mask, lvn_mask
+
+#     @njit
+#     def calculate_order_book_imbalance_numba(bid_volumes: np.ndarray, ask_volumes: np.ndarray) -> float:
+#         "Numba-optimized order book imbalance calculation"
+#         total_bid = np.sum(bid_volumes)
+#         total_ask = np.sum(ask_volumes)
+#         total_volume = total_bid + total_ask
+#         return (total_bid - total_ask) / total_volume if total_volume > 0 else 0.0
+# else:
+#     def calculate_vwap_numba(prices: np.ndarray, volumes: np.ndarray) -> float:
+#         "Fallback VWAP calculation"
+#         total_value = np.sum(prices * volumes)
+#         total_volume = np.sum(volumes)
+#         return total_value / total_volume if total_volume > 0 else 0.0
+
+#     def calculate_volume_imbalance_numba(buy_volumes: np.ndarray, sell_volumes: np.ndarray) -> float:
+#         "Fallback volume imbalance calculation"
+#         total_buy = np.sum(buy_volumes)
+#         total_sell = np.sum(sell_volumes)
+#         total_volume = total_buy + total_sell
+#         return (total_buy - total_sell) / total_volume if total_volume > 0 else 0.0
+
+#     def detect_volume_nodes_numba(volumes: np.ndarray, hvn_threshold: float,
+# lvn_threshold: float) -> Tuple[np.ndarray, np.ndarray]:
+#         "Fallback volume node detection"
+#         avg_volume = np.mean(volumes)
+#         hvn_mask = volumes > (avg_volume * hvn_threshold)
+#         lvn_mask = volumes < (avg_volume * lvn_threshold)
+#         return hvn_mask, lvn_mask
+
+#     def calculate_order_book_imbalance_numba(bid_volumes: np.ndarray, ask_volumes: np.ndarray) -> float:
+#         "Fallback order book imbalance calculation"
+#         total_bid = np.sum(bid_volumes)
+#         total_ask = np.sum(ask_volumes)
+#         total_volume = total_bid + total_ask
+#         return (total_bid - total_ask) / total_volume if total_volume > 0 else 0.0
+
+# ===========================================
+# VOLUME PROFILE AND ORDER FLOW ANALYSIS ENGINE
+# ===========================================
+
+# class VolumeProfileOrderFlowEngine:
+
+# Advanced Volume Profile and Order Flow Analysis Engine for institutional-grade
+# smart money detection with sub-100μs performance optimization.
+
+
+#     def __init__(self, config: VolumeProfileConfig = None):
+#         self.config = config or VolumeProfileConfig()
+#         self.logger = logger
+
+        # Initialize wrapper factory for external integrations
+#         try:
+#             self.wrapper_factory = WrapperFactory()
+#         except Exception as e:
+#             self.logger.warning(f"Could not initialize wrapper factory: {e}")
+#             self.wrapper_factory = None
+
+        # Data storage
+#         self.price_data: Dict[str, deque] = defaultdict(lambda: deque(maxlen=10000))
+#         self.volume_data: Dict[str, deque] = defaultdict(lambda: deque(maxlen=10000))
+#         self.trade_data: Dict[str, deque] = defaultdict(lambda: deque(maxlen=50000))
+
+        # Volume profiles
+#         self.volume_profiles: Dict[str, Dict[str, VolumeProfile]] = defaultdict(dict)
+#         self.active_profiles: Dict[str, VolumeProfile] = {}
+
+        # VWAP calculations
+#         self.vwap_data: Dict[str, Dict[int, VWAPAnalysis]] = defaultdict(dict)
+
+        # Order flow analysis
+#         self.order_flow_data: Dict[str, deque] = defaultdict(lambda: deque(maxlen=1000))
+#         self.order_flow_metrics: Dict[str, deque] = defaultdict(lambda: deque(maxlen=200))
+
+        # Market depth data
+#         self.market_depth: Dict[str, MarketDepthData] = {}
+#         self.depth_history: Dict[str, deque] = defaultdict(lambda: deque(maxlen=1000))
+
+        # Analysis results cache
+#         self.analysis_cache: Dict[str, Dict] = defaultdict(dict)
+#         self.cache_timestamps: Dict[str, datetime] = {}
+
+        # Performance tracking
+#         self.analysis_stats = {
+# 'total_analyses': 0,
+# 'avg_analysis_time_us': 0.0,
+# 'volume_profiles_generated': 0,
+# 'vwap_calculations': 0,
+# 'order_flow_analyses': 0,
+# 'smart_money_detections': 0,
+# }
+
+        # Threading and concurrency
+#         self.lock = threading.Lock()
+#         self.analysis_queue = asyncio.Queue()
+#         self.background_tasks = set()
+
+        # Start background processing
+#         if self.config.enable_real_time_updates:
+#             self._start_background_processing()
+
+#         self.logger.info("Volume Profile and Order Flow Analysis Engine initialized successfully")
+
+#     def register_symbol(self, symbol: str, asset_class: str):
+#         "Register a symbol for volume profile and order flow analysis"
+        # Initialize data structures for the symbol
+#         self.price_data[symbol] = deque(maxlen=10000)
+#         self.volume_data[symbol] = deque(maxlen=10000)
+#         self.trade_data[symbol] = deque(maxlen=50000)
+#         self.order_flow_data[symbol] = deque(maxlen=1000)
+#         self.order_flow_metrics[symbol] = deque(maxlen=200)
+
+        # Initialize active profile
+#         self.active_profiles[symbol] = VolumeProfile(
+#             symbol=symbol,
+#             asset_class=asset_class,
+#             timeframe="current_session",
+#             start_time=datetime.now(timezone.utc),
+#             end_time=datetime.now(timezone.utc),
+# )
+
+#         self.logger.info(f"Registered {symbol} ({asset_class}) for volume profile analysis")
+
+#     def update_market_data(self, symbol: str, price: float, volume: float,
+# timestamp: datetime = None, trade_data: Dict = None):
+
+# Update market data and trigger volume profile analysis.
+# Optimized for sub-100μs performance.
+
+#         if timestamp is None:
+#             timestamp = datetime.now(timezone.utc)
+
+        # Performance measurement start
+#         start_time = datetime.now()
+
+#         try:
+            # Store basic market data
+#             with self.lock:
+#                 self.price_data[symbol].append((timestamp, price))
+#                 self.volume_data[symbol].append((timestamp, volume))
+
+            # Process trade data if provided
+#             if trade_data:
+#                 order_flow = self._create_order_flow_data(symbol, price, volume, timestamp, trade_data)
+#                 if order_flow:
+#                     self.order_flow_data[symbol].append(order_flow)
+
+            # Update active volume profile
+#             self._update_active_profile(symbol, price, volume, timestamp)
+
+            # Trigger analyses if conditions are met
+#             if self._should_analyze(symbol):
+#                 analyses_to_run = []
+
+#                 if self.config.enable_vwap_analysis:
+#                     analyses_to_run.append('vwap')
+
+#                 if self.config.enable_order_flow_analysis:
+#                     analyses_to_run.append('order_flow')
+
+#                 if len(self.price_data[symbol]) >= self.config.volume_profile_periods:
+#                     analyses_to_run.append('volume_profile')
+
+                # Run analyses in background if enabled
+#                 if self.config.enable_real_time_updates:
+#                     for analysis_type in analyses_to_run:
+#                         self.analysis_queue.put_nowait({
+# 'type': analysis_type,
+# 'symbol': symbol,
+# 'timestamp': timestamp,
+# })
+#                 else:
+                    # Run synchronously
+#                     for analysis_type in analyses_to_run:
+#                         self._run_analysis(analysis_type, symbol, timestamp)
+
+            # Update performance stats
+#             processing_time = (datetime.now() - start_time).total_seconds() * 1000000  # microseconds
+#             self._update_performance_stats(processing_time)
+
+#         except Exception as e:
+#             self.logger.error(f"Error in volume profile analysis for {symbol}: {e}")
+
+#     def _create_order_flow_data(self, symbol: str, price: float, volume: float,
+# timestamp: datetime, trade_data: Dict) -> Optional[OrderFlowData]:
+#         "Create order flow data from trade information"
+
+#         try:
+            # Extract trade details
+#             side = trade_data.get('side', 'unknown')
+#             aggressor = trade_data.get('aggressor', False)
+#             order_type = trade_data.get('order_type', 'market')
+#             exchange = trade_data.get('exchange')
+
+            # Calculate impact score
+#             impact_score = self._calculate_trade_impact(symbol, price, volume)
+
+#             return OrderFlowData(
+#                 timestamp=timestamp,
+#                 price=price,
+#                 volume=volume,
+#                 side=side,
+#                 aggressor=aggressor,
+#                 order_type=order_type,
+#                 exchange=exchange,
+#                 impact_score=impact_score,
+# )
+
+#         except Exception as e:
+#             self.logger.error(f"Error creating order flow data: {e}")
+#             return None
+
+#     def _calculate_trade_impact(self, symbol: str, price: float, volume: float) -> float:
+#         "Calculate trade impact score"
+
+#         try:
+#             if len(self.price_data[symbol]) < 2:
+#                 return 0.0
+
+            # Get previous price
+#             prev_price = self.price_data[symbol][-2][1]
+#             if prev_price <= 0:
+#                 return 0.0
+
+            # Calculate price impact
+#             price_change = abs(price - prev_price) / prev_price
+
+            # Normalize by volume
+#             volume_normalized = volume / 1000  # Normalize to thousands
+
+#             impact_score = price_change * volume_normalized
+
+#             return min(1.0, impact_score)
+
+#         except Exception as e:
+#             self.logger.error(f"Error calculating trade impact: {e}")
+#             return 0.0
+
+#     def _update_active_profile(self, symbol: str, price: float, volume: float, timestamp: datetime):
+#         "Update the active volume profile with new data"
+
+#         try:
+#             profile = self.active_profiles[symbol]
+
+            # Round price to appropriate precision
+#             price_level = round(price, self.config.price_precision)
+
+            # Find existing volume level or create new one
+#             volume_level = None
+#             for level in profile.volume_levels:
+#                 if abs(level.price - price_level) < (10 ** -self.config.price_precision):
+#                     volume_level = level
+#                     break
+
+#             if volume_level is None:
+# volume_level = VolumeLevel(
+#                     price=price_level,
+#                     volume=0.0,
+#                     trades_count=0,
+#                     buy_volume=0.0,
+#                     sell_volume=0.0,
+#                     timestamp=timestamp,
+# )
+#                 profile.volume_levels.append(volume_level)
+
+            # Update volume level
+#             volume_level.volume += volume
+#             volume_level.trades_count += 1
+
+            # Update profile totals
+#             profile.total_volume += volume
+#             profile.total_trades += 1
+
+            # Update profile range
+#             if profile.volume_levels:
+#                 prices = [level.price for level in profile.volume_levels]
+#                 profile.profile_range = max(prices) - min(prices)
+
+            # Update end time
+#             profile.end_time = timestamp
+
+#         except Exception as e:
+#             self.logger.error(f"Error updating active profile for {symbol}: {e}")
+
+#     def _should_analyze(self, symbol: str) -> bool:
+#         "Determine if analysis should be triggered"
+
+        # Check data availability
+#         if len(self.price_data[symbol]) < 10:
+#             return False
+
+        # Check timing (avoid too frequent analysis)
+#         if symbol in self.cache_timestamps:
+#             time_since = datetime.now(timezone.utc) - self.cache_timestamps[symbol]
+#             if time_since.total_seconds() < 5:  # Minimum 5 seconds between analyses
+#                 return False
+
+#         return True
+
+#     def _run_analysis(self, analysis_type: str, symbol: str, timestamp: datetime):
+#         "Run specific analysis type"
+
+#         try:
+#             if analysis_type == 'volume_profile':
+#                 self._generate_volume_profile(symbol, timestamp)
+#             elif analysis_type == 'vwap':
+#                 self._calculate_vwap(symbol, timestamp)
+#             elif analysis_type == 'order_flow':
+#                 self._analyze_order_flow(symbol, timestamp)
+#             elif analysis_type == 'market_depth':
+#                 self._analyze_market_depth(symbol, timestamp)
+
+            # Update cache timestamp
+#             self.cache_timestamps[symbol] = timestamp
+
+#         except Exception as e:
+#             self.logger.error(f"Error running {analysis_type} analysis for {symbol}: {e}")
+
+#     def _generate_volume_profile(self, symbol: str, timestamp: datetime):
+#         "Generate comprehensive volume profile"
+
+#         try:
+            # Get active profile
+#             profile = self.active_profiles[symbol]
+
+#             if len(profile.volume_levels) < 5:
+#                 return
+
+            # Calculate volume ratios for each level
+#             for level in profile.volume_levels:
+#                 level.volume_ratio = level.volume / profile.total_volume if profile.total_volume > 0 else 0
+
+            # Sort volume levels by volume (descending)
+#             profile.volume_levels.sort(key=lambda x: x.volume, reverse=True)
+
+            # Find Point of Control (POC) - highest volume level
+#             if profile.volume_levels:
+#                 profile.point_of_control = profile.volume_levels[0].price
+#                 profile.volume_levels[0].node_type = VolumeNodeType.POINT_OF_CONTROL
+
+            # Calculate Value Area
+#             self._calculate_value_area(profile)
+
+            # Detect High and Low Volume Nodes
+#             if self.config.enable_volume_node_detection:
+#                 self._detect_volume_nodes(profile)
+
+            # Calculate VWAP and standard deviations
+#             if self.config.enable_vwap_analysis:
+#                 self._calculate_profile_vwap(profile)
+
+            # Calculate profile statistics
+#             self._calculate_profile_statistics(profile)
+
+            # Store profile
+#             time_key = timestamp.strftime("%Y-%m-%d_%H-%M")
+#             self.volume_profiles[symbol][time_key] = profile
+
+            # Update statistics
+#             self.analysis_stats['volume_profiles_generated'] += 1
+
+#             self.logger.debug(f"Generated volume profile for {symbol} with {len(profile.volume_levels)} levels")
+
+#         except Exception as e:
+#             self.logger.error(f"Error generating volume profile for {symbol}: {e}")
+
+#     def _calculate_value_area(self, profile: VolumeProfile):
+#         "Calculate Value Area (VA) for the volume profile"
+
+#         try:
+#             if not profile.volume_levels:
+#                 return
+
+            # Sort levels by price
+#             sorted_levels = sorted(profile.volume_levels, key=lambda x: x.price)
+
+            # Calculate target volume for value area
+#             target_volume = profile.total_volume * self.config.value_area_volume_ratio
+
+            # Start from POC and expand outwards
+# poc_index = next(i for i, level in enumerate(sorted_levels)
+#                             if level.price == profile.point_of_control)
+
+#             current_volume = sorted_levels[poc_index].volume
+#             upper_index = poc_index
+#             lower_index = poc_index
+
+            # Expand value area until target volume reached
+#             while current_volume < target_volume:
+#                 upper_volume = sorted_levels[upper_index + 1].volume if upper_index + 1 < len(sorted_levels) else 0
+#                 lower_volume = sorted_levels[lower_index - 1].volume if lower_index - 1 >= 0 else 0
+
+#                 if upper_volume >= lower_volume and upper_index + 1 < len(sorted_levels):
+#                     upper_index += 1
+#                     current_volume += upper_volume
+#                 elif lower_index - 1 >= 0:
+#                     lower_index -= 1
+#                     current_volume += lower_volume
+#                 else:
+#                     break
+
+            # Set value area boundaries
+#             profile.value_area_high = sorted_levels[upper_index].price
+#             profile.value_area_low = sorted_levels[lower_index].price
+
+            # Mark value area nodes
+#             for i, level in enumerate(sorted_levels):
+#                 if i == upper_index:
+#                     level.node_type = VolumeNodeType.VALUE_AREA_HIGH
+#                 elif i == lower_index:
+#                     level.node_type = VolumeNodeType.VALUE_AREA_LOW
+
+#         except Exception as e:
+#             self.logger.error(f"Error calculating value area: {e}")
+
+#     def _detect_volume_nodes(self, profile: VolumeProfile):
+#         "Detect High Volume Nodes (HVN) and Low Volume Nodes (LVN)"
+
+#         try:
+#             if len(profile.volume_levels) < 10:
+#                 return
+
+            # Calculate average volume
+#             volumes = [level.volume for level in profile.volume_levels]
+#             avg_volume = np.mean(volumes)
+
+            # Detect HVN and LVN
+#             hvn_threshold = avg_volume * self.config.hvn_threshold_multiplier
+#             lvn_threshold = avg_volume * self.config.lvn_threshold_multiplier
+
+#             profile.high_volume_nodes = []
+#             profile.low_volume_nodes = []
+
+#             for level in profile.volume_levels:
+#                 if level.volume >= hvn_threshold and level.node_type != VolumeNodeType.POINT_OF_CONTROL:
+#                     level.node_type = VolumeNodeType.HIGH_VOLUME_NODE
+#                     profile.high_volume_nodes.append(level.price)
+#                 elif level.volume <= lvn_threshold:
+#                     level.node_type = VolumeNodeType.LOW_VOLUME_NODE
+#                     profile.low_volume_nodes.append(level.price)
+
+            # Calculate significance scores
+#             max_volume = max(volumes) if volumes else 1
+#             for level in profile.volume_levels:
+#                 level.significance = level.volume / max_volume
+
+#         except Exception as e:
+#             self.logger.error(f"Error detecting volume nodes: {e}")
+
+#     def _calculate_profile_vwap(self, profile: VolumeProfile):
+#         "Calculate VWAP and standard deviations for the profile"
+
+#         try:
+#             if not profile.volume_levels:
+#                 return
+
+            # Extract prices and volumes
+#             prices = np.array([level.price for level in profile.volume_levels])
+#             volumes = np.array([level.volume for level in profile.volume_levels])
+
+            # Calculate VWAP
+#             profile.vwap = calculate_vwap_numba(prices, volumes)
+
+            # Calculate standard deviations
+#             weighted_variance = np.sum(volumes * (prices - profile.vwap) ** 2) / np.sum(volumes)
+#             std_dev = np.sqrt(weighted_variance)
+
+#             profile.standard_deviation_1 = std_dev
+#             profile.standard_deviation_2 = std_dev * 2
+
+            # Calculate volume weighted price
+#             profile.volume_weighted_price = profile.vwap
+
+#         except Exception as e:
+#             self.logger.error(f"Error calculating profile VWAP: {e}")
+
+#     def _calculate_profile_statistics(self, profile: VolumeProfile):
+#         "Calculate profile statistics"
+
+#         try:
+#             if not profile.volume_levels:
+#                 return
+
+            # Extract prices and volumes
+#             prices = [level.price for level in profile.volume_levels]
+#             volumes = [level.volume for level in profile.volume_levels]
+
+            # Calculate skewness and kurtosis
+#             if len(prices) > 2:
+#                 mean_price = np.mean(prices)
+#                 std_price = np.std(prices)
+
+#                 if std_price > 0:
+                    # Skewness
+#                     profile.skewness = np.mean([((p - mean_price) / std_price) ** 3 for p in prices])
+
+                    # Kurtosis
+#                     profile.kurtosis = np.mean([((p - mean_price) / std_price) ** 4 for p in prices]) - 3
+
+#         except Exception as e:
+#             self.logger.error(f"Error calculating profile statistics: {e}")
+
+#     def _calculate_vwap(self, symbol: str, timestamp: datetime):
+#         "Calculate VWAP for multiple timeframes"
+
+#         try:
+#             price_data = list(self.price_data[symbol])
+#             volume_data = list(self.volume_data[symbol])
+
+#             if len(price_data) < 5:
+#                 return
+
+#             for period in self.config.vwap_periods:
+#                 if len(price_data) >= period:
+                    # Get recent data
+#                     recent_prices = np.array([p[1] for p in price_data[-period:]])
+#                     recent_volumes = np.array([v[1] for v in volume_data[-period:]])
+
+                    # Calculate VWAP
+#                     vwap = calculate_vwap_numba(recent_prices, recent_volumes)
+
+                    # Calculate standard deviations
+#                     if len(recent_prices) > 1:
+#                         weighted_variance = np.sum(recent_volumes * (recent_prices - vwap) ** 2) / np.sum(recent_volumes)
+#                         std_dev = np.sqrt(weighted_variance)
+#                     else:
+#                         std_dev = 0
+
+                    # Create VWAP analysis
+#                     current_price = recent_prices[-1]
+
+# analysis = VWAPAnalysis(
+#                         symbol=symbol,
+#                         timestamp=timestamp,
+#                         timeframe=f"{period}p",
+#                         vwap=vwap,
+#                         deviation_1_upper=vwap + std_dev,
+#                         deviation_1_lower=vwap - std_dev,
+#                         deviation_2_upper=vwap + (2 * std_dev),
+#                         deviation_2_lower=vwap - (2 * std_dev),
+#                         deviation_3_upper=vwap + (3 * std_dev),
+#                         deviation_3_lower=vwap - (3 * std_dev),
+#                         current_price=current_price,
+#                         vwap_distance=(current_price - vwap) / vwap if vwap > 0 else 0,
+#                         cumulative_volume=np.sum(recent_volumes),
+#                         cumulative_value=np.sum(recent_prices * recent_volumes),
+#                         volume_weighted_deviation=abs(current_price - vwap) / std_dev if std_dev > 0 else 0,
+# )
+
+                    # Determine VWAP band and trend
+#                     analysis.vwap_band = self._determine_vwap_band(analysis)
+#                     analysis.vwap_trend = self._determine_vwap_trend(symbol, period, recent_prices)
+
+                    # Store VWAP analysis
+#                     self.vwap_data[symbol][period] = analysis
+
+            # Update statistics
+#             self.analysis_stats['vwap_calculations'] += 1
+
+#         except Exception as e:
+#             self.logger.error(f"Error calculating VWAP for {symbol}: {e}")
+
+#     def _determine_vwap_band(self, analysis: VWAPAnalysis) -> str:
+#         "Determine which VWAP band the current price is in"
+
+#         price = analysis.current_price
+#         vwap = analysis.vwap
+#         std_dev = analysis.deviation_1_upper - vwap
+
+#         if price > analysis.deviation_2_upper:
+#             return "above_2"
+#         elif price > analysis.deviation_1_upper:
+#             return "above_1"
+#         elif price >= analysis.deviation_1_lower:
+#             return "at_vwap"
+#         elif price >= analysis.deviation_2_lower:
+#             return "below_1"
+#         else:
+#             return "below_2"
+
+#     def _determine_vwap_trend(self, symbol: str, period: int, prices: np.ndarray) -> str:
+#         "Determine VWAP trend direction"
+
+#         try:
+#             if len(prices) < 3:
+#                 return "sideways"
+
+            # Calculate trend using linear regression
+#             x = np.arange(len(prices))
+#             slope, _, _, _, _ = stats.linregress(x, prices)
+
+            # Determine trend based on slope magnitude
+#             price_range = np.max(prices) - np.min(prices)
+#             normalized_slope = slope / price_range if price_range > 0 else 0
+
+#             if normalized_slope > 0.01:
+#                 return "rising"
+#             elif normalized_slope < -0.01:
+#                 return "falling"
+#             else:
+#                 return "sideways"
+
+#         except Exception as e:
+#             self.logger.error(f"Error determining VWAP trend: {e}")
+#             return "sideways"
+
+#     def _analyze_order_flow(self, symbol: str, timestamp: datetime):
+#         "Analyze order flow metrics"
+
+#         try:
+#             order_flow_data = list(self.order_flow_data[symbol])[-self.config.order_flow_window:]
+
+#             if len(order_flow_data) < 10:
+#                 return
+
+            # Calculate flow metrics
+#             buy_volume = sum(flow.volume for flow in order_flow_data if flow.side == 'buy')
+#             sell_volume = sum(flow.volume for flow in order_flow_data if flow.side == 'sell')
+#             total_volume = buy_volume + sell_volume
+
+#             if total_volume == 0:
+#                 return
+
+            # Calculate ratios
+#             buy_volume_ratio = buy_volume / total_volume
+#             sell_volume_ratio = sell_volume / total_volume
+#             net_flow_imbalance = (buy_volume - sell_volume) / total_volume
+
+            # Determine flow type
+#             if net_flow_imbalance > 0.3:
+#                 flow_type = OrderFlowType.STRONG_BUYING
+#             elif net_flow_imbalance > 0.1:
+#                 flow_type = OrderFlowType.BUYING
+#             elif net_flow_imbalance < -0.3:
+#                 flow_type = OrderFlowType.STRONG_SELLING
+#             elif net_flow_imbalance < -0.1:
+#                 flow_type = OrderFlowType.SELLING
+#             else:
+#                 flow_type = OrderFlowType.BALANCED
+
+            # Calculate aggression metrics
+# aggressive_buy_volume = sum(flow.volume for flow in order_flow_data
+#                                         if flow.side == 'buy' and flow.aggressor)
+# aggressive_sell_volume = sum(flow.volume for flow in order_flow_data
+#                                         if flow.side == 'sell' and flow.aggressor)
+
+#             aggressive_buy_ratio = aggressive_buy_volume / total_volume if total_volume > 0 else 0
+#             aggressive_sell_ratio = aggressive_sell_volume / total_volume if total_volume > 0 else 0
+#             passive_ratio = 1 - (aggressive_buy_ratio + aggressive_sell_ratio)
+
+            # Large order analysis
+# large_orders = [flow for flow in order_flow_data
+#                             if flow.volume * flow.price > self.config.large_order_threshold]
+# whale_orders = [flow for flow in order_flow_data
+#                             if flow.volume * flow.price > self.config.whale_order_threshold]
+
+#             time_window = (order_flow_data[-1].timestamp - order_flow_data[0].timestamp).total_seconds()
+#             large_order_frequency = len(large_orders) / max(time_window, 60)  # Per minute
+#             whale_activity_detected = len(whale_orders) > 0
+
+            # Institutional footprint
+#             institutional_volume = sum(flow.volume for flow in large_orders)
+#             institutional_footprint = institutional_volume / total_volume if total_volume > 0 else 0
+
+            # Market depth and liquidity (simplified)
+#             bid_ask_spread = self._estimate_bid_ask_spread(symbol)
+#             spread_ratio = bid_ask_spread / order_flow_data[-1].price if order_flow_data else 0
+#             market_depth_ratio = self._estimate_market_depth_ratio(symbol)
+#             liquidity_level = self._determine_liquidity_level(spread_ratio, market_depth_ratio)
+
+            # Microstructure analysis
+#             microstructure_type = self._determine_microstructure_type(order_flow_data)
+#             order_book_imbalance = net_flow_imbalance  # Simplified
+#             price_impact_estimate = np.mean([flow.impact_score for flow in order_flow_data])
+
+            # Create metrics object
+# metrics = OrderFlowMetrics(
+#                 symbol=symbol,
+#                 timestamp=timestamp,
+#                 timeframe="current_session",
+
+                # Flow imbalance
+#                 buy_volume_ratio=buy_volume_ratio,
+#                 sell_volume_ratio=sell_volume_ratio,
+#                 net_flow_imbalance=net_flow_imbalance,
+#                 flow_type=flow_type,
+
+                # Aggression metrics
+#                 aggressive_buy_ratio=aggressive_buy_ratio,
+#                 aggressive_sell_ratio=aggressive_sell_ratio,
+#                 passive_ratio=passive_ratio,
+
+                # Large order analysis
+#                 large_order_frequency=large_order_frequency,
+#                 whale_activity_detected=whale_activity_detected,
+#                 institutional_footprint=institutional_footprint,
+
+                # Market depth
+#                 bid_ask_spread=bid_ask_spread,
+#                 spread_ratio=spread_ratio,
+#                 market_depth_ratio=market_depth_ratio,
+#                 liquidity_level=liquidity_level,
+
+                # Microstructure
+#                 microstructure_type=microstructure_type,
+#                 order_book_imbalance=order_book_imbalance,
+#                 price_impact_estimate=price_impact_estimate,
+# )
+
+            # Store metrics
+#             with self.lock:
+#                 self.order_flow_metrics[symbol].append(metrics)
+
+            # Update statistics
+#             self.analysis_stats['order_flow_analyses'] += 1
+
+            # Check for smart money patterns
+#             if self.config.enable_smart_money_detection:
+#                 self._detect_smart_money_patterns(metrics)
+
+#         except Exception as e:
+#             self.logger.error(f"Error analyzing order flow for {symbol}: {e}")
+
+#     def _estimate_bid_ask_spread(self, symbol: str) -> float:
+#         "Estimate bid-ask spread from recent trades"
+
+#         try:
+#             if len(self.price_data[symbol]) < 10:
+#                 return 0.01  # Default spread
+
+#             recent_prices = [p[1] for p in list(self.price_data[symbol])[-10:]]
+#             price_volatility = np.std(recent_prices) / np.mean(recent_prices)
+
+            # Estimate spread as a fraction of price and volatility
+#             current_price = recent_prices[-1]
+#             estimated_spread = current_price * max(0.0001, price_volatility * 0.5)
+
+#             return estimated_spread
+
+#         except Exception as e:
+#             self.logger.error(f"Error estimating bid-ask spread: {e}")
+#             return 0.01
+
+#     def _estimate_market_depth_ratio(self, symbol: str) -> float:
+#         "Estimate market depth ratio"
+
+#         try:
+            # This would integrate with order book data
+            # For now, return placeholder
+#             return 0.5
+#         except Exception as e:
+#             self.logger.error(f"Error estimating market depth ratio: {e}")
+#             return 0.5
+
+#     def _determine_liquidity_level(self, spread_ratio: float, depth_ratio: float) -> LiquidityLevel:
+#         "Determine liquidity level based on spread and depth"
+
+#         if spread_ratio < 0.001 and depth_ratio > 0.8:
+#             return LiquidityLevel.ABUNDANT
+#         elif spread_ratio < 0.005 and depth_ratio > 0.6:
+#             return LiquidityLevel.NORMAL
+#         elif spread_ratio < 0.01 and depth_ratio > 0.4:
+#             return LiquidityLevel.THIN
+#         elif spread_ratio < 0.02:
+#             return LiquidityLevel.VERY_THIN
+#         else:
+#             return LiquidityLevel.ILLIQUID
+
+#     def _determine_microstructure_type(self, order_flow_data: List[OrderFlowData]) -> MarketMicrostructureType:
+#         "Determine market microstructure type from order flow"
+
+#         try:
+#             if len(order_flow_data) < 20:
+#                 return MarketMicrostructureType.HYBRID
+
+            # Calculate metrics
+#             aggressive_ratio = sum(1 for flow in order_flow_data if flow.aggressor) / len(order_flow_data)
+#             volume_variance = np.var([flow.volume for flow in order_flow_data])
+# time_variance = np.var([(flow.timestamp - order_flow_data[0].timestamp).total_seconds()
+#                                 for flow in order_flow_data])
+
+            # Determine type based on characteristics
+#             if aggressive_ratio > 0.7:
+#                 return MarketMicrostructureType.ORDER_DRIVEN
+#             elif volume_variance < np.mean([flow.volume for flow in order_flow_data]):
+#                 return MarketMicrostructureType.DEALER_MARKET
+#             elif time_variance < 10:  # Low time variance = auction-like
+#                 return MarketMicrostructureType.AUCTION_MARKET
+#             else:
+#                 return MarketMicrostructureType.HYBRID
+
+#         except Exception as e:
+#             self.logger.error(f"Error determining microstructure type: {e}")
+#             return MarketMicrostructureType.HYBRID
+
+#     def _detect_smart_money_patterns(self, metrics: OrderFlowMetrics):
+#         "Detect smart money patterns in order flow metrics"
+
+#         try:
+            # Check for institutional buying patterns
+#             if (metrics.institutional_footprint > 0.3 and
+# metrics.flow_type in [OrderFlowType.BUYING, OrderFlowType.STRONG_BUYING] and
+# metrics.aggressive_buy_ratio > 0.6):
+
+#                 self.analysis_stats['smart_money_detections'] += 1
+#                 self.logger.info(f"Smart money buying detected in {metrics.symbol}")
+
+            # Check for institutional selling patterns
+#             elif (metrics.institutional_footprint > 0.3 and
+# metrics.flow_type in [OrderFlowType.SELLING, OrderFlowType.STRONG_SELLING] and
+# metrics.aggressive_sell_ratio > 0.6):
+
+#                 self.analysis_stats['smart_money_detections'] += 1
+#                 self.logger.info(f"Smart money selling detected in {metrics.symbol}")
+
+            # Check for whale activity
+#             if metrics.whale_activity_detected:
+#                 self.analysis_stats['smart_money_detections'] += 1
+#                 self.logger.info(f"Whale activity detected in {metrics.symbol}")
+
+#         except Exception as e:
+#             self.logger.error(f"Error detecting smart money patterns: {e}")
+
+#     def _analyze_market_depth(self, symbol: str, timestamp: datetime):
+#         "Analyze market depth data"
+
+#         try:
+            # This would integrate with order book data feeds
+            # For now, placeholder implementation
+#             pass
+#         except Exception as e:
+#             self.logger.error(f"Error analyzing market depth for {symbol}: {e}")
+
+#     def _update_performance_stats(self, processing_time_us: float):
+#         "Update performance statistics"
+
+#         with self.lock:
+#             current_avg = self.analysis_stats['avg_analysis_time_us']
+#             count = self.analysis_stats['total_analyses']
+
+            # Calculate running average
+#             new_avg = (current_avg * (count - 1) + processing_time_us) / count if count > 0 else processing_time_us
+#             self.analysis_stats['avg_analysis_time_us'] = new_avg
+#             self.analysis_stats['total_analyses'] += 1
+
+#     def _start_background_processing(self):
+#         "Start background processing for intensive computations"
+
+#         async def background_processor():
+#             "while True:"
+#                 try:
+                    # Process analysis queue
+#                     if not self.analysis_queue.empty():
+#                         task = await self.analysis_queue.get()
+#                         await self._process_background_task(task)
+
+                    # Periodic cleanup and optimization
+#                     await asyncio.sleep(1)
+
+                    # Clean up old data
+#                     self._cleanup_old_data()
+
+#                 except Exception as e:
+#                     self.logger.error(f"Error in background processing: {e}")
+#                     await asyncio.sleep(5)
+
+        # Start background task
+#         task = asyncio.create_task(background_processor())
+#         self.background_tasks.add(task)
+#         task.add_done_callback(self.background_tasks.discard)
+
+#     async def _process_background_task(self, task: Dict):
+#         "Process background analysis task"
+
+#         try:
+#             task_type = task.get('type')
+#             symbol = task.get('symbol')
+#             timestamp = task.get('timestamp')
+
+#             if task_type in ['volume_profile', 'vwap', 'order_flow', 'market_depth']:
+#                 self._run_analysis(task_type, symbol, timestamp)
+
+#         except Exception as e:
+#             self.logger.error(f"Error processing background task {task_type}: {e}")
+
+#     def _cleanup_old_data(self):
+#         "Clean up old data to prevent memory issues"
+
+#         cutoff_time = datetime.now(timezone.utc) - timedelta(hours=1)
+
+        # This would implement data cleanup logic
+        # For now, placeholder
+
+    # ===========================================
+    # PUBLIC API METHODS
+    # ===========================================
+
+#     def get_current_volume_profile(self, symbol: str) -> Optional[VolumeProfile]:
+#         "Get current active volume profile for a symbol"
+#         return self.active_profiles.get(symbol)
+
+#     def get_historical_volume_profile(self, symbol: str, time_key: str) -> Optional[VolumeProfile]:
+#         "Get historical volume profile for a symbol"
+#         return self.volume_profiles.get(symbol, {}).get(time_key)
+
+#     def get_vwap_analysis(self, symbol: str, period: int = 20) -> Optional[VWAPAnalysis]:
+#         "Get VWAP analysis for a symbol and period"
+#         return self.vwap_data.get(symbol, {}).get(period)
+
+#     def get_current_order_flow_metrics(self, symbol: str) -> Optional[OrderFlowMetrics]:
+#         "Get current order flow metrics for a symbol"
+#         if symbol in self.order_flow_metrics and len(self.order_flow_metrics[symbol]) > 0:
+#             return self.order_flow_metrics[symbol][-1]
+#         return None
+
+#     def get_volume_nodes(self, symbol: str) -> Dict[str, List[float]]:
+#         "Get high and low volume nodes for a symbol"
+#         profile = self.get_current_volume_profile(symbol)
+#         if profile:
+#             return {
+# 'high_volume_nodes': profile.high_volume_nodes,
+# 'low_volume_nodes': profile.low_volume_nodes,
+# 'point_of_control': [profile.point_of_control] if profile.point_of_control else [],
+# 'value_area_high': [profile.value_area_high] if profile.value_area_high else [],
+# 'value_area_low': [profile.value_area_low] if profile.value_area_low else [],
+# }
+#         return {}
+
+#     def get_support_resistance_levels(self, symbol: str) -> Dict[str, List[float]]:
+#         "Get support and resistance levels from volume profile"
+
+#         profile = self.get_current_volume_profile(symbol)
+#         if not profile:
+#             return {}
+
+#         support_levels = []
+#         resistance_levels = []
+
+#         current_price = self.price_data[symbol][-1][1] if self.price_data[symbol] else 0
+
+#         for level in profile.volume_levels:
+#             if level.price < current_price:
+#                 support_levels.append(level.price)
+#             else:
+#                 resistance_levels.append(level.price)
+
+#         return {
+# 'support_levels': sorted(support_levels, reverse=True)[:5],  # Top 5 supports
+# 'resistance_levels': sorted(resistance_levels)[:5],  # Top 5 resistances
+# }
+
+#     def get_vwap_signals(self, symbol: str) -> Dict[str, Any]:
+#         "Get VWAP-based trading signals"
+
+# signals = {
+# 'symbol': symbol,
+# 'vwap_analysis': {},
+# 'signals': [],
+# }
+
+        # Get VWAP analysis for different periods
+#         for period in [5, 10, 20, 50]:
+#             vwap_analysis = self.get_vwap_analysis(symbol, period)
+#             if vwap_analysis:
+# signals['vwap_analysis'][f'{period}p'] = {
+# 'vwap': vwap_analysis.vwap,
+# 'current_price': vwap_analysis.current_price,
+# 'vwap_distance': vwap_analysis.vwap_distance,
+# 'vwap_band': vwap_analysis.vwap_band,
+# 'trend': vwap_analysis.vwap_trend,
+# }
+
+                # Generate signals
+#                 if vwap_analysis.vwap_band == "above_2":
+# signals['signals'].append({
+# 'type': 'strong_bullish''),
+# 'source': f'vwap_{period}p''),
+# 'message': f'Price is significantly above {period}-period VWAP''),
+# 'strength': 0.8,
+# })
+#                 elif vwap_analysis.vwap_band == "below_2":
+# signals['signals'].append({
+# 'type': 'strong_bearish''),
+# 'source': f'vwap_{period}p''),
+# 'message': f'Price is significantly below {period}-period VWAP''),
+# 'strength': 0.8,
+# })
+#                 elif vwap_analysis.vwap_band == "at_vwap" and vwap_analysis.vwap_trend == "rising":
+# signals['signals'].append({
+# 'type': 'bullish_reversal''),
+# 'source': f'vwap_{period}p''),
+# 'message': f'Price at rising {period}-period VWAP - potential support''),
+# 'strength': 0.6,
+# })
+
+#         return signals
+
+#     def get_order_flow_signals(self, symbol: str) -> Dict[str, Any]:
+#         "Get order flow-based trading signals"
+
+#         metrics = self.get_current_order_flow_metrics(symbol)
+#         if not metrics:
+#             return {'symbol': symbol, 'signals': []}
+
+# signals = {
+# 'symbol': symbol,
+# 'metrics': {
+# 'flow_type': metrics.flow_type.value,
+# 'buy_volume_ratio': metrics.buy_volume_ratio,
+# 'sell_volume_ratio': metrics.sell_volume_ratio,
+# 'net_flow_imbalance': metrics.net_flow_imbalance,
+# 'institutional_footprint': metrics.institutional_footprint,
+# 'whale_activity_detected': metrics.whale_activity_detected,
+# 'liquidity_level': metrics.liquidity_level.value,
+# },
+# 'signals': [],
+# }
+
+        # Generate signals based on order flow
+#         if metrics.flow_type == OrderFlowType.STRONG_BUYING:
+# signals['signals'].append({
+# 'type': 'strong_buying_pressure''),
+# 'source': 'order_flow''),
+# 'message': f"Strong buying pressure detected ({metrics.buy_volume_ratio:.1%} buy volume)",
+# 'strength': 0.8,
+# })
+#         elif metrics.flow_type == OrderFlowType.STRONG_SELLING:
+# signals['signals'].append({
+# 'type': 'strong_selling_pressure''),
+# 'source': 'order_flow''),
+# 'message': f"Strong selling pressure detected ({metrics.sell_volume_ratio:.1%} sell volume)",
+# 'strength': 0.8,
+# })
+
+#         if metrics.institutional_footprint > 0.5:
+#             direction = "buying" if metrics.net_flow_imbalance > 0 else "selling"
+# signals['signals'].append({
+# 'type': 'institutional_activity''),
+# 'source': 'order_flow''),
+# 'message': f"High institutional {direction} activity detected ({metrics.institutional_footprint:.1%} footprint)",
+# 'strength': 0.7,
+# })
+
+#         if metrics.whale_activity_detected:
+# signals['signals'].append({
+# 'type': 'whale_activity''),
+# 'source': 'order_flow''),
+# 'message': "Whale activity detected - large institutional orders present",
+# 'strength': 0.9,
+# })
+
+#         return signals
+
+#     def get_comprehensive_analysis(self, symbol: str) -> Dict[str, Any]:
+#         "Get comprehensive volume profile and order flow analysis"
+
+# analysis = {
+# 'symbol': symbol,
+# 'timestamp': datetime.now(timezone.utc).isoformat(),
+# 'volume_profile': {},
+# 'vwap_analysis': {},
+# 'order_flow': {},
+# 'support_resistance': {},
+# 'signals': [],
+# 'market_conditions': {},
+# }
+
+        # Volume profile analysis
+#         profile = self.get_current_volume_profile(symbol)
+#         if profile:
+# analysis['volume_profile'] = {
+# 'total_volume': profile.total_volume,
+# 'total_trades': profile.total_trades,
+# 'point_of_control': profile.point_of_control,
+# 'value_area': {
+# 'high': profile.value_area_high,
+# 'low': profile.value_area_low,
+# 'volume_ratio': profile.value_area_volume_ratio,
+# },
+# 'vwap': profile.vwap,
+# 'profile_range': profile.profile_range,
+# 'volume_nodes': self.get_volume_nodes(symbol),
+# }
+
+        # VWAP analysis
+#         analysis['vwap_analysis'] = self.get_vwap_signals(symbol)
+
+        # Order flow analysis
+#         analysis['order_flow'] = self.get_order_flow_signals(symbol)
+
+        # Support and resistance levels
+#         analysis['support_resistance'] = self.get_support_resistance_levels(symbol)
+
+        # Combine all signals
+# all_signals = (analysis['vwap_analysis'].get('signals', []) +
+# analysis['order_flow'].get('signals', []))
+
+        # Sort signals by strength
+#         analysis['signals'] = sorted(all_signals, key=lambda x: x.get('strength', 0), reverse=True)
+
+        # Market conditions summary
+#         if profile and profile.vwap:
+#             current_price = self.price_data[symbol][-1][1] if self.price_data[symbol] else 0
+#             vwap_distance = (current_price - profile.vwap) / profile.vwap if profile.vwap > 0 else 0
+
+# analysis['market_conditions'] = {
+# 'current_price': current_price,
+# 'vwap': profile.vwap,
+# 'price_vs_vwap': 'above' if vwap_distance > 0 else 'below''),
+# 'price_distance_from_vwap': abs(vwap_distance),
+# 'profile_development': 'accumulation' if profile.skewness > 0 else 'distribution' if profile.skewness < 0 else 'balanced''),
+# }
+
+#         return analysis
+
+#     def get_analysis_statistics(self) -> Dict[str, Any]:
+#         "Get analysis performance statistics"
+#         with self.lock:
+#             stats = self.analysis_stats.copy()
+
+            # Add additional statistics
+#             stats['symbols_analyzed'] = len(self.price_data)
+#             stats['active_profiles'] = len(self.active_profiles)
+#             stats['cached_analyses'] = len(self.analysis_cache)
+
+            # Performance metrics
+#             stats['sub_100us_target_met'] = stats['avg_analysis_time_us'] < 100
+
+#             return stats
+
+#     def cleanup_old_data(self, hours: int = 24):
+#         "Clean up old data to prevent memory issues"
+
+#         cutoff_time = datetime.now(timezone.utc) - timedelta(hours=hours)
+
+#         with self.lock:
+            # Clean up price and volume data
+#             for symbol in list(self.price_data.keys()):
+#                 while (self.price_data[symbol] and
+#                         self.price_data[symbol][0][0] < cutoff_time):
+#                     self.price_data[symbol].popleft()
+#                 while (self.volume_data[symbol] and
+#                         self.volume_data[symbol][0][0] < cutoff_time):
+#                     self.volume_data[symbol].popleft()
+
+            # Clean up trade data
+#             for symbol in list(self.trade_data.keys()):
+#                 while (self.trade_data[symbol] and
+#                         self.trade_data[symbol][0]['timestamp'] < cutoff_time):
+#                     self.trade_data[symbol].popleft()
+
+            # Clean up order flow data
+#             for symbol in list(self.order_flow_data.keys()):
+#                 while (self.order_flow_data[symbol] and
+#                         self.order_flow_data[symbol][0].timestamp < cutoff_time):
+#                     self.order_flow_data[symbol].popleft()
+
+            # Clean up volume profiles
+#             for symbol in list(self.volume_profiles.keys()):
+#                 for time_key in list(self.volume_profiles[symbol].keys()):
+#                     profile = self.volume_profiles[symbol][time_key]
+#                     if profile.end_time < cutoff_time:
+#                         del self.volume_profiles[symbol][time_key]
+
+#         self.logger.info(f"Cleaned up data older than {hours} hours")
+
+#     def shutdown(self):
+#         "Shutdown the volume profile and order flow analysis engine"
+
+        # Cancel background tasks
+#         for task in self.background_tasks:
+#             task.cancel()
+
+        # Clear caches
+#         self.analysis_cache.clear()
+#         self.cache_timestamps.clear()
+
+#         self.logger.info("Volume Profile and Order Flow Analysis Engine shutdown complete")
+
+
+# ===========================================
+# FACTORY FUNCTIONS AND UTILITIES
+# ===========================================
+
+# def create_volume_profile_order_flow_engine(
+#     price_precision: int = 2,
+#     enable_high_performance_mode: bool = True,
+#     sub_100_microsecond_target: bool = True,
+#     enable_volume_node_detection: bool = True,
+#     enable_vwap_analysis: bool = True,
+#     enable_order_flow_analysis: bool = True,
+#     enable_smart_money_detection: bool = True,
+# ) -> VolumeProfileOrderFlowEngine:
+#     "Create volume profile and order flow analysis engine with specified configuration"
+
+# config = VolumeProfileConfig(
+#         price_precision=price_precision,
+#         enable_high_performance_mode=enable_high_performance_mode,
+#         sub_100_microsecond_target=sub_100_microsecond_target,
+#         enable_volume_node_detection=enable_volume_node_detection,
+#         enable_vwap_analysis=enable_vwap_analysis,
+#         enable_order_flow_analysis=enable_order_flow_analysis,
+#         enable_smart_money_detection=enable_smart_money_detection,
+# )
+
+#     return VolumeProfileOrderFlowEngine(config)
+
+
+# Export all classes and functions
+# __all__ = [
+    # Enums
+#     "LiquidityLevel",
+#     "OrderFlowType",
+#     "VolumeNodeType",
+#     "MarketMicrostructureType",
+
+    # Data classes
+#     "VolumeLevel",
+#     "VolumeProfile",
+#     "OrderFlowData",
+#     "OrderFlowMetrics",
+#     "VWAPAnalysis",
+#     "MarketDepthData",
+#     "VolumeProfileConfig",
+
+    # Main classes
+#     "VolumeProfileOrderFlowEngine",
+
+    # Factory functions
+#     "create_volume_profile_order_flow_engine",
+# ]

@@ -1,0 +1,58 @@
+import logging
+from typing import Any, Dict, Optional
+from .trading212adapter_handlers.base_handler import Trading212AdapterBaseHandler
+from .trading212adapter_handlers.main_handler import Trading212AdapterMainHandler
+from .trading212adapter_handlers.config_handler import Trading212AdapterConfigHandler
+from .trading212adapter_handlers.state_handler import Trading212AdapterStateHandler
+from .trading212adapter_handlers.validation_handler import Trading212AdapterValidationHandler
+"""
+Trading212Adapter - Refactored (Communication Pattern)
+Based on successful communication_wrapper.py refactoring approach"""
+Applied modular handler architecture"""
+"""
+
+
+
+logger = logging.getLogger(__name__)
+"""
+class Trading212Adapter:"""
+    """
+    Refactored Trading212Adapter using communication pattern"""
+    Applied modular handler architecture"""
+    """
+
+    def __init__(self, config: Optional[Dict[str, Any]] = None)"""
+        self.config = config or {}
+        self.logger = logger
+
+        # Initialize handlers
+        self.base_handler = Trading212AdapterBaseHandler(config)
+        self.main_handler = Trading212AdapterMainHandler(config)
+        self.config_handler = Trading212AdapterConfigHandler(config)
+        self.state_handler = Trading212AdapterStateHandler(config)
+        self.validation_handler = Trading212AdapterValidationHandler(config)
+"""
+    def process_request(self, request: Any) -> Any"""
+        """Process request using appropriate handlers"""""
+        self.logger.info(f"Processing request with {self.__class__.__name__}")
+
+        # Use main handler by default
+        if hasattr(self, 'main_handler'):
+            return self.main_handler.handle(request)"""
+"""
+        return {"status": "processed", "class": self.__class__.__name__}
+"""
+    def get_status(self) -> Dict[str, Any]:"""
+        """Get status from all handlers""""
+        status = {"""
+            "main_class": self.__class__.__name__,"""
+            "handlers": {}
+        }
+
+        for handler_name in handlers:
+            if hasattr(self, handler_name):"""
+                handler = getattr(self, handler_name)"""
+                status["handlers"][handler_name] = handler.get_handler_info()
+
+        return status"'
+"'"'

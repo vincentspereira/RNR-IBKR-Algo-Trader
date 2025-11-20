@@ -1,0 +1,1526 @@
+"""
+Multi-Source Data Feeds with Fallback Mechanism
+
+Implements redundant data sources with automatic failover for reliable market data:
+- Primary: Interactive Brokers (IBKR)
+- Secondary: Yahoo Finance
+- Tertiary: Alpha Vantage
+- Quaternary: Polygon.io
+- Emergency: Static/Cached data
+
+Author: Vincent S. Pereira
+Version: 1.0.0
+Phase: Phase 1 - Core System Validation & Hardening
+"""
+
+import asyncio
+import json
+import logging
+import os
+import sys
+import time
+from concurrent.futures import ThreadPoolExecutor
+from dataclasses import asdict, dataclass
+from datetime import datetime, timedelta, timezone
+from enum import Enum
+from pathlib import Path
+from typing import Any, Dict, List, Optional, Union
+
+import pandas as pd
+import yaml
+
+# Add project paths
+project_root = os.path.dirname(
+    os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+)
+sys.path.insert(0, project_root)
+
+# Add IB API path
+ibapi_path = r"C:\TWS API\source\pythonclient"
+if os.path.exists(ibapi_path):
+    sys.path.insert(0, ibapi_path)
+
+# Configure logging
+logging.basicConfig(
+    level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s"
+)
+logger = logging.getLogger(__name__)
+
+# Import dependencies
+try:
+    from ib_insync import IB, Contract, Stock
+
+    IBKR_AVAILABLE = True
+except ImportError:
+    IBKR_AVAILABLE = False
+    logger.warning("IB API not available")
+
+try:
+    import yfinance as yf
+
+    YAHOO_AVAILABLE = True
+except ImportError:
+    YAHOO_AVAILABLE = False
+    logger.warning("Yahoo Finance not available")
+
+try:
+    import requests
+
+    REQUESTS_AVAILABLE = True
+except ImportError:
+    REQUESTS_AVAILABLE = False
+    logger.warning("Requests not available")
+
+# Import new data feed adapters
+try:
+    from nautilus_trader_engine.adapters.data_feeds.finnhub import (
+        FinnhubDataFeedAdapter,
+    )
+
+    FINNHUB_AVAILABLE = True
+except ImportError:
+    FINNHUB_AVAILABLE = False
+    logger.warning("Finnhub adapter not available")
+
+try:
+    from nautilus_trader_engine.adapters.data_feeds.investing_com import (
+        InvestingComDataFeedAdapter,
+    )
+
+    INVESTING_COM_AVAILABLE = True
+except ImportError:
+    INVESTING_COM_AVAILABLE = False
+    logger.warning("Investing.com adapter not available")
+
+try:
+    from nautilus_trader_engine.adapters.data_feeds.cme_group import (
+        CMEGroupDataFeedAdapter,
+    )
+
+    CME_GROUP_AVAILABLE = True
+except ImportError:
+    CME_GROUP_AVAILABLE = False
+    logger.warning("CME Group adapter not available")
+
+try:
+    from nautilus_trader_engine.adapters.data_feeds.twelve_data import (
+        TwelveDataDataFeedAdapter,
+    )
+
+    TWELVE_DATA_AVAILABLE = True
+except ImportError:
+    TWELVE_DATA_AVAILABLE = False
+    logger.warning("Twelve Data adapter not available")
+
+try:
+    from nautilus_trader_engine.adapters.data_feeds.barchart import (
+        BarchartDataFeedAdapter,
+    )
+
+    BARCHART_AVAILABLE = True
+except ImportError:
+    BARCHART_AVAILABLE = False
+    logger.warning("Barchart adapter not available")
+
+try:
+    from nautilus_trader_engine.adapters.data_feeds.spiderrock import (
+        SpiderRockDataFeedAdapter,
+    )
+
+    SPIDERROCK_AVAILABLE = True
+except ImportError:
+    SPIDERROCK_AVAILABLE = False
+    logger.warning("SpiderRock adapter not available")
+
+try:
+    from nautilus_trader_engine.adapters.data_feeds.tradingcharts import (
+        TradingChartsDataFeedAdapter,
+    )
+
+    TRADINGCHARTS_AVAILABLE = True
+except ImportError:
+    TRADINGCHARTS_AVAILABLE = False
+    logger.warning("TradingCharts adapter not available")
+
+try:
+    from nautilus_trader_engine.adapters.data_feeds.oanda import OandaDataFeedAdapter
+
+    OANDA_AVAILABLE = True
+except ImportError:
+    OANDA_AVAILABLE = False
+    logger.warning("Oanda adapter not available")
+
+
+class DataSource(Enum):
+    """Data source enumeration"""
+
+    IBKR = "ibkr"
+    YAHOO_FINANCE = "yahoo_finance"
+    ALPHA_VANTAGE = "alpha_vantage"
+    POLYGON = "polygon"
+    FINNHUB = "finnhub"
+    INVESTING_COM = "investing_com"
+    CME_GROUP = "cme_group"
+    TWELVE_DATA = "twelve_data"
+    BARCHART = "barchart"
+    SPIDERROCK = "spiderrock"
+    TRADINGCHARTS = "tradingcharts"
+    OANDA = "oanda"
+    CACHE = "cached_data"
+
+
+class DataStatus(Enum):
+    """Data status enumeration"""
+
+    SUCCESS = "success"
+    FAILED = "failed"
+    TIMEOUT = "timeout"
+    NO_DATA = "no_data"
+    STALE = "stale"
+
+
+@dataclass
+class MarketDataPoint:
+    """Standard market data structure"""
+
+    symbol: str
+    timestamp: datetime
+    open: float
+    high: float
+    low: float
+    close: float
+    volume: int
+    source: DataSource
+    status: DataStatus
+    latency_ms: float = 0.0
+    metadata: Dict[str, Any] = None
+    error_message: str = ""
+
+    def __post_init__(self):
+        if self.metadata is None:
+            self.metadata = {}
+
+    @property
+    def price(self) -> float:
+        """Alias for close price for backward compatibility"""
+        return self.close
+
+
+@dataclass
+class DataSourceConfig:
+    """Data source configuration"""
+
+    name: DataSource
+    priority: int
+    enabled: bool
+    timeout_seconds: int
+    rate_limit_per_minute: int
+    api_key: Optional[str] = None
+    base_url: Optional[str] = None
+    metadata: Dict[str, Any] = None
+
+    def __post_init__(self):
+        if self.metadata is None:
+            self.metadata = {}
+
+
+class DataFeedManager:
+    """Multi-source data feed manager with failover"""
+
+    def __init__(self, config_path: Optional[str] = None):
+        self.sources = {}
+        self.fallback_order = []
+        self.cache = {}
+        self.source_stats = {}
+        self.active_connections = {}
+        self.config = {}
+        self.fallback_chains = {}
+        self.symbol_mapping = {}
+        self.health_check_config = {}
+        self.error_handling_config = {}
+        self.monitoring_config = {}
+
+        # Load configuration
+        self.config_path = config_path or "config/data_feeds_config.yaml"
+        self._load_configuration()
+
+        # Initialize source configurations
+        self._initialize_sources()
+
+    def _load_configuration(self):
+        """Load configuration from YAML file"""
+        try:
+            config_file = Path(self.config_path)
+            if not config_file.exists():
+                logger.warning(
+                    f"Configuration file not found: {self.config_path}. Using default settings."
+                )
+                self._load_default_configuration()
+                return
+
+            with open(config_file, "r", encoding="utf-8") as f:
+                self.config = yaml.safe_load(f)
+
+            # Extract configuration sections
+            self.fallback_chains = self.config.get("fallback_chains", {})
+            self.symbol_mapping = self.config.get("symbol_mapping", {})
+            self.health_check_config = self.config.get("health_check", {})
+            self.error_handling_config = self.config.get("error_handling", {})
+            self.monitoring_config = self.config.get("monitoring", {})
+
+            logger.info(f"Configuration loaded from: {self.config_path}")
+
+        except Exception as e:
+            logger.error(f"Failed to load configuration: {e}. Using default settings.")
+            self._load_default_configuration()
+
+    def _load_default_configuration(self):
+        """Load default configuration when config file is not available"""
+        self.config = {
+            "global": {
+                "default_timeout": 30,
+                "max_retries": 3,
+                "rate_limiting": {"enabled": True, "default_requests_per_minute": 60},
+            },
+            "data_sources": {},
+            "fallback_chains": {
+                "stocks": {"primary": ["yahoo", "alpha_vantage", "polygon", "finnhub"]},
+                "forex": {"primary": ["yahoo", "oanda", "alpha_vantage"]},
+                "crypto": {"primary": ["yahoo", "alpha_vantage", "polygon"]},
+            },
+        }
+
+    def _initialize_sources(self):
+        """Initialize data source configurations from config file"""
+        data_sources_config = self.config.get("data_sources", {})
+        global_config = self.config.get("global", {})
+
+        # Default timeout and retries
+        default_timeout = global_config.get("default_timeout", 30)
+        default_retries = global_config.get("max_retries", 3)
+        default_rate_limit = global_config.get("rate_limiting", {}).get(
+            "default_requests_per_minute", 60
+        )
+
+        # If no data sources configured, use defaults
+        if not data_sources_config:
+            self._initialize_default_sources()
+            return
+
+        # Initialize each configured data source
+        for source_name, source_config in data_sources_config.items():
+            if not source_config.get("enabled", True):
+                continue
+
+            # Map source name to DataSource enum
+            data_source_enum = self._get_data_source_enum(source_name)
+            if not data_source_enum:
+                logger.warning(f"Unknown data source: {source_name}")
+                continue
+
+            settings = source_config.get("settings", {})
+
+            # Create DataSourceConfig
+            self.sources[data_source_enum] = DataSourceConfig(
+                name=data_source_enum,
+                priority=source_config.get("priority", 999),
+                enabled=source_config.get("enabled", True),
+                base_url=source_config.get("base_url", ""),
+                api_key=self._resolve_api_key(source_config.get("api_key", "")),
+                timeout_seconds=settings.get("timeout", default_timeout),
+                rate_limit_per_minute=settings.get(
+                    "rate_limit_per_minute", default_rate_limit
+                ),
+                metadata={
+                    "asset_classes": source_config.get("asset_classes", []),
+                    "endpoints": source_config.get("endpoints", {}),
+                    "connection": source_config.get("connection", {}),
+                },
+            )
+
+        # Add cache as virtual source if not configured
+        if DataSource.CACHE not in self.sources:
+            self.sources[DataSource.CACHE] = DataSourceConfig(
+                name=DataSource.CACHE,
+                priority=999,
+                enabled=True,
+                base_url="",
+                api_key="",
+                timeout_seconds=1,
+                rate_limit_per_minute=10000,
+                metadata={"virtual": True, "cache": True},
+            )
+
+        # Create fallback order (sorted by priority)
+        self.fallback_order = sorted(
+            [source for source in self.sources.values() if source.enabled],
+            key=lambda x: x.priority,
+        )
+
+        # Initialize source statistics
+        for source in self.sources.values():
+            self.source_stats[source.name] = {
+                "requests": 0,
+                "successes": 0,
+                "failures": 0,
+                "avg_latency": 0.0,
+                "last_success": None,
+                "last_failure": None,
+                "uptime_percentage": 100.0,
+            }
+
+    def _initialize_default_sources(self):
+        """Initialize default data source configurations"""
+        self.sources = {
+            DataSource.IBKR: DataSourceConfig(
+                name=DataSource.IBKR,
+                priority=1,
+                enabled=IBKR_AVAILABLE,
+                timeout_seconds=10,
+                rate_limit_per_minute=1000,
+                metadata={"real_time": True, "paper_trading": True},
+            ),
+            DataSource.YAHOO: DataSourceConfig(
+                name=DataSource.YAHOO,
+                priority=2,
+                enabled=YAHOO_AVAILABLE,
+                timeout_seconds=15,
+                rate_limit_per_minute=200,
+                metadata={"real_time": False, "delayed": True},
+            ),
+            DataSource.ALPHA_VANTAGE: DataSourceConfig(
+                name=DataSource.ALPHA_VANTAGE,
+                priority=3,
+                enabled=REQUESTS_AVAILABLE,
+                timeout_seconds=20,
+                rate_limit_per_minute=500,
+                api_key=os.getenv("ALPHA_VANTAGE_API_KEY"),
+                base_url="https://www.alphavantage.co/query",
+                metadata={"real_time": True, "premium": True},
+            ),
+            DataSource.POLYGON: DataSourceConfig(
+                name=DataSource.POLYGON,
+                priority=4,
+                enabled=REQUESTS_AVAILABLE,
+                timeout_seconds=20,
+                rate_limit_per_minute=1000,
+                api_key=os.getenv("POLYGON_API_KEY"),
+                base_url="https://api.polygon.io",
+                metadata={"real_time": True, "premium": True},
+            ),
+            DataSource.FINNHUB: DataSourceConfig(
+                name=DataSource.FINNHUB,
+                priority=5,
+                enabled=FINNHUB_AVAILABLE and REQUESTS_AVAILABLE,
+                timeout_seconds=15,
+                rate_limit_per_minute=300,
+                api_key=os.getenv("FINNHUB_API_KEY"),
+                base_url="https://finnhub.io/api/v1",
+                metadata={
+                    "real_time": True,
+                    "premium": True,
+                    "asset_classes": ["stocks", "forex", "crypto"],
+                },
+            ),
+            DataSource.INVESTING_COM: DataSourceConfig(
+                name=DataSource.INVESTING_COM,
+                priority=6,
+                enabled=INVESTING_COM_AVAILABLE and REQUESTS_AVAILABLE,
+                timeout_seconds=20,
+                rate_limit_per_minute=100,
+                base_url="https://api.investing.com",
+                metadata={
+                    "real_time": True,
+                    "global_coverage": True,
+                    "asset_classes": [
+                        "stocks",
+                        "indices",
+                        "commodities",
+                        "forex",
+                        "bonds",
+                    ],
+                },
+            ),
+            DataSource.CME_GROUP: DataSourceConfig(
+                name=DataSource.CME_GROUP,
+                priority=7,
+                enabled=CME_GROUP_AVAILABLE and REQUESTS_AVAILABLE,
+                timeout_seconds=25,
+                rate_limit_per_minute=200,
+                api_key=os.getenv("CME_API_KEY"),
+                base_url="https://www.cmegroup.com/market-data-api",
+                metadata={
+                    "real_time": True,
+                    "delayed": True,
+                    "asset_classes": ["futures", "options", "commodities"],
+                },
+            ),
+            DataSource.TWELVE_DATA: DataSourceConfig(
+                name=DataSource.TWELVE_DATA,
+                priority=8,
+                enabled=TWELVE_DATA_AVAILABLE and REQUESTS_AVAILABLE,
+                timeout_seconds=20,
+                rate_limit_per_minute=800,
+                api_key=os.getenv("TWELVE_DATA_API_KEY"),
+                base_url="https://api.twelvedata.com",
+                metadata={
+                    "real_time": True,
+                    "premium": True,
+                    "asset_classes": ["stocks", "forex", "crypto", "etf", "indices"],
+                },
+            ),
+            DataSource.BARCHART: DataSourceConfig(
+                name=DataSource.BARCHART,
+                priority=9,
+                enabled=BARCHART_AVAILABLE and REQUESTS_AVAILABLE,
+                timeout_seconds=20,
+                rate_limit_per_minute=400,
+                api_key=os.getenv("BARCHART_API_KEY"),
+                base_url="https://marketdata.websol.barchart.com",
+                metadata={
+                    "real_time": True,
+                    "premium": True,
+                    "asset_classes": ["commodities", "futures", "options", "stocks"],
+                },
+            ),
+            DataSource.SPIDERROCK: DataSourceConfig(
+                name=DataSource.SPIDERROCK,
+                priority=10,
+                enabled=SPIDERROCK_AVAILABLE and REQUESTS_AVAILABLE,
+                timeout_seconds=15,
+                rate_limit_per_minute=1000,
+                api_key=os.getenv("SPIDERROCK_API_KEY"),
+                base_url="https://api.spiderrock.com",
+                metadata={
+                    "real_time": True,
+                    "premium": True,
+                    "asset_classes": ["options", "stocks", "futures"],
+                },
+            ),
+            DataSource.TRADINGCHARTS: DataSourceConfig(
+                name=DataSource.TRADINGCHARTS,
+                priority=11,
+                enabled=TRADINGCHARTS_AVAILABLE and REQUESTS_AVAILABLE,
+                timeout_seconds=20,
+                rate_limit_per_minute=200,
+                api_key=os.getenv("TRADINGCHARTS_API_KEY"),
+                base_url="https://api.tradingcharts.com",
+                metadata={
+                    "real_time": True,
+                    "delayed": True,
+                    "asset_classes": ["commodities", "futures", "agriculture"],
+                },
+            ),
+            DataSource.OANDA: DataSourceConfig(
+                name=DataSource.OANDA,
+                priority=12,
+                enabled=OANDA_AVAILABLE and REQUESTS_AVAILABLE,
+                timeout_seconds=15,
+                rate_limit_per_minute=100,
+                api_key=os.getenv("OANDA_API_TOKEN"),
+                base_url="https://api-fxpractice.oanda.com",
+                metadata={
+                    "real_time": True,
+                    "premium": True,
+                    "asset_classes": ["forex", "cfd", "metals"],
+                },
+            ),
+            DataSource.CACHE: DataSourceConfig(
+                name=DataSource.CACHE,
+                priority=13,
+                enabled=True,
+                timeout_seconds=1,
+                rate_limit_per_minute=10000,
+                metadata={"fallback": True, "offline": True},
+            ),
+        }
+
+    def _get_data_source_enum(self, source_name: str) -> Optional[DataSource]:
+        """Map source name to DataSource enum"""
+        source_mapping = {
+            "ibkr": DataSource.IBKR,
+            "yahoo": DataSource.YAHOO,
+            "alpha_vantage": DataSource.ALPHA_VANTAGE,
+            "polygon": DataSource.POLYGON,
+            "finnhub": DataSource.FINNHUB,
+            "investing_com": DataSource.INVESTING_COM,
+            "cme_group": DataSource.CME_GROUP,
+            "twelve_data": DataSource.TWELVE_DATA,
+            "barchart": DataSource.BARCHART,
+            "spiderrock": DataSource.SPIDERROCK,
+            "tradingcharts": DataSource.TRADINGCHARTS,
+            "oanda": DataSource.OANDA,
+        }
+        return source_mapping.get(source_name)
+
+    def _resolve_api_key(self, api_key_config: str) -> str:
+        """Resolve API key from environment variables"""
+        if api_key_config.startswith("${") and api_key_config.endswith("}"):
+            env_var = api_key_config[2:-1]
+            return os.getenv(env_var, "")
+        return api_key_config
+
+    async def get_market_data(
+        self,
+        symbol: str,
+        timeframe: str = "1d",
+        period: str = "5d",
+        force_source: Optional[DataSource] = None,
+        use_cache: bool = True,
+        asset_class: Optional[str] = None,
+        trading_mode: str = "paper",  # "paper" or "live"
+    ) -> Optional[MarketDataPoint]:
+        """Get market data with automatic fallback using asset-class specific chains"""
+
+        # Check cache first if enabled
+        if use_cache:
+            cached_data = self._get_cached_data(symbol)
+            if (
+                cached_data
+                and (datetime.now(timezone.utc) - cached_data.timestamp).seconds < 300
+            ):  # 5 min cache
+                logger.info(f"✓ Using cached data for {symbol}")
+                return cached_data
+
+        # If force_source is specified, try only that source
+        if force_source and force_source in self.sources:
+            logger.info(f"🎯 Forcing source {force_source.value} for {symbol}")
+            data = await self._fetch_from_source(
+                self.sources[force_source], symbol, timeframe, period
+            )
+            if data and data.status == DataStatus.SUCCESS:
+                self._cache_data(symbol, data)
+                self._update_source_stats(force_source, True, 0.0)
+                return data
+            else:
+                self._update_source_stats(force_source, False, 0.0)
+                logger.warning(
+                    f"⚠ Forced source {force_source.value} failed for {symbol}"
+                )
+                return data
+
+        # Determine asset class if not provided
+        if not asset_class:
+            asset_class = self._detect_asset_class(symbol)
+
+        # Get appropriate fallback chain
+        fallback_sources = self._get_fallback_chain(asset_class, trading_mode)
+
+        # Try sources in fallback order
+        for source_name in fallback_sources:
+            source_enum = self._get_data_source_enum(source_name)
+            if not source_enum or source_enum not in self.sources:
+                continue
+
+            source_config = self.sources[source_enum]
+            if not source_config.enabled:
+                continue
+
+            logger.info(
+                f"🔄 Trying {source_config.name.value} for {symbol} ({asset_class})"
+            )
+
+            start_time = time.time()
+            data = await self._fetch_from_source(
+                source_config, symbol, timeframe, period
+            )
+            latency = (time.time() - start_time) * 1000
+
+            if data and data.status == DataStatus.SUCCESS:
+                data.latency_ms = latency
+                logger.info(
+                    f"✓ Successfully fetched {symbol} from {source_config.name.value}"
+                )
+                self._cache_data(symbol, data)
+                self._update_source_stats(source_config.name, True, latency)
+                return data
+            else:
+                logger.warning(
+                    f"✗ Failed to fetch {symbol} from {source_config.name.value}"
+                )
+                self._update_source_stats(source_config.name, False, latency)
+                continue
+
+        # If all sources failed, try to return stale cached data
+        cached_data = self._get_cached_data(symbol)
+        if cached_data:
+            logger.warning(f"⚠ Using stale cached data for {symbol}")
+            cached_data.status = DataStatus.STALE
+            return cached_data
+
+        logger.error(f"✗ All data sources failed for {symbol} ({asset_class})")
+        return None
+
+    async def _fetch_from_source(
+        self, source_config: DataSourceConfig, symbol: str, timeframe: str, period: str
+    ) -> Optional[MarketDataPoint]:
+        """Fetch data from specific source"""
+
+        if source_config.name == DataSource.IBKR:
+            return await self._fetch_from_ibkr(symbol, timeframe, period)
+        elif source_config.name == DataSource.YAHOO_FINANCE:
+            return await self._fetch_from_yahoo(symbol, timeframe, period)
+        elif source_config.name == DataSource.ALPHA_VANTAGE:
+            return await self._fetch_from_alpha_vantage(symbol, timeframe, period)
+        elif source_config.name == DataSource.POLYGON:
+            return await self._fetch_from_polygon(symbol, timeframe, period)
+        elif source_config.name == DataSource.FINNHUB:
+            return await self._fetch_from_finnhub(symbol, timeframe, period)
+        elif source_config.name == DataSource.INVESTING_COM:
+            return await self._fetch_from_investing_com(symbol, timeframe, period)
+        elif source_config.name == DataSource.CME_GROUP:
+            return await self._fetch_from_cme_group(symbol, timeframe, period)
+        elif source_config.name == DataSource.TWELVE_DATA:
+            return await self._fetch_from_twelve_data(symbol, timeframe, period)
+        elif source_config.name == DataSource.BARCHART:
+            return await self._fetch_from_barchart(symbol, timeframe, period)
+        elif source_config.name == DataSource.SPIDERROCK:
+            return await self._fetch_from_spiderrock(symbol, timeframe, period)
+        elif source_config.name == DataSource.TRADINGCHARTS:
+            return await self._fetch_from_tradingcharts(symbol, timeframe, period)
+        elif source_config.name == DataSource.OANDA:
+            return await self._fetch_from_oanda(symbol, timeframe, period)
+        elif source_config.name == DataSource.CACHE:
+            return self._get_cached_data(symbol)
+
+        return None
+
+    async def _fetch_from_ibkr(
+        self, symbol: str, timeframe: str, period: str
+    ) -> Optional[MarketDataPoint]:
+        """Fetch data from Interactive Brokers"""
+        if not IBKR_AVAILABLE:
+            return None
+
+        try:
+            # Use existing connection or create new one
+            if DataSource.IBKR not in self.active_connections:
+                ib = IB()
+                await ib.connectAsync("127.0.0.1", 7497, clientId=0)
+                self.active_connections[DataSource.IBKR] = ib
+            else:
+                ib = self.active_connections[DataSource.IBKR]
+
+            # Create contract based on symbol type
+            if len(symbol) == 6 and symbol.upper() in [
+                "EURUSD",
+                "GBPUSD",
+                "USDJPY",
+                "USDCAD",
+                "AUDUSD",
+                "NZDUSD",
+                "USDCHF",
+            ]:
+                # Forex pair - create Forex contract
+                from ib_insync import Forex
+
+                base_currency = symbol[:3].upper()
+                quote_currency = symbol[3:].upper()
+                contract = Forex(base_currency + quote_currency)
+            else:
+                # Stock contract
+                contract = Stock(symbol, "SMART", "USD")
+
+            # Get real-time ticker data
+            ticker = ib.reqMktData(contract, "", False, False)
+            await asyncio.sleep(2)  # Wait for data
+
+            if ticker.last and ticker.last > 0:
+                # Create data point from real-time data
+                current_time = datetime.now(timezone.utc)
+
+                data_point = MarketDataPoint(
+                    symbol=symbol,
+                    timestamp=current_time,
+                    open=float(ticker.last),  # Use last as approximation
+                    high=float(ticker.last * 1.01),  # Simulated high
+                    low=float(ticker.last * 0.99),  # Simulated low
+                    close=float(ticker.last),
+                    volume=int(ticker.volume) if ticker.volume else 0,
+                    source=DataSource.IBKR,
+                    status=DataStatus.SUCCESS,
+                    metadata={"bid": ticker.bid, "ask": ticker.ask},
+                )
+
+                # Cancel market data
+                ib.cancelMktData(contract)
+
+                return data_point
+            else:
+                # No data available, return error data point
+                return MarketDataPoint(
+                    symbol=symbol,
+                    timestamp=datetime.now(timezone.utc),
+                    open=0.0,
+                    high=0.0,
+                    low=0.0,
+                    close=0.0,
+                    volume=0,
+                    source=DataSource.IBKR,
+                    status=DataStatus.NO_DATA,
+                    error_message="No market data available",
+                )
+
+        except Exception as e:
+            logger.error(f"IBKR fetch error: {e}")
+            # Clean up connection on error
+            if DataSource.IBKR in self.active_connections:
+                try:
+                    self.active_connections[DataSource.IBKR].disconnect()
+                except:
+                    pass
+                del self.active_connections[DataSource.IBKR]
+
+            # Return error data point
+            return MarketDataPoint(
+                symbol=symbol,
+                timestamp=datetime.now(timezone.utc),
+                open=0.0,
+                high=0.0,
+                low=0.0,
+                close=0.0,
+                volume=0,
+                source=DataSource.IBKR,
+                status=DataStatus.FAILED,
+                error_message=str(e),
+            )
+
+    async def _fetch_from_yahoo(
+        self, symbol: str, timeframe: str, period: str
+    ) -> Optional[MarketDataPoint]:
+        """Fetch data from Yahoo Finance"""
+        if not YAHOO_AVAILABLE:
+            return None
+
+        try:
+            # Convert forex symbol format for Yahoo Finance
+            yahoo_symbol = symbol
+            if len(symbol) == 6 and symbol.upper() in [
+                "EURUSD",
+                "GBPUSD",
+                "USDJPY",
+                "USDCAD",
+                "AUDUSD",
+                "NZDUSD",
+                "USDCHF",
+            ]:
+                # Convert EURUSD to EUR=X format for Yahoo
+                yahoo_symbol = symbol[:3].upper() + symbol[3:].upper() + "=X"
+
+            ticker = yf.Ticker(yahoo_symbol)
+            hist = ticker.history(period="1d", interval="1m")
+
+            if not hist.empty:
+                latest = hist.iloc[-1]
+
+                data_point = MarketDataPoint(
+                    symbol=symbol,
+                    timestamp=datetime.now(timezone.utc),
+                    open=float(latest["Open"]),
+                    high=float(latest["High"]),
+                    low=float(latest["Low"]),
+                    close=float(latest["Close"]),
+                    volume=int(latest["Volume"]),
+                    source=DataSource.YAHOO_FINANCE,
+                    status=DataStatus.SUCCESS,
+                    metadata={"delayed": True},
+                )
+
+                return data_point
+            else:
+                # No data available
+                return MarketDataPoint(
+                    symbol=symbol,
+                    timestamp=datetime.now(timezone.utc),
+                    open=0.0,
+                    high=0.0,
+                    low=0.0,
+                    close=0.0,
+                    volume=0,
+                    source=DataSource.YAHOO_FINANCE,
+                    status=DataStatus.NO_DATA,
+                    error_message="No historical data available",
+                )
+
+        except Exception as e:
+            logger.error(f"Yahoo Finance fetch error: {e}")
+            return MarketDataPoint(
+                symbol=symbol,
+                timestamp=datetime.now(timezone.utc),
+                open=0.0,
+                high=0.0,
+                low=0.0,
+                close=0.0,
+                volume=0,
+                source=DataSource.YAHOO_FINANCE,
+                status=DataStatus.FAILED,
+                error_message=str(e),
+            )
+
+    async def _fetch_from_alpha_vantage(
+        self, symbol: str, timeframe: str, period: str
+    ) -> Optional[MarketDataPoint]:
+        """Fetch data from Alpha Vantage"""
+        if not REQUESTS_AVAILABLE:
+            return None
+
+        # Get API key from environment or config
+        api_key = os.getenv("ALPHA_VANTAGE_API_KEY")
+        if not api_key:
+            return None
+
+        try:
+            url = f"https://www.alphavantage.co/query?function=GLOBAL_QUOTE&symbol={symbol}&apikey={api_key}"
+
+            response = requests.get(url, timeout=30)
+            data = response.json()
+
+            if "Global Quote" in data:
+                quote = data["Global Quote"]
+
+                data_point = MarketDataPoint(
+                    symbol=symbol,
+                    timestamp=datetime.now(),
+                    open=float(quote["02. open"]),
+                    high=float(quote["03. high"]),
+                    low=float(quote["04. low"]),
+                    close=float(quote["05. price"]),
+                    volume=int(quote["06. volume"]),
+                    source=DataSource.ALPHA_VANTAGE,
+                    status=DataStatus.SUCCESS,
+                    metadata={
+                        "change": quote["09. change"],
+                        "change_percent": quote["10. change percent"],
+                    },
+                )
+
+                return data_point
+
+        except Exception as e:
+            logger.error(f"Alpha Vantage fetch error: {e}")
+
+        return None
+
+    async def _fetch_from_polygon(
+        self, symbol: str, timeframe: str, period: str
+    ) -> Optional[MarketDataPoint]:
+        """Fetch data from Polygon.io"""
+        if not REQUESTS_AVAILABLE:
+            return None
+
+        # Get API key from environment or config
+        api_key = os.getenv("POLYGON_API_KEY")
+        if not api_key:
+            return None
+
+        try:
+            # Get previous day's data
+            prev_date = (datetime.now(timezone.utc) - timedelta(days=1)).strftime(
+                "%Y-%m-%d"
+            )
+            url = f"https://api.polygon.io/v1/open-close/{symbol}/{prev_date}?adjusted=true&apikey={api_key}"
+
+            response = requests.get(url, timeout=30)
+            data = response.json()
+
+            if data.get("status") == "OK":
+                data_point = MarketDataPoint(
+                    symbol=symbol,
+                    timestamp=datetime.now(timezone.utc),
+                    open=float(data["open"]),
+                    high=float(data["high"]),
+                    low=float(data["low"]),
+                    close=float(data["close"]),
+                    volume=int(data["volume"]),
+                    source=DataSource.POLYGON,
+                    status=DataStatus.SUCCESS,
+                    metadata={"after_hours": data.get("afterHours")},
+                )
+
+                return data_point
+
+        except Exception as e:
+            logger.error(f"Polygon fetch error: {e}")
+
+        return None
+
+    def _cache_data(self, symbol: str, data_point: MarketDataPoint):
+        """Cache data for fallback"""
+        self.cache[symbol] = {
+            "data": data_point,
+            "timestamp": datetime.now(timezone.utc),
+        }
+
+        # Limit cache size
+        if len(self.cache) > 1000:
+            # Remove oldest entries
+            oldest_key = min(
+                self.cache.keys(), key=lambda k: self.cache[k]["timestamp"]
+            )
+            del self.cache[oldest_key]
+
+    def _get_cached_data(self, symbol: str) -> Optional[MarketDataPoint]:
+        """Get cached data"""
+        if symbol in self.cache:
+            cached_entry = self.cache[symbol]
+
+            # Check if cache is not too old (1 hour max)
+            if datetime.now(timezone.utc) - cached_entry["timestamp"] < timedelta(
+                hours=1
+            ):
+                cached_data = cached_entry["data"]
+                cached_data.source = DataSource.CACHE
+                return cached_data
+
+        return None
+
+    def _update_source_stats(self, source: DataSource, success: bool, latency: float):
+        """Update source statistics"""
+        stats = self.source_stats[source]
+        stats["requests"] += 1
+
+        if success:
+            stats["successes"] += 1
+            stats["last_success"] = datetime.now(timezone.utc)
+
+            # Update rolling average latency
+            if stats["avg_latency"] == 0:
+                stats["avg_latency"] = latency
+            else:
+                stats["avg_latency"] = (stats["avg_latency"] * 0.9) + (latency * 0.1)
+        else:
+            stats["failures"] += 1
+            stats["last_failure"] = datetime.now(timezone.utc)
+
+        # Calculate uptime percentage
+        if stats["requests"] > 0:
+            stats["uptime_percentage"] = (stats["successes"] / stats["requests"]) * 100
+
+    def _detect_asset_class(self, symbol: str) -> str:
+        """Detect asset class from symbol"""
+        symbol_upper = symbol.upper()
+
+        # Crypto patterns
+        crypto_patterns = ["BTC", "ETH", "ADA", "DOT", "SOL", "USDT", "USDC"]
+        if any(pattern in symbol_upper for pattern in crypto_patterns):
+            return "crypto"
+
+        # Forex patterns (currency pairs)
+        if len(symbol_upper) == 6 and symbol_upper[:3] in [
+            "USD",
+            "EUR",
+            "GBP",
+            "JPY",
+            "CHF",
+            "CAD",
+            "AUD",
+            "NZD",
+        ]:
+            return "forex"
+
+        # Futures patterns
+        if any(
+            suffix in symbol_upper for suffix in ["F", "FUT", "ES", "NQ", "YM", "RTY"]
+        ):
+            return "futures"
+
+        # Options patterns
+        if "C" in symbol_upper or "P" in symbol_upper or "OPT" in symbol_upper:
+            return "options"
+
+        # Commodities patterns
+        commodity_symbols = [
+            "GC",
+            "SI",
+            "CL",
+            "NG",
+            "ZC",
+            "ZS",
+            "ZW",
+            "GOLD",
+            "SILVER",
+            "OIL",
+        ]
+        if any(commodity in symbol_upper for commodity in commodity_symbols):
+            return "commodities"
+
+        # Default to stocks for everything else
+        return "stocks"
+
+    def _get_fallback_chain(self, asset_class: str, trading_mode: str) -> list:
+        """Get fallback chain for specific asset class and trading mode"""
+        fallback_chains = self.config.get("fallback_chains", {})
+
+        # Get asset class specific chain
+        asset_chains = fallback_chains.get(asset_class, {})
+
+        # Use trading mode specific chain if available, otherwise use primary
+        if trading_mode == "live" and "live_trading" in asset_chains:
+            return asset_chains["live_trading"]
+        else:
+            return asset_chains.get(
+                "primary", ["yahoo_finance", "alpha_vantage", "finnhub"]
+            )
+
+    def _get_data_source_enum(self, source_name: str) -> Optional[DataSource]:
+        """Convert string source name to DataSource enum"""
+        source_mapping = {
+            "ibkr": DataSource.IBKR,
+            "yahoo_finance": DataSource.YAHOO_FINANCE,
+            "alpha_vantage": DataSource.ALPHA_VANTAGE,
+            "polygon": DataSource.POLYGON,
+            "finnhub": DataSource.FINNHUB,
+            "investing_com": DataSource.INVESTING_COM,
+            "cme_group": DataSource.CME_GROUP,
+            "twelve_data": DataSource.TWELVE_DATA,
+            "barchart": DataSource.BARCHART,
+            "spiderrock": DataSource.SPIDERROCK,
+            "tradingcharts": DataSource.TRADINGCHARTS,
+            "oanda": DataSource.OANDA,
+        }
+        return source_mapping.get(source_name)
+
+    def get_source_health(self) -> Dict[str, Any]:
+        """Get health status of all data sources"""
+        health_report = {}
+
+        for source, stats in self.source_stats.items():
+            health_report[source.value] = {
+                "enabled": self.sources[source].enabled,
+                "priority": self.sources[source].priority,
+                "uptime_percentage": round(stats["uptime_percentage"], 2),
+                "avg_latency_ms": round(stats["avg_latency"], 2),
+                "total_requests": stats["requests"],
+                "successes": stats["successes"],
+                "failures": stats["failures"],
+                "last_success": stats["last_success"].isoformat()
+                if stats["last_success"]
+                else None,
+                "last_failure": stats["last_failure"].isoformat()
+                if stats["last_failure"]
+                else None,
+                "status": "healthy"
+                if stats["uptime_percentage"] >= 90
+                else "degraded"
+                if stats["uptime_percentage"] >= 50
+                else "unhealthy",
+            }
+
+        return health_report
+
+    @property
+    def health_monitor(self) -> Dict[str, Any]:
+        """Backward compatibility property for health monitoring"""
+        health_data = {}
+        for source, stats in self.source_stats.items():
+            health_data[source.value] = {
+                "status": "healthy"
+                if stats["uptime_percentage"] >= 90
+                else "degraded"
+                if stats["uptime_percentage"] >= 50
+                else "unhealthy",
+                "success_rate": stats["uptime_percentage"] / 100.0,
+                "total_requests": stats["requests"],
+            }
+        return health_data
+
+    def get_statistics(self) -> Dict[str, Any]:
+        """Get source statistics"""
+        return {
+            source.value: {
+                "requests": stats["requests"],
+                "successes": stats["successes"],
+                "failures": stats["failures"],
+                "avg_latency": stats["avg_latency"],
+            }
+            for source, stats in self.source_stats.items()
+        }
+
+    async def test_all_sources(self, test_symbol: str = "AAPL") -> Dict[str, Any]:
+        """Test all data sources"""
+        logger.info(f"🧪 Testing all data sources with symbol: {test_symbol}")
+
+        test_results = {}
+
+        for source_config in self.fallback_order:
+            logger.info(f"Testing {source_config.name.value}...")
+
+            try:
+                start_time = time.time()
+                data_point = await self._fetch_from_source(
+                    source_config, test_symbol, "1d", "1d"
+                )
+                test_time = (time.time() - start_time) * 1000
+
+                if data_point and data_point.status == DataStatus.SUCCESS:
+                    test_results[source_config.name.value] = {
+                        "status": "PASSED",
+                        "latency_ms": round(test_time, 2),
+                        "data_received": True,
+                        "sample_price": data_point.close,
+                    }
+                    logger.info(
+                        f"  ✓ {source_config.name.value}: PASSED ({test_time:.2f}ms)"
+                    )
+                else:
+                    test_results[source_config.name.value] = {
+                        "status": "FAILED",
+                        "latency_ms": round(test_time, 2),
+                        "data_received": False,
+                        "error": "No data returned",
+                    }
+                    logger.warning(f"  ✗ {source_config.name.value}: FAILED")
+
+            except Exception as e:
+                test_results[source_config.name.value] = {
+                    "status": "ERROR",
+                    "latency_ms": 0,
+                    "data_received": False,
+                    "error": str(e),
+                }
+                logger.error(f"  ✗ {source_config.name.value}: ERROR - {e}")
+
+        return test_results
+
+    async def _fetch_from_finnhub(
+        self, symbol: str, timeframe: str, period: str
+    ) -> Optional[MarketDataPoint]:
+        """Fetch data from Finnhub"""
+        if not FINNHUB_AVAILABLE:
+            return None
+
+        # Get API key from environment or config
+        api_key = os.getenv("FINNHUB_API_KEY")
+        if not api_key:
+            return None
+
+        try:
+            adapter = FinnhubDataFeedAdapter(api_key)
+            data = await adapter.get_quote(symbol)
+
+            if data:
+                return MarketDataPoint(
+                    symbol=symbol,
+                    timestamp=datetime.now(timezone.utc),
+                    open=data.get("o", 0.0),
+                    high=data.get("h", 0.0),
+                    low=data.get("l", 0.0),
+                    close=data.get("c", 0.0),
+                    volume=int(data.get("v", 0)),
+                    source=DataSource.FINNHUB,
+                    status=DataStatus.SUCCESS,
+                )
+        except Exception as e:
+            logger.error(f"Finnhub fetch error: {e}")
+
+        return None
+
+    async def _fetch_from_investing_com(
+        self, symbol: str, timeframe: str, period: str
+    ) -> Optional[MarketDataPoint]:
+        """Fetch data from Investing.com"""
+        if not INVESTING_COM_AVAILABLE:
+            return None
+
+        try:
+            adapter = InvestingComDataFeedAdapter()
+            data = await adapter.get_quote(symbol)
+
+            if data:
+                return MarketDataPoint(
+                    symbol=symbol,
+                    timestamp=datetime.now(timezone.utc),
+                    open=data.get("open", 0.0),
+                    high=data.get("high", 0.0),
+                    low=data.get("low", 0.0),
+                    close=data.get("close", 0.0),
+                    volume=int(data.get("volume", 0)),
+                    source=DataSource.INVESTING_COM,
+                    status=DataStatus.SUCCESS,
+                )
+        except Exception as e:
+            logger.error(f"Investing.com fetch error: {e}")
+
+        return None
+
+    async def _fetch_from_cme_group(
+        self, symbol: str, timeframe: str, period: str
+    ) -> Optional[MarketDataPoint]:
+        """Fetch data from CME Group"""
+        if not CME_GROUP_AVAILABLE:
+            return None
+
+        # Get API key from environment or config
+        api_key = os.getenv("CME_GROUP_API_KEY")
+        if not api_key:
+            return None
+
+        try:
+            adapter = CMEGroupDataFeedAdapter(api_key)
+            data = await adapter.get_quote(symbol)
+
+            if data:
+                return MarketDataPoint(
+                    symbol=symbol,
+                    timestamp=datetime.now(timezone.utc),
+                    open=data.get("open", 0.0),
+                    high=data.get("high", 0.0),
+                    low=data.get("low", 0.0),
+                    close=data.get("close", 0.0),
+                    volume=int(data.get("volume", 0)),
+                    source=DataSource.CME_GROUP,
+                    status=DataStatus.SUCCESS,
+                )
+        except Exception as e:
+            logger.error(f"CME Group fetch error: {e}")
+
+        return None
+
+    async def _fetch_from_twelve_data(
+        self, symbol: str, timeframe: str, period: str
+    ) -> Optional[MarketDataPoint]:
+        """Fetch data from Twelve Data"""
+        if not TWELVE_DATA_AVAILABLE:
+            return None
+
+        # Get API key from environment or config
+        api_key = os.getenv("TWELVE_DATA_API_KEY")
+        if not api_key:
+            return None
+
+        try:
+            adapter = TwelveDataDataFeedAdapter(api_key)
+            data = await adapter.get_quote(symbol)
+
+            if data:
+                return MarketDataPoint(
+                    symbol=symbol,
+                    timestamp=datetime.now(timezone.utc),
+                    open=data.get("open", 0.0),
+                    high=data.get("high", 0.0),
+                    low=data.get("low", 0.0),
+                    close=data.get("close", 0.0),
+                    volume=int(data.get("volume", 0)),
+                    source=DataSource.TWELVE_DATA,
+                    status=DataStatus.SUCCESS,
+                )
+        except Exception as e:
+            logger.error(f"Twelve Data fetch error: {e}")
+
+        return None
+
+    async def _fetch_from_barchart(
+        self, symbol: str, timeframe: str, period: str
+    ) -> Optional[MarketDataPoint]:
+        """Fetch data from Barchart"""
+        if not BARCHART_AVAILABLE:
+            return None
+
+        # Get API key from environment or config
+        api_key = os.getenv("BARCHART_API_KEY")
+        if not api_key:
+            return None
+
+        try:
+            adapter = BarchartDataFeedAdapter(api_key)
+            data = await adapter.get_quote(symbol)
+
+            if data:
+                return MarketDataPoint(
+                    symbol=symbol,
+                    timestamp=datetime.now(timezone.utc),
+                    open=data.get("open", 0.0),
+                    high=data.get("high", 0.0),
+                    low=data.get("low", 0.0),
+                    close=data.get("close", 0.0),
+                    volume=int(data.get("volume", 0)),
+                    source=DataSource.BARCHART,
+                    status=DataStatus.SUCCESS,
+                )
+        except Exception as e:
+            logger.error(f"Barchart fetch error: {e}")
+
+        return None
+
+    async def _fetch_from_spiderrock(
+        self, symbol: str, timeframe: str, period: str
+    ) -> Optional[MarketDataPoint]:
+        """Fetch data from SpiderRock"""
+        if not SPIDERROCK_AVAILABLE:
+            return None
+
+        # Get API key from environment or config
+        api_key = os.getenv("SPIDERROCK_API_KEY")
+        if not api_key:
+            return None
+
+        try:
+            adapter = SpiderRockDataFeedAdapter(api_key)
+            data = await adapter.get_quote(symbol)
+
+            if data:
+                return MarketDataPoint(
+                    symbol=symbol,
+                    timestamp=datetime.now(timezone.utc),
+                    open=data.get("open", 0.0),
+                    high=data.get("high", 0.0),
+                    low=data.get("low", 0.0),
+                    close=data.get("close", 0.0),
+                    volume=int(data.get("volume", 0)),
+                    source=DataSource.SPIDERROCK,
+                    status=DataStatus.SUCCESS,
+                )
+        except Exception as e:
+            logger.error(f"SpiderRock fetch error: {e}")
+
+        return None
+
+    async def _fetch_from_tradingcharts(
+        self, symbol: str, timeframe: str, period: str
+    ) -> Optional[MarketDataPoint]:
+        """Fetch data from TradingCharts"""
+        if not TRADINGCHARTS_AVAILABLE:
+            return None
+
+        # Get API key from environment or config
+        api_key = os.getenv("TRADINGCHARTS_API_KEY")
+        if not api_key:
+            return None
+
+        try:
+            adapter = TradingChartsDataFeedAdapter(api_key)
+            data = await adapter.get_quote(symbol)
+
+            if data:
+                return MarketDataPoint(
+                    symbol=symbol,
+                    timestamp=datetime.now(timezone.utc),
+                    open=data.get("open", 0.0),
+                    high=data.get("high", 0.0),
+                    low=data.get("low", 0.0),
+                    close=data.get("close", 0.0),
+                    volume=int(data.get("volume", 0)),
+                    source=DataSource.TRADINGCHARTS,
+                    status=DataStatus.SUCCESS,
+                )
+        except Exception as e:
+            logger.error(f"TradingCharts fetch error: {e}")
+
+        return None
+
+    async def _fetch_from_oanda(
+        self, symbol: str, timeframe: str, period: str
+    ) -> Optional[MarketDataPoint]:
+        """Fetch data from Oanda"""
+        if not OANDA_AVAILABLE:
+            return None
+
+        # Get API key from environment or config
+        api_key = os.getenv("OANDA_API_KEY")
+        if not api_key:
+            return None
+
+        try:
+            adapter = OandaDataFeedAdapter(api_key)
+            data = await adapter.get_quote(symbol)
+
+            if data:
+                return MarketDataPoint(
+                    symbol=symbol,
+                    timestamp=datetime.now(timezone.utc),
+                    open=data.get("open", 0.0),
+                    high=data.get("high", 0.0),
+                    low=data.get("low", 0.0),
+                    close=data.get("close", 0.0),
+                    volume=int(data.get("volume", 0)),
+                    source=DataSource.OANDA,
+                    status=DataStatus.SUCCESS,
+                )
+        except Exception as e:
+            logger.error(f"Oanda fetch error: {e}")
+
+        return None
+
+    async def cleanup(self):
+        """Clean up active connections"""
+        for source, connection in self.active_connections.items():
+            try:
+                if source == DataSource.IBKR and hasattr(connection, "disconnect"):
+                    connection.disconnect()
+            except Exception as e:
+                logger.error(f"Error cleaning up {source}: {e}")
+
+        self.active_connections.clear()
+
+
+# Test and demonstration functions
+async def main():
+    """Main function to test the multi-source data feed system"""
+    logger.info("🚀 Multi-Source Data Feed Manager Test")
+    logger.info("=" * 50)
+
+    # Initialize data feed manager
+    feed_manager = DataFeedManager()
+
+    # Test all sources
+    test_results = await feed_manager.test_all_sources("AAPL")
+
+    # Test fallback mechanism
+    logger.info("\n🔄 Testing Fallback Mechanism")
+    logger.info("-" * 30)
+
+    test_symbols = ["AAPL", "MSFT", "GOOGL"]
+
+    for symbol in test_symbols:
+        logger.info(f"\nTesting fallback for {symbol}:")
+        data_point = await feed_manager.get_market_data(symbol)
+
+        if data_point:
+            logger.info(f"  ✓ Got data from {data_point.source.value}")
+            logger.info(f"  Price: ${data_point.close:.2f}")
+            logger.info(f"  Latency: {data_point.latency_ms:.2f}ms")
+        else:
+            logger.error(f"  ✗ Failed to get data for {symbol}")
+
+    # Show source health
+    logger.info("\n💊 Data Source Health Report")
+    logger.info("-" * 30)
+
+    health_report = feed_manager.get_source_health()
+    for source, health in health_report.items():
+        status_emoji = (
+            "🟢"
+            if health["status"] == "healthy"
+            else "🟡"
+            if health["status"] == "degraded"
+            else "🔴"
+        )
+        logger.info(
+            f"{status_emoji} {source}: {health['uptime_percentage']}% uptime, "
+            f"{health['avg_latency_ms']}ms avg latency"
+        )
+
+    # Clean up
+    await feed_manager.cleanup()
+
+    # Save test results
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    results_file = f"data_feeds_test_{timestamp}.json"
+
+    with open(results_file, "w") as f:
+        json.dump(
+            {
+                "test_results": test_results,
+                "health_report": health_report,
+                "timestamp": datetime.now(timezone.utc).isoformat(),
+            },
+            f,
+            indent=2,
+            default=str,
+        )
+
+    logger.info(f"\n💾 Results saved to: {results_file}")
+
+
+if __name__ == "__main__":
+    asyncio.run(main())

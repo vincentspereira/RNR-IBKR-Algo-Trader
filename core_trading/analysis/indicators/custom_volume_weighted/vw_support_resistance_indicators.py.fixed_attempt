@@ -1,0 +1,948 @@
+from collections import deque
+from typing import Dict, List, Optional, Tuple
+import numpy as np
+from nautilus_trader.model.data import Bar
+from .base_custom_vw_indicator import (
+"""Volume-Weighted Support/Resistance Indicators."""
+
+This module implements 4 volume-weighted support/resistance indicators:
+1. VW Pivot Points - Volume-weighted Pivot Points
+2. VW Fibonacci Retracements - Volume-weighted Fibonacci levels
+3. VW Support/Resistance Levels - Dynamic volume-weighted S/R levels
+4. VW Price Channels - Volume-weighted Price Channels
+"""
+All indicators follow the institutional-grade 5-pillar architecture."""
+"""
+
+
+
+    BaseCustomVWIndicator,
+    CustomVWIndicatorConfig,
+    VWIndicatorType,
+)
+
+"""
+class VWPivotPoints(BaseCustomVWIndicator):"""
+    """
+    Volume-Weighted Pivot Points.
+
+    Enhanced Pivot Points with volume weighting for improved
+    support and resistance level identification.
+
+    Mathematical Formula:
+    VW_High = Σ(High * Volume) / Σ(Volume)
+    VW_Low = Σ(Low * Volume) / Σ(Volume)
+    VW_Close = Σ(Close * Volume) / Σ(Volume)
+    VW_Pivot = (VW_High + VW_Low + VW_Close) / 3
+    VW_R1 = 2 * VW_Pivot - VW_Low
+    VW_S1 = 2 * VW_Pivot - VW_High
+    VW_R2 = VW_Pivot + (VW_High - VW_Low)"""
+    VW_S2 = VW_Pivot - (VW_High - VW_Low)"""
+    """
+
+    def __init__(self, config: CustomVWIndicatorConfig)"""
+        super().__init__(config)
+        self.indicator_type = VWIndicatorType.SUPPORT_RESISTANCE
+"""
+        # Pivot calculation period (typically daily)"""
+        self.pivot_period = getattr(config, "pivot_period", 1)
+
+        # Historical data for pivot calculation
+        self.highs = deque(maxlen=self.pivot_period)
+        self.lows = deque(maxlen=self.pivot_period)
+        self.closes = deque(maxlen=self.pivot_period)
+        self.volumes = deque(maxlen=self.pivot_period)
+
+        # Current pivot levels
+        self.pivot_levels = {}
+        self.pivot_history = deque(maxlen=config.period)
+
+        # Volume weighting
+        self.volume_ema = None
+        self.volume_alpha = 2.0 / (config.period + 1)
+"""
+    def _calculate_indicator_value(self, bar: Bar) -> Optional[float]"""
+        """Calculate Volume-Weighted Pivot Points."""
+        high = bar.high.as_double()
+        low = bar.low.as_double()
+        close = bar.close.as_double()
+        volume = bar.volume.as_double()
+
+        # Store bar data
+        self.highs.append(high)
+        self.lows.append(low)
+        self.closes.append(close)
+        self.volumes.append(volume)
+
+        # Initialize volume EMA
+        if self.volume_ema is None:
+            self.volume_ema = volume
+        else:
+            self.volume_ema = (
+                self.volume_alpha * volume + (1 - self.volume_alpha) * self.volume_ema
+            )
+
+        # Need enough data for pivot calculation
+        if len(self.highs) < self.pivot_period:
+            return None
+
+        # Calculate volume-weighted OHLC
+        total_volume = sum(self.volumes)
+        if total_volume == 0:
+            return None
+
+        vw_high = sum(h * v for h, v in zip(self.highs, self.volumes)) / total_volume
+        vw_low = sum(l * v for l, v in zip(self.lows, self.volumes)) / total_volume
+        vw_close = sum(c * v for c, v in zip(self.closes, self.volumes)) / total_volume
+
+        # Calculate pivot point
+        pivot = (vw_high + vw_low + vw_close) / 3.0
+
+        # Calculate support and resistance levels
+        r1 = 2 * pivot - vw_low
+        s1 = 2 * pivot - vw_high
+        r2 = pivot + (vw_high - vw_low)
+        s2 = pivot - (vw_high - vw_low)
+        r3 = vw_high + 2 * (pivot - vw_low)
+        s3 = vw_low - 2 * (vw_high - pivot)
+
+        # Store pivot levels"""
+        self.pivot_levels = {"""
+            "pivot": pivot,"""
+            "r1": r1,"""
+            "r2": r2,"""
+            "r3": r3,"""
+            "s1": s1,"""
+            "s2": s2,"""
+            "s3": s3,"""
+            "vw_high": vw_high,"""
+            "vw_low": vw_low,"""
+            "vw_close": vw_close,
+        }
+
+        self.pivot_history.append(self.pivot_levels.copy())
+
+        return pivot
+"""
+    def get_pivot_levels(self) -> Optional[Dict[str, float]]:"""
+        """Get current pivot levels."""
+        return self.pivot_levels if self.pivot_levels else None
+
+    def get_nearest_support_resistance(
+        self, current_price: float"""
+    ) -> Optional[Tuple[float, float]]:"""
+        """Get nearest support and resistance levels."""
+        if not self.pivot_levels:
+            return None
+
+        # Get all levels"""
+        levels = ["""
+            self.pivot_levels["s3"],"""
+            self.pivot_levels["s2"],"""
+            self.pivot_levels["s1"],"""
+            self.pivot_levels["pivot"],"""
+            self.pivot_levels["r1"],"""
+            self.pivot_levels["r2"],"""
+            self.pivot_levels["r3"],
+        ]
+
+        # Find nearest support (below current price)
+        support = None
+        for level in reversed(levels):
+            if level < current_price:
+                support = level
+                break
+
+        # Find nearest resistance (above current price)
+        resistance = None
+        for level in levels:
+            if level > current_price:
+                resistance = level
+                break
+
+        return support, resistance
+"""
+    def get_level_strength(self, level: float) -> Optional[str]"""
+        """Get strength of a pivot level based on historical touches."""
+        if len(self.pivot_history) < 5:
+            return None
+
+        touches = 0
+        for pivot_data in self.pivot_history:
+            for level_name, level_value in pivot_data.items():
+                if abs(level_value - level) < (level * 0.001):  # Within 0.1%
+                    touches += 1
+"""
+        if touches >= 5:"""
+            return "VERY_STRONG"""
+        elif touches >= 3:"""
+            return "STRONG"""
+        elif touches >= 2:"""
+            return "MODERATE"""
+        else:"""
+            return "WEAK"
+"""
+    def reset(self) -> None:"""
+        """Reset indicator state."""
+        super().reset()
+        self.highs.clear()
+        self.lows.clear()
+        self.closes.clear()
+        self.volumes.clear()
+        self.pivot_levels.clear()
+        self.pivot_history.clear()
+        self.volume_ema = None
+
+"""
+class VWFibonacciRetracements(BaseCustomVWIndicator):"""
+    """
+    Volume-Weighted Fibonacci Retracements.
+
+    Enhanced Fibonacci retracements with volume weighting for improved
+    retracement level identification.
+
+    Mathematical Formula:
+    VW_High = max(High * Volume_Weight) over swing period
+    VW_Low = min(Low * Volume_Weight) over swing period
+    Range = VW_High - VW_Low"""
+    Fib_Levels = VW_Low + Range * [0.236, 0.382, 0.5, 0.618, 0.786]"""
+    """
+
+    def __init__(self, config: CustomVWIndicatorConfig)"""
+        super().__init__(config)
+        self.indicator_type = VWIndicatorType.SUPPORT_RESISTANCE
+
+        # Fibonacci levels
+        self.fib_ratios = [0.0, 0.236, 0.382, 0.5, 0.618, 0.786, 1.0]
+"""
+        # Swing detection parameters"""
+        self.swing_period = getattr(config, "swing_period", 20)
+
+        # Historical data
+        self.highs = deque(maxlen=self.swing_period * 2)
+        self.lows = deque(maxlen=self.swing_period * 2)
+        self.volumes = deque(maxlen=self.swing_period * 2)
+
+        # Current swing points
+        self.swing_high = None
+        self.swing_low = None
+        self.swing_high_volume = None
+        self.swing_low_volume = None
+
+        # Fibonacci levels
+        self.fib_levels = {}
+        self.fib_history = deque(maxlen=config.period)
+
+        # Volume weighting
+        self.volume_ema = None
+        self.volume_alpha = 2.0 / (config.period + 1)
+"""
+    def _calculate_indicator_value(self, bar: Bar) -> Optional[float]"""
+        """Calculate Volume-Weighted Fibonacci Retracements."""
+        high = bar.high.as_double()
+        low = bar.low.as_double()
+        volume = bar.volume.as_double()
+
+        # Store bar data
+        self.highs.append(high)
+        self.lows.append(low)
+        self.volumes.append(volume)
+
+        # Initialize volume EMA
+        if self.volume_ema is None:
+            self.volume_ema = volume
+        else:
+            self.volume_ema = (
+                self.volume_alpha * volume + (1 - self.volume_alpha) * self.volume_ema
+            )
+
+        # Need enough data for swing detection
+        if len(self.highs) < self.swing_period:
+            return None
+
+        # Detect swing high and low with volume weighting
+        self._detect_swing_points()
+
+        # Calculate Fibonacci levels if we have swing points
+        if self.swing_high is not None and self.swing_low is not None:
+            self._calculate_fibonacci_levels()
+"""
+            # Return the 50% retracement level as the main value"""
+            return self.fib_levels.get("50.0%", None)
+
+        return None
+"""
+    def _detect_swing_points(self):"""
+        """Detect volume-weighted swing high and low points."""
+        if len(self.highs) < self.swing_period:
+            return
+
+        # Calculate volume weights
+        volume_weights = []
+        for vol in self.volumes:
+            if self.volume_ema > 0:
+                weight = vol / self.volume_ema
+            else:
+                weight = 1.0
+            volume_weights.append(weight)
+"""
+        # Find volume-weighted swing high"""
+        max_weighted_high = -float("inf")
+        max_high_idx = 0
+
+        for i, (high, weight) in enumerate(zip(self.highs, volume_weights)):
+            weighted_high = high * (1.0 + weight * 0.1)  # Volume boost
+            if weighted_high > max_weighted_high:
+                max_weighted_high = weighted_high
+                max_high_idx = i
+"""
+        # Find volume-weighted swing low"""
+        min_weighted_low = float("inf")
+        min_low_idx = 0
+
+        for i, (low, weight) in enumerate(zip(self.lows, volume_weights)):
+            weighted_low = low * (1.0 - weight * 0.1)  # Volume discount
+            if weighted_low < min_weighted_low:
+                min_weighted_low = weighted_low
+                min_low_idx = i
+
+        # Update swing points
+        self.swing_high = list(self.highs)[max_high_idx]
+        self.swing_low = list(self.lows)[min_low_idx]
+        self.swing_high_volume = list(self.volumes)[max_high_idx]
+        self.swing_low_volume = list(self.volumes)[min_low_idx]
+"""
+    def _calculate_fibonacci_levels(self):"""
+        """Calculate Fibonacci retracement levels."""
+        if self.swing_high is None or self.swing_low is None:
+            return
+
+        # Determine if we're in an uptrend or downtrend
+        if self.swing_high > self.swing_low:
+            # Uptrend - retracements from high to low
+            range_value = self.swing_high - self.swing_low
+            base_level = self.swing_low
+        else:
+            # Downtrend - retracements from low to high
+            range_value = self.swing_low - self.swing_high
+            base_level = self.swing_high
+
+        # Calculate Fibonacci levels
+        self.fib_levels = {}
+        for ratio in self.fib_ratios:"""
+            level = base_level + (range_value * ratio)"""
+            self.fib_levels[f"{ratio*100:.1f}%"] = level
+
+        # Store in history"""
+        fib_data = {"""
+            "levels": self.fib_levels.copy(),"""
+            "swing_high": self.swing_high,"""
+            "swing_low": self.swing_low,"""
+            "trend": "UP" if self.swing_high > self.swing_low else "DOWN",
+        }
+        self.fib_history.append(fib_data)
+"""
+    def get_fibonacci_levels(self) -> Optional[Dict[str, float]]:"""
+        """Get current Fibonacci levels."""
+        return self.fib_levels if self.fib_levels else None
+
+    def get_nearest_fib_level(
+        self, current_price: float"""
+    ) -> Optional[Tuple[str, float]]:"""
+        """Get nearest Fibonacci level."""
+        if not self.fib_levels:
+            return None"""
+"""
+        min_distance = float("inf")
+        nearest_level = None
+        nearest_name = None
+
+        for name, level in self.fib_levels.items():
+            distance = abs(current_price - level)
+            if distance < min_distance:
+                min_distance = distance
+                nearest_level = level
+                nearest_name = name
+
+        return nearest_name, nearest_level
+
+    def get_fib_confluence(
+        self, price_level: float, tolerance: float = 0.001"""
+    ) -> List[str]:"""
+        """Get Fibonacci levels near a price level."""
+        if not self.fib_levels:
+            return []
+
+        confluent_levels = []
+        for name, level in self.fib_levels.items():
+            if abs(level - price_level) <= (price_level * tolerance):
+                confluent_levels.append(name)
+
+        return confluent_levels
+"""
+    def reset(self) -> None:"""
+        """Reset indicator state."""
+        super().reset()
+        self.highs.clear()
+        self.lows.clear()
+        self.volumes.clear()
+        self.swing_high = None
+        self.swing_low = None
+        self.swing_high_volume = None
+        self.swing_low_volume = None
+        self.fib_levels.clear()
+        self.fib_history.clear()
+        self.volume_ema = None
+
+"""
+class VWSupportResistanceLevels(BaseCustomVWIndicator):"""
+    """
+    Volume-Weighted Support/Resistance Levels.
+
+    Dynamic support and resistance levels based on volume-weighted
+    price action and historical level significance.
+
+    Mathematical Formula:
+    Level_Strength = Σ(Volume_at_Level) / Average_Volume"""
+    Level_Significance = Touches * Level_Strength * Time_Factor"""
+    """
+
+    def __init__(self, config: CustomVWIndicatorConfig)"""
+        super().__init__(config)
+        self.indicator_type = VWIndicatorType.SUPPORT_RESISTANCE
+"""
+        # Level detection parameters"""
+        self.level_tolerance = getattr(config, "level_tolerance", 0.001)  # 0.1%"""
+        self.min_touches = getattr(config, "min_touches", 2)"""
+        self.lookback_period = getattr(config, "lookback_period", 100)
+
+        # Historical data
+        self.price_levels = deque(maxlen=self.lookback_period)
+        self.volume_data = deque(maxlen=self.lookback_period)
+        self.timestamps = deque(maxlen=self.lookback_period)
+
+        # Identified levels
+        self.support_levels = {}
+        self.resistance_levels = {}
+        self.level_history = deque(maxlen=config.period)
+
+        # Volume weighting
+        self.volume_ema = None
+        self.volume_alpha = 2.0 / (config.period + 1)
+
+        self.bar_count = 0
+"""
+    def _calculate_indicator_value(self, bar: Bar) -> Optional[float]"""
+        """Calculate Volume-Weighted Support/Resistance Levels."""
+        high = bar.high.as_double()
+        low = bar.low.as_double()
+        close = bar.close.as_double()
+        volume = bar.volume.as_double()
+
+        # Store bar data
+        typical_price = (high + low + close) / 3.0"""
+        self.price_levels.append("""
+            {"high": high, "low": low, "close": close, "typical": typical_price}
+        )
+        self.volume_data.append(volume)
+        self.timestamps.append(self.bar_count)
+
+        self.bar_count += 1
+
+        # Initialize volume EMA
+        if self.volume_ema is None:
+            self.volume_ema = volume
+        else:
+            self.volume_ema = (
+                self.volume_alpha * volume + (1 - self.volume_alpha) * self.volume_ema
+            )
+
+        # Need enough data for level detection
+        if len(self.price_levels) < self.min_touches * 2:
+            return None
+
+        # Detect support and resistance levels
+        self._detect_levels()
+
+        # Return the strongest level as the main value
+        strongest_level = self._get_strongest_level()
+        return strongest_level
+"""
+    def _detect_levels(self):"""
+        """Detect support and resistance levels."""
+        if len(self.price_levels) < self.min_touches:
+            return
+
+        # Clear previous levels
+        self.support_levels.clear()
+        self.resistance_levels.clear()
+"""
+        # Get price and volume arrays"""
+        highs = [p["high"] for p in self.price_levels]"""
+        lows = [p["low"] for p in self.price_levels]"""
+        closes = [p["close"] for p in self.price_levels]
+        volumes = list(self.volume_data)
+"""
+        # Detect resistance levels (from highs)"""
+        self._detect_level_type(highs, volumes, "resistance")
+"""
+        # Detect support levels (from lows)"""
+        self._detect_level_type(lows, volumes, "support")
+
+        # Store level data"""
+        level_data = {"""
+            "support": self.support_levels.copy(),"""
+            "resistance": self.resistance_levels.copy(),"""
+            "timestamp": self.bar_count,
+        }
+        self.level_history.append(level_data)
+
+    def _detect_level_type(
+        self, prices: List[float], volumes: List[float], level_type: str"""
+    ):"""
+        """Detect levels of a specific type (support or resistance)."""
+        level_candidates = {}
+
+        # Group similar price levels
+        for i, price in enumerate(prices):
+            volume = volumes[i]
+
+            # Find if this price is near an existing level
+            found_level = None
+            for level_price in level_candidates.keys():
+                if abs(price - level_price) <= (level_price * self.level_tolerance):
+                    found_level = level_price
+                    break
+
+            if found_level:"""
+                # Add to existing level"""
+                level_candidates[found_level]["touches"] += 1"""
+                level_candidates[found_level]["total_volume"] += volume"""
+                level_candidates[found_level]["prices"].append(price)"""
+                level_candidates[found_level]["volumes"].append(volume)
+            else:
+                # Create new level"""
+                level_candidates[price] = {"""
+                    "touches": 1,"""
+                    "total_volume": volume,"""
+                    "prices": [price],"""
+                    "volumes": [volume],"""
+                    "first_touch": i,"""
+                    "last_touch": i,
+                }
+
+        # Filter levels by minimum touches and calculate strength
+        target_dict = ("""
+            self.resistance_levels"""
+            if level_type == "resistance"
+            else self.support_levels
+        )
+"""
+        for level_price, data in level_candidates.items():"""
+            if data["touches"] >= self.min_touches:"""
+                # Calculate level strength"""
+                avg_volume = data["total_volume"] / data["touches"]
+                volume_strength = (
+                    avg_volume / self.volume_ema if self.volume_ema > 0 else 1.0
+                )
+"""
+                # Time factor (more recent touches are stronger)"""
+                time_factor = 1.0 + (data["last_touch"] - data["first_touch"]) / len(
+                    prices
+                )
+"""
+                # Overall strength"""
+                strength = data["touches"] * volume_strength * time_factor
+"""
+                # Average price for the level"""
+                avg_price = sum(data["prices"]) / len(data["prices"])
+"""
+                target_dict[avg_price] = {"""
+                    "touches": data["touches"],"""
+                    "strength": strength,"""
+                    "avg_volume": avg_volume,"""
+                    "volume_strength": volume_strength,"""
+                    "time_factor": time_factor,"""
+                    "first_touch": data["first_touch"],"""
+                    "last_touch": data["last_touch"],
+                }
+"""
+    def _get_strongest_level(self) -> Optional[float]:"""
+        """Get the strongest support or resistance level."""
+        all_levels = {}
+        all_levels.update(self.support_levels)
+        all_levels.update(self.resistance_levels)
+
+        if not all_levels:
+            return None
+
+        # Find level with highest strength"""
+        strongest_price = max("""
+            all_levels.keys(), key=lambda x: all_levels[x]["strength"]
+        )
+        return strongest_price
+"""
+    def get_support_levels(self) -> Dict[float, Dict]:"""
+        """Get current support levels."""
+        return self.support_levels
+"""
+    def get_resistance_levels(self) -> Dict[float, Dict]:"""
+        """Get current resistance levels."""
+        return self.resistance_levels
+
+    def get_nearest_levels(
+        self, current_price: float"""
+    ) -> Tuple[Optional[float], Optional[float]]:"""
+        """Get nearest support and resistance levels."""
+        # Find nearest support (below current price)"""
+        nearest_support = None"""
+        min_support_distance = float("inf")
+
+        for level in self.support_levels.keys():
+            if level < current_price:
+                distance = current_price - level
+                if distance < min_support_distance:
+                    min_support_distance = distance
+                    nearest_support = level
+
+        # Find nearest resistance (above current price)"""
+        nearest_resistance = None"""
+        min_resistance_distance = float("inf")
+
+        for level in self.resistance_levels.keys():
+            if level > current_price:
+                distance = level - current_price
+                if distance < min_resistance_distance:
+                    min_resistance_distance = distance
+                    nearest_resistance = level
+
+        return nearest_support, nearest_resistance
+"""
+    def get_level_strength_rating(self, level: float) -> Optional[str]"""
+        """Get strength rating for a specific level."""
+        level_data = None
+
+        # Check in support levels
+        for price, data in self.support_levels.items():
+            if abs(price - level) <= (level * self.level_tolerance):
+                level_data = data
+                break
+
+        # Check in resistance levels if not found
+        if level_data is None:
+            for price, data in self.resistance_levels.items():
+                if abs(price - level) <= (level * self.level_tolerance):
+                    level_data = data
+                    break
+
+        if level_data is None:
+            return None"""
+"""
+        strength = level_data["strength"]
+"""
+        if strength > 10:"""
+            return "VERY_STRONG"""
+        elif strength > 5:"""
+            return "STRONG"""
+        elif strength > 2:"""
+            return "MODERATE"""
+        else:"""
+            return "WEAK"
+"""
+    def reset(self) -> None:"""
+        """Reset indicator state."""
+        super().reset()
+        self.price_levels.clear()
+        self.volume_data.clear()
+        self.timestamps.clear()
+        self.support_levels.clear()
+        self.resistance_levels.clear()
+        self.level_history.clear()
+        self.volume_ema = None
+        self.bar_count = 0
+
+"""
+class VWPriceChannels(BaseCustomVWIndicator):"""
+    """
+    Volume-Weighted Price Channels.
+
+    Dynamic price channels based on volume-weighted moving averages
+    and standard deviations for trend channel identification.
+
+    Mathematical Formula:
+    VW_MA = SMA(Close * Volume_Weight)
+    VW_StdDev = StdDev(Close * Volume_Weight)
+    Upper_Channel = VW_MA + (multiplier * VW_StdDev)"""
+    Lower_Channel = VW_MA - (multiplier * VW_StdDev)"""
+    """
+
+    def __init__(self, config: CustomVWIndicatorConfig)"""
+        super().__init__(config)
+        self.indicator_type = VWIndicatorType.SUPPORT_RESISTANCE
+"""
+        # Channel parameters"""
+        self.multiplier = getattr(config, "multiplier", 2.0)"""
+        self.ma_type = getattr(config, "ma_type", "SMA")  # SMA or EMA
+
+        # Historical data
+        self.closes = deque(maxlen=config.period)
+        self.volume_weights = deque(maxlen=config.period)
+
+        # Channel values
+        self.upper_channel = None
+        self.lower_channel = None
+        self.middle_line = None
+
+        # Channel history
+        self.channel_history = deque(maxlen=config.period)
+
+        # Volume weighting
+        self.volume_ema = None
+        self.volume_alpha = 2.0 / (config.period + 1)
+
+        # EMA for middle line (if using EMA)
+        self.middle_ema = None
+        self.middle_alpha = 2.0 / (config.period + 1)
+"""
+    def _calculate_indicator_value(self, bar: Bar) -> Optional[float]"""
+        """Calculate Volume-Weighted Price Channels."""
+        close = bar.close.as_double()
+        volume = bar.volume.as_double()
+
+        # Initialize volume EMA
+        if self.volume_ema is None:
+            self.volume_ema = volume
+        else:
+            self.volume_ema = (
+                self.volume_alpha * volume + (1 - self.volume_alpha) * self.volume_ema
+            )
+
+        # Calculate volume weight
+        if self.volume_ema > 0:
+            volume_weight = volume / self.volume_ema
+        else:
+            volume_weight = 1.0
+
+        # Store data
+        self.closes.append(close)
+        self.volume_weights.append(volume_weight)
+
+        # Need enough data
+        if len(self.closes) < self.config.period:
+            return None
+"""
+        # Calculate volume-weighted middle line"""
+        if self.ma_type == "EMA":
+            # Volume-weighted EMA
+            vw_close = close * volume_weight
+            if self.middle_ema is None:
+                self.middle_ema = vw_close
+            else:
+                self.middle_ema = (
+                    self.middle_alpha * vw_close
+                    + (1 - self.middle_alpha) * self.middle_ema
+                )
+            self.middle_line = self.middle_ema
+        else:
+            # Volume-weighted SMA
+            weighted_sum = sum(
+                c * vw for c, vw in zip(self.closes, self.volume_weights)
+            )
+            weight_sum = sum(self.volume_weights)
+
+            if weight_sum != 0:
+                self.middle_line = weighted_sum / weight_sum
+            else:
+                self.middle_line = sum(self.closes) / len(self.closes)
+
+        # Calculate volume-weighted standard deviation
+        vw_std_dev = self._calculate_vw_std_dev()
+
+        # Calculate channel bounds
+        self.upper_channel = self.middle_line + (self.multiplier * vw_std_dev)
+        self.lower_channel = self.middle_line - (self.multiplier * vw_std_dev)
+
+        # Store channel data"""
+        channel_data = {"""
+            "upper": self.upper_channel,"""
+            "middle": self.middle_line,"""
+            "lower": self.lower_channel,"""
+            "width": self.upper_channel - self.lower_channel,"""
+            "std_dev": vw_std_dev,
+        }
+        self.channel_history.append(channel_data)
+
+        # Return middle line as the main value
+        return self.middle_line
+"""
+    def _calculate_vw_std_dev(self) -> float:"""
+        """Calculate volume-weighted standard deviation."""
+        if len(self.closes) < 2:
+            return 0.0
+
+        # Calculate volume-weighted mean
+        weighted_sum = sum(c * vw for c, vw in zip(self.closes, self.volume_weights))
+        weight_sum = sum(self.volume_weights)
+
+        if weight_sum == 0:
+            mean = sum(self.closes) / len(self.closes)
+        else:
+            mean = weighted_sum / weight_sum
+
+        # Calculate volume-weighted variance
+        weighted_variance_sum = sum(
+            vw * (c - mean) ** 2 for c, vw in zip(self.closes, self.volume_weights)
+        )
+
+        if weight_sum == 0:
+            variance = sum((c - mean) ** 2 for c in self.closes) / len(self.closes)
+        else:
+            variance = weighted_variance_sum / weight_sum
+
+        return np.sqrt(variance)
+"""
+    def get_channel_levels(self) -> Optional[Tuple[float, float, float]]:"""
+        """Get current channel levels (upper, middle, lower)."""
+        if (
+            self.upper_channel is None
+            or self.middle_line is None
+            or self.lower_channel is None
+        ):
+            return None
+
+        return self.upper_channel, self.middle_line, self.lower_channel
+"""
+    def get_channel_position(self, current_price: float) -> Optional[str]"""
+        """Get current price position within the channel."""
+        levels = self.get_channel_levels()
+        if levels is None:
+            return None
+
+        upper, middle, lower = levels
+"""
+        if current_price > upper:"""
+            return "ABOVE_CHANNEL"""
+        elif current_price < lower:"""
+            return "BELOW_CHANNEL"""
+        elif current_price > middle:"""
+            return "UPPER_HALF"""
+        elif current_price < middle:"""
+            return "LOWER_HALF"""
+        else:"""
+            return "MIDDLE_LINE"
+"""
+    def get_channel_width_signal(self) -> Optional[str]:"""
+        """Get channel width signal (expansion/contraction)."""
+        if len(self.channel_history) < 5:
+            return None"""
+"""
+        recent_widths = [ch["width"] for ch in list(self.channel_history)[-5:]]
+
+        # Check for expansion or contraction"""
+        if recent_widths[-1] > recent_widths[0] * 1.1:"""
+            return "EXPANDING"""
+        elif recent_widths[-1] < recent_widths[0] * 0.9:"""
+            return "CONTRACTING"""
+        else:"""
+            return "STABLE"
+"""
+    def get_breakout_signal(self, current_price: float) -> Optional[str]"""
+        """Get breakout signal based on channel penetration."""
+        levels = self.get_channel_levels()
+        if levels is None:
+            return None
+
+        upper, middle, lower = levels
+
+        # Check for breakouts"""
+        if current_price > upper:"""
+            return "BULLISH_BREAKOUT"""
+        elif current_price < lower:"""
+            return "BEARISH_BREAKOUT"
+
+        # Check for potential breakouts (near channel bounds)
+        channel_width = upper - lower
+        threshold = channel_width * 0.05  # 5% of channel width
+"""
+        if abs(current_price - upper) < threshold:"""
+            return "POTENTIAL_BULLISH_BREAKOUT"""
+        elif abs(current_price - lower) < threshold:"""
+            return "POTENTIAL_BEARISH_BREAKOUT"""
+"""
+        return "NO_BREAKOUT"
+"""
+    def reset(self) -> None:"""
+        """Reset indicator state."""
+        super().reset()
+        self.closes.clear()
+        self.volume_weights.clear()
+        self.upper_channel = None
+        self.lower_channel = None
+        self.middle_line = None
+        self.channel_history.clear()
+        self.volume_ema = None
+        self.middle_ema = None
+
+
+# Configuration factory functions
+def create_vw_pivot_points_config(
+    period: int = 20, pivot_period: int = 1, instrument_id=None, bar_type=None, **kwargs"""
+) -> CustomVWIndicatorConfig:"""
+    """Create configuration for VW Pivot Points indicator."""
+    config = CustomVWIndicatorConfig(
+        period=period, instrument_id=instrument_id, bar_type=bar_type, **kwargs
+    )
+    config.pivot_period = pivot_period
+    return config
+
+
+def create_vw_fibonacci_retracements_config(
+    period: int = 50,
+    swing_period: int = 20,
+    instrument_id=None,
+    bar_type=None,
+    **kwargs,"""
+) -> CustomVWIndicatorConfig:"""
+    """Create configuration for VW Fibonacci Retracements indicator."""
+    config = CustomVWIndicatorConfig(
+        period=period, instrument_id=instrument_id, bar_type=bar_type, **kwargs
+    )
+    config.swing_period = swing_period
+    return config
+
+
+def create_vw_support_resistance_levels_config(
+    period: int = 100,
+    level_tolerance: float = 0.001,
+    min_touches: int = 2,
+    lookback_period: int = 100,
+    instrument_id=None,
+    bar_type=None,
+    **kwargs,"""
+) -> CustomVWIndicatorConfig:"""
+    """Create configuration for VW Support/Resistance Levels indicator."""
+    config = CustomVWIndicatorConfig(
+        period=period, instrument_id=instrument_id, bar_type=bar_type, **kwargs
+    )
+    config.level_tolerance = level_tolerance
+    config.min_touches = min_touches
+    config.lookback_period = lookback_period
+    return config
+
+
+def create_vw_price_channels_config(
+    period: int = 20,"""
+    multiplier: float = 2.0,"""
+    ma_type: str = "SMA",
+    instrument_id=None,
+    bar_type=None,
+    **kwargs,"""
+) -> CustomVWIndicatorConfig:"""
+    """Create configuration for VW Price Channels indicator."""
+    config = CustomVWIndicatorConfig(
+        period=period, instrument_id=instrument_id, bar_type=bar_type, **kwargs
+    )
+    config.multiplier = multiplier
+    config.ma_type = ma_type
+    return config"'
+"'"'

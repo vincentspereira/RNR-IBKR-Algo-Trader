@@ -1,0 +1,1330 @@
+"""SpiderRock Data Feed Adapter
+
+This module provides a comprehensive adapter for SpiderRock Connect API integration,
+serving as a professional options market data source. SpiderRock specializes in
+real-time options data, analytics, and risk management tools. The adapter implements
+the BaseDataFeedAdapter interface and provides functionality for options chains,
+volatility surfaces, and advanced options analytics.
+
+Features:
+- Comprehensive options market coverage
+- Real-time options chains and quotes
+- Implied volatility surfaces
+- Options analytics and Greeks
+- Risk management tools
+- Multi-exchange options data
+- Professional-grade options data quality
+- Advanced filtering and screening
+- Comprehensive error handling and retry logic
+- Rate limiting and request management
+- Event-driven data distribution
+"""
+
+import asyncio
+import json
+import logging
+import math
+import threading
+import time
+from concurrent.futures import ThreadPoolExecutor
+from dataclasses import dataclass, field
+from datetime import datetime, timedelta, timezone
+from decimal import Decimal
+from enum import Enum
+from typing import Any, AsyncGenerator, Callable, Dict, List, Optional, Union
+from urllib.parse import urlencode, urljoin
+
+import aiohttp
+
+from ..base import (
+    AdapterConfig,
+    AdapterType,
+    BaseDataFeedAdapter,
+    ConnectionStatus,
+    HealthCheck,
+)
+
+# SpiderRock imports (would be installed via pip install pandas requests websockets)
+try:
+    import numpy as np
+    import pandas as pd
+    import requests
+    import websockets
+
+    SPIDERROCK_AVAILABLE = True
+except ImportError:
+    SPIDERROCK_AVAILABLE = False
+    logging.warning(
+        "SpiderRock dependencies not available. Install with: pip install pandas requests websockets numpy"
+    )
+
+
+class SpiderRockExchange(Enum):
+    """SpiderRock supported exchanges"""
+
+    CBOE = "CBOE"
+    ISE = "ISE"
+    AMEX = "AMEX"
+    NASDAQ = "NASDAQ"
+    NYSE = "NYSE"
+    PHLX = "PHLX"
+    BOX = "BOX"
+    MIAX = "MIAX"
+    PEARL = "PEARL"
+    EMERALD = "EMERALD"
+    ALL = "ALL"
+
+
+class SpiderRockOptionType(Enum):
+    """SpiderRock option types"""
+
+    CALL = "Call"
+    PUT = "Put"
+    BOTH = "Both"
+
+
+class SpiderRockDataType(Enum):
+    """SpiderRock data types"""
+
+    LIVE = "Live"
+    DELAYED = "Delayed"
+    SNAPSHOT = "Snapshot"
+    HISTORICAL = "Historical"
+
+
+class SpiderRockMoneyness(Enum):
+    """SpiderRock moneyness filters"""
+
+    ITM = "ITM"  # In-the-money
+    ATM = "ATM"  # At-the-money
+    OTM = "OTM"  # Out-of-the-money
+    ALL = "ALL"
+
+
+@dataclass
+class SpiderRockConfig(AdapterConfig):
+    """SpiderRock specific configuration"""
+
+    api_key: str = ""  # Required for production use
+    username: str = ""
+    password: str = ""
+    base_url: str = "https://mlink-live.nms.saturn.spiderrockconnect.com"
+    websocket_url: str = "wss://mlink-live.nms.saturn.spiderrockconnect.com/mlink/ws"
+    timeout: int = 30
+    max_requests_per_second: int = 10  # Conservative rate limit
+    retry_attempts: int = 3
+    retry_delay: float = 2.0
+    cache_duration: int = 60  # 1 minute cache for options data
+
+    # Authentication settings
+    session_timeout: int = 3600  # 1 hour
+
+    # Options-specific settings
+    default_exchanges: List[str] = field(
+        default_factory=lambda: ["CBOE", "ISE", "NASDAQ"]
+    )
+    max_strikes_per_expiry: int = 50
+    max_expiries: int = 12
+    include_greeks: bool = True
+    include_iv_surface: bool = True
+
+    # Data quality settings
+    min_volume_filter: int = 0
+    min_open_interest_filter: int = 0
+    max_bid_ask_spread_pct: float = 50.0  # 50% max spread
+
+    # Popular underlyings for options
+    popular_underlyings: List[str] = field(
+        default_factory=lambda: [
+            "SPY",
+            "QQQ",
+            "IWM",
+            "AAPL",
+            "MSFT",
+            "GOOGL",
+            "AMZN",
+            "TSLA",
+            "NVDA",
+            "META",
+            "NFLX",
+            "AMD",
+            "INTC",
+            "CRM",
+            "ADBE",
+            "PYPL",
+            "SPX",
+            "NDX",
+            "RUT",
+            "VIX",
+            "GLD",
+            "SLV",
+            "TLT",
+            "XLE",
+            "XLF",
+        ]
+    )
+
+    # Volatility surface settings
+    iv_surface_strikes: int = 21  # Number of strikes for IV surface
+    iv_surface_expiries: int = 8  # Number of expiries for IV surface
+
+
+class SpiderRockAdapter(BaseDataFeedAdapter):
+    """
+    SpiderRock Connect data feed adapter implementation
+
+    Provides comprehensive integration with SpiderRock Connect API for options
+    market data, analytics, and risk management. Specializes in real-time options
+    data with advanced filtering and analytics capabilities.
+    """
+
+    def __init__(self, config: SpiderRockConfig):
+        super().__init__(config)
+        self.config = config
+        self.session: Optional[aiohttp.ClientSession] = None
+        self.websocket: Optional[websockets.WebSocketServerProtocol] = None
+        self.rate_limiter = asyncio.Semaphore(config.max_requests_per_second)
+        self.cache: Dict[str, Any] = {}
+        self.last_request_time = 0.0
+
+        # Authentication
+        self.auth_token: Optional[str] = None
+        self.session_expiry: Optional[datetime] = None
+
+        # Request headers
+        self.headers = {
+            "User-Agent": "SpiderRock-Python-Client/1.0",
+            "Accept": "application/json",
+            "Content-Type": "application/json",
+        }
+
+        # Initialize caches
+        self.options_cache: Dict[str, pd.DataFrame] = {}
+        self.iv_surface_cache: Dict[str, Dict] = {}
+        self.greeks_cache: Dict[str, Dict] = {}
+        self.cache_expiry: Dict[str, datetime] = {}
+
+        # Streaming state
+        self.subscribed_symbols: set = set()
+        self.stream_callbacks: Dict[str, Callable] = {}
+
+        logger.info(f"Initialized SpiderRock adapter with config: {config.name}")
+
+    async def connect(self) -> bool:
+        """Establish connection to SpiderRock Connect API"""
+        try:
+            if not SPIDERROCK_AVAILABLE:
+                logger.error("SpiderRock dependencies not available")
+                self.status = ConnectionStatus.FAILED
+                return False
+
+            # Create HTTP session
+            connector = aiohttp.TCPConnector(
+                limit=20, limit_per_host=10, ttl_dns_cache=300, use_dns_cache=True
+            )
+
+            timeout = aiohttp.ClientTimeout(total=self.config.timeout)
+            self.session = aiohttp.ClientSession(
+                connector=connector, timeout=timeout, headers=self.headers
+            )
+
+            # Authenticate
+            if not await self._authenticate():
+                logger.error("Failed to authenticate with SpiderRock")
+                self.status = ConnectionStatus.FAILED
+                return False
+
+            # Test connection with a simple request
+            test_symbol = "SPY"
+            test_data = await self._test_connection(test_symbol)
+
+            if test_data:
+                self.status = ConnectionStatus.CONNECTED
+                logger.info("Successfully connected to SpiderRock Connect API")
+
+                # Initialize popular underlyings cache
+                await self._initialize_underlyings_cache()
+
+                return True
+            else:
+                logger.error("Failed to retrieve test data from SpiderRock")
+                self.status = ConnectionStatus.FAILED
+                return False
+
+        except Exception as e:
+            logger.error(f"Error connecting to SpiderRock: {e}")
+            self.status = ConnectionStatus.FAILED
+            return False
+
+    async def disconnect(self) -> bool:
+        """Disconnect from SpiderRock Connect API"""
+        try:
+            # Close WebSocket connection
+            if self.websocket:
+                await self.websocket.close()
+                self.websocket = None
+
+            # Close HTTP session
+            if self.session:
+                await self.session.close()
+                self.session = None
+
+            # Clear authentication
+            self.auth_token = None
+            self.session_expiry = None
+
+            self.status = ConnectionStatus.DISCONNECTED
+            logger.info("Disconnected from SpiderRock Connect API")
+            return True
+
+        except Exception as e:
+            logger.error(f"Error disconnecting from SpiderRock: {e}")
+            return False
+
+    async def get_historical_data(
+        self,
+        symbol: str,
+        start_date: datetime,
+        end_date: datetime,
+        interval: str = "1d",
+        **kwargs,
+    ) -> Optional[pd.DataFrame]:
+        """Get historical options data from SpiderRock"""
+        try:
+            if not self._is_connected():
+                await self.connect()
+
+            # SpiderRock specializes in options, so we'll get options chain history
+            option_type = kwargs.get("option_type", "Both")
+            exchanges = kwargs.get("exchanges", self.config.default_exchanges)
+
+            # Prepare API parameters
+            params = {
+                "ticker": symbol,
+                "startDate": start_date.strftime("%Y-%m-%d"),
+                "endDate": end_date.strftime("%Y-%m-%d"),
+                "optionType": option_type,
+                "exchanges": ",".join(exchanges),
+            }
+
+            # Add optional filters
+            if "min_volume" in kwargs:
+                params["minVolume"] = kwargs["min_volume"]
+            if "max_strikes" in kwargs:
+                params["maxStrikes"] = kwargs["max_strikes"]
+
+            # Make API request
+            url = f"{self.config.base_url}/rest/json/OptionChainHistory"
+
+            async with self.rate_limiter:
+                await self._respect_rate_limit()
+
+                headers = self._get_auth_headers()
+                async with self.session.get(
+                    url, params=params, headers=headers
+                ) as response:
+                    if response.status == 200:
+                        data = await response.json()
+
+                        if data and "optionChains" in data:
+                            # Convert to DataFrame
+                            df = self._process_options_history(
+                                data["optionChains"], symbol
+                            )
+
+                            if not df.empty:
+                                # Add metadata
+                                df.attrs = {
+                                    "symbol": symbol,
+                                    "source": "spiderrock",
+                                    "data_type": "options_history",
+                                    "start_date": start_date,
+                                    "end_date": end_date,
+                                    "option_type": option_type,
+                                }
+
+                                logger.info(
+                                    f"Retrieved {len(df)} historical options records for {symbol}"
+                                )
+                                return df
+
+                        return None
+
+                    elif response.status == 401:
+                        logger.warning("Authentication expired, re-authenticating")
+                        if await self._authenticate():
+                            return await self.get_historical_data(
+                                symbol, start_date, end_date, interval, **kwargs
+                            )
+                        return None
+
+                    else:
+                        logger.error(f"HTTP error {response.status} for {symbol}")
+                        return None
+
+        except Exception as e:
+            logger.error(f"Error getting historical data for {symbol}: {e}")
+            return None
+
+    async def get_quote(self, symbol: str) -> Optional[Dict[str, Any]]:
+        """Get real-time options chain quote from SpiderRock (BaseDataFeedAdapter abstract method)"""
+        try:
+            if not self._is_connected():
+                await self.connect()
+
+            # Check cache first
+            cache_key = f"quote_{symbol}"
+            if self._is_cached(cache_key):
+                return self.cache[cache_key]
+
+            # Prepare API parameters
+            params = {
+                "ticker": symbol,
+                "exchanges": ",".join(self.config.default_exchanges),
+                "includeGreeks": str(self.config.include_greeks).lower(),
+                "maxStrikes": self.config.max_strikes_per_expiry,
+            }
+
+            # Make API request
+            url = f"{self.config.base_url}/rest/json/OptionChain"
+
+            async with self.rate_limiter:
+                await self._respect_rate_limit()
+
+                headers = self._get_auth_headers()
+                async with self.session.get(
+                    url, params=params, headers=headers
+                ) as response:
+                    if response.status == 200:
+                        data = await response.json()
+
+                        if data and "optionChain" in data:
+                            # Process options chain data
+                            quote_data = self._process_options_chain(
+                                symbol, data["optionChain"]
+                            )
+
+                            # Cache the result
+                            self._cache_data(cache_key, quote_data)
+
+                            logger.debug(
+                                f"Retrieved options chain for {symbol}: {len(quote_data.get('options', []))} contracts"
+                            )
+                            return quote_data
+
+                        return None
+
+                    elif response.status == 401:
+                        logger.warning("Authentication expired, re-authenticating")
+                        if await self._authenticate():
+                            return await self.get_quote(symbol)
+                        return None
+
+                    else:
+                        logger.error(f"HTTP error {response.status} for {symbol}")
+                        return None
+
+        except Exception as e:
+            logger.error(f"Error getting SpiderRock quote for {symbol}: {e}")
+            return None
+
+    async def get_real_time_quote(self, symbol: str) -> Optional[Dict[str, Any]]:
+        """Get real-time options chain quote from SpiderRock (legacy method)"""
+        quote_data = await self.get_quote(symbol)
+        return quote_data if quote_data else None
+
+    async def subscribe_real_time(
+        self, symbols: List[str]
+    ) -> AsyncGenerator[Dict[str, Any], None]:
+        """Subscribe to real-time market data (BaseDataFeedAdapter abstract method)"""
+        try:
+            if not symbols:
+                return
+
+            logger.info(
+                f"Starting SpiderRock real-time subscription for {len(symbols)} symbols"
+            )
+
+            while True:
+                for symbol in symbols:
+                    try:
+                        quote_data = await self.get_quote(symbol)
+                        if quote_data:
+                            yield {
+                                "symbol": symbol,
+                                "data": quote_data,
+                                "timestamp": datetime.now(timezone.utc),
+                                "source": "spiderrock",
+                            }
+                    except Exception as e:
+                        logger.error(f"Error getting real-time data for {symbol}: {e}")
+                        continue
+
+                # Wait before next polling cycle (respect rate limits)
+                await asyncio.sleep(5.0)  # 5 seconds between polls for options data
+
+        except Exception as e:
+            logger.error(f"Error in SpiderRock real-time subscription: {e}")
+            return
+
+    async def search_symbols(self, query: str, limit: int = 20) -> List[Dict[str, Any]]:
+        """Search for symbols (BaseDataFeedAdapter abstract method)"""
+        try:
+            results = []
+            query_lower = query.lower()
+
+            # Search in popular underlyings
+            for symbol in self.config.popular_underlyings:
+                if query_lower in symbol.lower():
+                    results.append(
+                        {
+                            "symbol": symbol,
+                            "name": f"{symbol} Options",
+                            "exchange": "Multiple",
+                            "asset_type": "options",
+                            "source": "spiderrock",
+                        }
+                    )
+
+            # If no results found, provide some common options symbols
+            if not results:
+                common_symbols = [
+                    ("SPY", "SPDR S&P 500 ETF Options"),
+                    ("QQQ", "Invesco QQQ Trust Options"),
+                    ("IWM", "iShares Russell 2000 ETF Options"),
+                    ("AAPL", "Apple Inc. Options"),
+                    ("MSFT", "Microsoft Corporation Options"),
+                    ("GOOGL", "Alphabet Inc. Options"),
+                    ("AMZN", "Amazon.com Inc. Options"),
+                    ("TSLA", "Tesla Inc. Options"),
+                    ("NVDA", "NVIDIA Corporation Options"),
+                    ("META", "Meta Platforms Inc. Options"),
+                ]
+
+                for symbol, name in common_symbols:
+                    if query_lower in symbol.lower() or query_lower in name.lower():
+                        results.append(
+                            {
+                                "symbol": symbol,
+                                "name": name,
+                                "exchange": "Multiple",
+                                "asset_type": "options",
+                                "source": "spiderrock",
+                            }
+                        )
+
+            return results[:limit]
+
+        except Exception as e:
+            logger.error(f"Error searching SpiderRock symbols: {e}")
+            return []
+
+    async def get_options_chain(
+        self, underlying_symbol: str, **kwargs
+    ) -> Optional[pd.DataFrame]:
+        """Get comprehensive options chain data from SpiderRock"""
+        try:
+            if not self._is_connected():
+                await self.connect()
+
+            # Check cache first
+            cache_key = f"options_chain_{underlying_symbol}"
+            if self._is_cached(cache_key):
+                return self.options_cache.get(cache_key)
+
+            # Prepare API parameters
+            params = {
+                "ticker": underlying_symbol,
+                "exchanges": ",".join(
+                    kwargs.get("exchanges", self.config.default_exchanges)
+                ),
+                "optionType": kwargs.get("option_type", "Both"),
+                "includeGreeks": str(self.config.include_greeks).lower(),
+                "maxStrikes": kwargs.get(
+                    "max_strikes", self.config.max_strikes_per_expiry
+                ),
+                "maxExpiries": kwargs.get("max_expiries", self.config.max_expiries),
+            }
+
+            # Add filters
+            if "moneyness" in kwargs:
+                params["moneyness"] = kwargs["moneyness"]
+            if "min_volume" in kwargs:
+                params["minVolume"] = kwargs["min_volume"]
+            if "min_open_interest" in kwargs:
+                params["minOpenInterest"] = kwargs["min_open_interest"]
+
+            # Make API request
+            url = f"{self.config.base_url}/rest/json/OptionChainDetailed"
+
+            async with self.rate_limiter:
+                await self._respect_rate_limit()
+
+                headers = self._get_auth_headers()
+                async with self.session.get(
+                    url, params=params, headers=headers
+                ) as response:
+                    if response.status == 200:
+                        data = await response.json()
+
+                        if data and "optionChain" in data:
+                            # Convert to DataFrame
+                            df = self._process_detailed_options_chain(
+                                data["optionChain"], underlying_symbol
+                            )
+
+                            if not df.empty:
+                                # Cache the result
+                                self.options_cache[cache_key] = df
+                                self._set_cache_expiry(cache_key)
+
+                                logger.info(
+                                    f"Retrieved options chain for {underlying_symbol}: {len(df)} contracts"
+                                )
+                                return df
+
+                        return None
+
+                    elif response.status == 401:
+                        logger.warning("Authentication expired, re-authenticating")
+                        if await self._authenticate():
+                            return await self.get_options_chain(
+                                underlying_symbol, **kwargs
+                            )
+                        return None
+
+                    else:
+                        logger.error(
+                            f"HTTP error {response.status} for options chain {underlying_symbol}"
+                        )
+                        return None
+
+        except Exception as e:
+            logger.error(f"Error getting options chain for {underlying_symbol}: {e}")
+            return None
+
+    async def get_iv_surface(
+        self, underlying_symbol: str, **kwargs
+    ) -> Optional[Dict[str, Any]]:
+        """Get implied volatility surface from SpiderRock"""
+        try:
+            if not self._is_connected():
+                await self.connect()
+
+            if not self.config.include_iv_surface:
+                logger.info("IV surface disabled in configuration")
+                return None
+
+            # Check cache first
+            cache_key = f"iv_surface_{underlying_symbol}"
+            if self._is_cached(cache_key):
+                return self.iv_surface_cache.get(cache_key)
+
+            # Prepare API parameters
+            params = {
+                "ticker": underlying_symbol,
+                "strikes": kwargs.get("strikes", self.config.iv_surface_strikes),
+                "expiries": kwargs.get("expiries", self.config.iv_surface_expiries),
+                "surfaceType": kwargs.get("surface_type", "Live"),
+            }
+
+            # Make API request
+            url = f"{self.config.base_url}/rest/json/ImpliedVolatilitySurface"
+
+            async with self.rate_limiter:
+                await self._respect_rate_limit()
+
+                headers = self._get_auth_headers()
+                async with self.session.get(
+                    url, params=params, headers=headers
+                ) as response:
+                    if response.status == 200:
+                        data = await response.json()
+
+                        if data and "ivSurface" in data:
+                            # Process IV surface data
+                            iv_surface = self._process_iv_surface(
+                                data["ivSurface"], underlying_symbol
+                            )
+
+                            # Cache the result
+                            self.iv_surface_cache[cache_key] = iv_surface
+                            self._set_cache_expiry(cache_key)
+
+                            logger.info(f"Retrieved IV surface for {underlying_symbol}")
+                            return iv_surface
+
+                        return None
+
+                    elif response.status == 401:
+                        logger.warning("Authentication expired, re-authenticating")
+                        if await self._authenticate():
+                            return await self.get_iv_surface(
+                                underlying_symbol, **kwargs
+                            )
+                        return None
+
+                    else:
+                        logger.error(
+                            f"HTTP error {response.status} for IV surface {underlying_symbol}"
+                        )
+                        return None
+
+        except Exception as e:
+            logger.error(f"Error getting IV surface for {underlying_symbol}: {e}")
+            return None
+
+    async def get_options_analytics(
+        self, symbol: str, **kwargs
+    ) -> Optional[Dict[str, Any]]:
+        """Get advanced options analytics from SpiderRock"""
+        try:
+            if not self._is_connected():
+                await self.connect()
+
+            # Check cache first
+            cache_key = f"analytics_{symbol}"
+            if self._is_cached(cache_key):
+                return self.cache[cache_key]
+
+            # Prepare API parameters
+            params = {
+                "ticker": symbol,
+                "includeGreeks": "true",
+                "includeRisk": "true",
+                "includeVolatility": "true",
+            }
+
+            # Make API request
+            url = f"{self.config.base_url}/rest/json/OptionsAnalytics"
+
+            async with self.rate_limiter:
+                await self._respect_rate_limit()
+
+                headers = self._get_auth_headers()
+                async with self.session.get(
+                    url, params=params, headers=headers
+                ) as response:
+                    if response.status == 200:
+                        data = await response.json()
+
+                        if data and "analytics" in data:
+                            # Process analytics data
+                            analytics = self._process_options_analytics(
+                                data["analytics"], symbol
+                            )
+
+                            # Cache the result
+                            self._cache_data(cache_key, analytics)
+
+                            logger.debug(f"Retrieved options analytics for {symbol}")
+                            return analytics
+
+                        return None
+
+                    else:
+                        logger.error(
+                            f"HTTP error {response.status} for analytics {symbol}"
+                        )
+                        return None
+
+        except Exception as e:
+            logger.error(f"Error getting options analytics for {symbol}: {e}")
+            return None
+
+    async def subscribe_to_stream(self, symbols: List[str], callback: Callable) -> bool:
+        """Subscribe to real-time options data stream"""
+        try:
+            if not symbols:
+                return False
+
+            logger.info(
+                f"Starting WebSocket stream for {len(symbols)} SpiderRock symbols"
+            )
+
+            # Connect to WebSocket
+            if not await self._connect_websocket():
+                logger.error("Failed to connect to SpiderRock WebSocket")
+                return False
+
+            # Subscribe to symbols
+            for symbol in symbols:
+                await self._subscribe_symbol(symbol, callback)
+                self.subscribed_symbols.add(symbol)
+
+            # Start WebSocket message handler
+            self.streaming_task = asyncio.create_task(self._handle_websocket_messages())
+
+            self.is_streaming = True
+            return True
+
+        except Exception as e:
+            logger.error(f"Error subscribing to SpiderRock stream: {e}")
+            return False
+
+    async def unsubscribe_from_stream(self) -> bool:
+        """Unsubscribe from real-time data stream"""
+        try:
+            # Cancel streaming task
+            if hasattr(self, "streaming_task") and self.streaming_task:
+                self.streaming_task.cancel()
+                try:
+                    await self.streaming_task
+                except asyncio.CancelledError:
+                    logger.debug(
+                        "SpiderRock streaming task cancelled during disconnect"
+                    )
+
+            # Close WebSocket
+            if self.websocket:
+                await self.websocket.close()
+                self.websocket = None
+
+            # Clear subscriptions
+            self.subscribed_symbols.clear()
+            self.stream_callbacks.clear()
+
+            self.is_streaming = False
+            logger.info("Unsubscribed from SpiderRock stream")
+            return True
+
+        except Exception as e:
+            logger.error(f"Error unsubscribing from SpiderRock stream: {e}")
+            return False
+
+    async def health_check(self) -> HealthCheck:
+        """Perform health check"""
+        start_time = time.time()
+
+        try:
+            if not self._is_connected():
+                return HealthCheck(
+                    is_healthy=False,
+                    status="disconnected",
+                    latency_ms=0,
+                    error_message="Not connected to SpiderRock Connect API",
+                )
+
+            # Test with a simple options chain request
+            test_symbol = "SPY"
+            test_data = await self._test_connection(test_symbol)
+
+            latency = (time.time() - start_time) * 1000
+
+            if test_data:
+                return HealthCheck(
+                    is_healthy=True,
+                    status="connected",
+                    latency_ms=latency,
+                    additional_info={
+                        "cache_size": len(self.cache),
+                        "options_cache_size": len(self.options_cache),
+                        "iv_surface_cache_size": len(self.iv_surface_cache),
+                        "subscribed_symbols": len(self.subscribed_symbols),
+                        "include_greeks": self.config.include_greeks,
+                        "include_iv_surface": self.config.include_iv_surface,
+                        "session_valid": self._is_session_valid(),
+                    },
+                )
+            else:
+                return HealthCheck(
+                    is_healthy=False,
+                    status="error",
+                    latency_ms=latency,
+                    error_message="Failed to retrieve test data",
+                )
+
+        except Exception as e:
+            latency = (time.time() - start_time) * 1000
+            return HealthCheck(
+                is_healthy=False,
+                status="error",
+                latency_ms=latency,
+                error_message=str(e),
+            )
+
+    # Private helper methods
+
+    async def _authenticate(self) -> bool:
+        """Authenticate with SpiderRock Connect API"""
+        try:
+            auth_data = {
+                "username": self.config.username,
+                "password": self.config.password,
+                "apiKey": self.config.api_key,
+            }
+
+            url = f"{self.config.base_url}/rest/json/authenticate"
+
+            async with self.session.post(url, json=auth_data) as response:
+                if response.status == 200:
+                    data = await response.json()
+
+                    if "token" in data:
+                        self.auth_token = data["token"]
+                        self.session_expiry = datetime.now() + timedelta(
+                            seconds=self.config.session_timeout
+                        )
+
+                        logger.info("Successfully authenticated with SpiderRock")
+                        return True
+                    else:
+                        logger.error(f"Authentication failed: {data}")
+                        return False
+                else:
+                    logger.error(f"Authentication HTTP error: {response.status}")
+                    return False
+
+        except Exception as e:
+            logger.error(f"Error during SpiderRock authentication: {e}")
+            return False
+
+    async def _test_connection(self, symbol: str) -> bool:
+        """Test connection with a simple API call"""
+        try:
+            params = {"ticker": symbol, "maxStrikes": 5}
+
+            url = f"{self.config.base_url}/rest/json/OptionChain"
+            headers = self._get_auth_headers()
+
+            async with self.session.get(
+                url, params=params, headers=headers
+            ) as response:
+                if response.status == 200:
+                    data = await response.json()
+                    return "optionChain" in data
+                else:
+                    return False
+
+        except Exception as e:
+            logger.error(f"Error testing SpiderRock connection: {e}")
+            return False
+
+    async def _initialize_underlyings_cache(self):
+        """Initialize cache for popular underlyings"""
+        try:
+            # Cache basic info for popular underlyings
+            for symbol in self.config.popular_underlyings[
+                :5
+            ]:  # Limit to avoid rate limits
+                try:
+                    await self.get_real_time_quote(symbol)
+                    await asyncio.sleep(0.2)  # Small delay between requests
+                except Exception as e:
+                    logger.warning(f"Error caching {symbol}: {e}")
+                    continue
+
+            logger.info(f"Initialized cache for popular underlyings")
+
+        except Exception as e:
+            logger.warning(f"Error initializing underlyings cache: {e}")
+
+    def _process_options_history(
+        self, options_data: List[Dict], symbol: str
+    ) -> pd.DataFrame:
+        """Process historical options data"""
+        try:
+            if not options_data:
+                return pd.DataFrame()
+
+            # Flatten the nested options data
+            flattened_data = []
+            for chain in options_data:
+                for option in chain.get("options", []):
+                    flattened_data.append(
+                        {
+                            "underlying_symbol": symbol,
+                            "option_symbol": option.get("symbol", ""),
+                            "strike": float(option.get("strike", 0)),
+                            "expiration": pd.to_datetime(option.get("expiration")),
+                            "option_type": option.get("optionType", ""),
+                            "bid": float(option.get("bid", 0)),
+                            "ask": float(option.get("ask", 0)),
+                            "last": float(option.get("last", 0)),
+                            "volume": int(option.get("volume", 0)),
+                            "open_interest": int(option.get("openInterest", 0)),
+                            "implied_volatility": float(
+                                option.get("impliedVolatility", 0)
+                            ),
+                            "delta": float(option.get("delta", 0)),
+                            "gamma": float(option.get("gamma", 0)),
+                            "theta": float(option.get("theta", 0)),
+                            "vega": float(option.get("vega", 0)),
+                            "timestamp": pd.to_datetime(chain.get("timestamp")),
+                        }
+                    )
+
+            df = pd.DataFrame(flattened_data)
+
+            if not df.empty:
+                # Set timestamp as index
+                df.set_index("timestamp", inplace=True)
+                df.sort_index(inplace=True)
+
+            return df
+
+        except Exception as e:
+            logger.error(f"Error processing options history for {symbol}: {e}")
+            return pd.DataFrame()
+
+    def _process_options_chain(self, symbol: str, chain_data: Dict) -> Dict[str, Any]:
+        """Process options chain data"""
+        try:
+            current_time = datetime.now(timezone.utc)
+
+            # Extract underlying info
+            underlying_price = float(chain_data.get("underlyingPrice", 0))
+
+            # Process options
+            options = []
+            for option in chain_data.get("options", []):
+                option_info = {
+                    "symbol": option.get("symbol", ""),
+                    "strike": float(option.get("strike", 0)),
+                    "expiration": option.get("expiration", ""),
+                    "option_type": option.get("optionType", ""),
+                    "bid": float(option.get("bid", 0)),
+                    "ask": float(option.get("ask", 0)),
+                    "last": float(option.get("last", 0)),
+                    "volume": int(option.get("volume", 0)),
+                    "open_interest": int(option.get("openInterest", 0)),
+                    "implied_volatility": float(option.get("impliedVolatility", 0)),
+                }
+
+                # Add Greeks if available
+                if self.config.include_greeks:
+                    option_info.update(
+                        {
+                            "delta": float(option.get("delta", 0)),
+                            "gamma": float(option.get("gamma", 0)),
+                            "theta": float(option.get("theta", 0)),
+                            "vega": float(option.get("vega", 0)),
+                            "rho": float(option.get("rho", 0)),
+                        }
+                    )
+
+                options.append(option_info)
+
+            chain_summary = {
+                "underlying_symbol": symbol,
+                "underlying_price": underlying_price,
+                "options": options,
+                "total_contracts": len(options),
+                "timestamp": current_time,
+                "source": "spiderrock",
+            }
+
+            return chain_summary
+
+        except Exception as e:
+            logger.error(f"Error processing options chain for {symbol}: {e}")
+            return {}
+
+    def _process_detailed_options_chain(
+        self, chain_data: Dict, symbol: str
+    ) -> pd.DataFrame:
+        """Process detailed options chain data into DataFrame"""
+        try:
+            options_list = []
+
+            for option in chain_data.get("options", []):
+                option_dict = {
+                    "underlying_symbol": symbol,
+                    "option_symbol": option.get("symbol", ""),
+                    "strike": float(option.get("strike", 0)),
+                    "expiration": pd.to_datetime(option.get("expiration")),
+                    "option_type": option.get("optionType", ""),
+                    "exchange": option.get("exchange", ""),
+                    "bid": float(option.get("bid", 0)),
+                    "ask": float(option.get("ask", 0)),
+                    "last": float(option.get("last", 0)),
+                    "volume": int(option.get("volume", 0)),
+                    "open_interest": int(option.get("openInterest", 0)),
+                    "implied_volatility": float(option.get("impliedVolatility", 0)),
+                    "bid_size": int(option.get("bidSize", 0)),
+                    "ask_size": int(option.get("askSize", 0)),
+                }
+
+                # Add Greeks if available
+                if self.config.include_greeks:
+                    option_dict.update(
+                        {
+                            "delta": float(option.get("delta", 0)),
+                            "gamma": float(option.get("gamma", 0)),
+                            "theta": float(option.get("theta", 0)),
+                            "vega": float(option.get("vega", 0)),
+                            "rho": float(option.get("rho", 0)),
+                        }
+                    )
+
+                # Calculate additional metrics
+                bid_price = option_dict["bid"]
+                ask_price = option_dict["ask"]
+                if bid_price > 0 and ask_price > 0:
+                    option_dict["bid_ask_spread"] = ask_price - bid_price
+                    option_dict["bid_ask_spread_pct"] = (
+                        (ask_price - bid_price) / ((ask_price + bid_price) / 2) * 100
+                    )
+                else:
+                    option_dict["bid_ask_spread"] = 0
+                    option_dict["bid_ask_spread_pct"] = 0
+
+                options_list.append(option_dict)
+
+            df = pd.DataFrame(options_list)
+
+            if not df.empty:
+                # Apply filters
+                df = self._apply_options_filters(df)
+
+                # Sort by expiration and strike
+                df = df.sort_values(["expiration", "strike"])
+
+            return df
+
+        except Exception as e:
+            logger.error(f"Error processing detailed options chain for {symbol}: {e}")
+            return pd.DataFrame()
+
+    def _process_iv_surface(self, surface_data: Dict, symbol: str) -> Dict[str, Any]:
+        """Process implied volatility surface data"""
+        try:
+            # Extract surface points
+            surface_points = []
+            for point in surface_data.get("surfacePoints", []):
+                surface_points.append(
+                    {
+                        "strike": float(point.get("strike", 0)),
+                        "expiration": point.get("expiration", ""),
+                        "days_to_expiry": int(point.get("daysToExpiry", 0)),
+                        "implied_volatility": float(point.get("impliedVolatility", 0)),
+                        "delta": float(point.get("delta", 0)),
+                        "moneyness": float(point.get("moneyness", 0)),
+                    }
+                )
+
+            # Create surface matrix
+            df = pd.DataFrame(surface_points)
+
+            if not df.empty:
+                # Pivot to create surface matrix
+                surface_matrix = df.pivot_table(
+                    values="implied_volatility",
+                    index="days_to_expiry",
+                    columns="moneyness",
+                    aggfunc="mean",
+                )
+            else:
+                surface_matrix = pd.DataFrame()
+
+            iv_surface = {
+                "underlying_symbol": symbol,
+                "surface_points": surface_points,
+                "surface_matrix": surface_matrix,
+                "underlying_price": float(surface_data.get("underlyingPrice", 0)),
+                "timestamp": datetime.now(timezone.utc),
+                "source": "spiderrock",
+            }
+
+            return iv_surface
+
+        except Exception as e:
+            logger.error(f"Error processing IV surface for {symbol}: {e}")
+            return {}
+
+    def _process_options_analytics(
+        self, analytics_data: Dict, symbol: str
+    ) -> Dict[str, Any]:
+        """Process options analytics data"""
+        try:
+            analytics = {
+                "symbol": symbol,
+                "portfolio_delta": float(analytics_data.get("portfolioDelta", 0)),
+                "portfolio_gamma": float(analytics_data.get("portfolioGamma", 0)),
+                "portfolio_theta": float(analytics_data.get("portfolioTheta", 0)),
+                "portfolio_vega": float(analytics_data.get("portfolioVega", 0)),
+                "portfolio_rho": float(analytics_data.get("portfolioRho", 0)),
+                "implied_volatility_rank": float(analytics_data.get("ivRank", 0)),
+                "implied_volatility_percentile": float(
+                    analytics_data.get("ivPercentile", 0)
+                ),
+                "historical_volatility": float(
+                    analytics_data.get("historicalVolatility", 0)
+                ),
+                "volatility_skew": float(analytics_data.get("volatilitySkew", 0)),
+                "put_call_ratio": float(analytics_data.get("putCallRatio", 0)),
+                "timestamp": datetime.now(timezone.utc),
+                "source": "spiderrock",
+            }
+
+            return analytics
+
+        except Exception as e:
+            logger.error(f"Error processing options analytics for {symbol}: {e}")
+            return {}
+
+    def _apply_options_filters(self, df: pd.DataFrame) -> pd.DataFrame:
+        """Apply quality filters to options data"""
+        try:
+            original_count = len(df)
+
+            # Filter by volume
+            if self.config.min_volume_filter > 0:
+                df = df[df["volume"] >= self.config.min_volume_filter]
+
+            # Filter by open interest
+            if self.config.min_open_interest_filter > 0:
+                df = df[df["open_interest"] >= self.config.min_open_interest_filter]
+
+            # Filter by bid-ask spread
+            if self.config.max_bid_ask_spread_pct > 0:
+                df = df[df["bid_ask_spread_pct"] <= self.config.max_bid_ask_spread_pct]
+
+            # Remove options with zero bid and ask
+            df = df[(df["bid"] > 0) | (df["ask"] > 0)]
+
+            filtered_count = len(df)
+            if filtered_count < original_count:
+                logger.debug(f"Filtered options: {original_count} -> {filtered_count}")
+
+            return df
+
+        except Exception as e:
+            logger.error(f"Error applying options filters: {e}")
+            return df
+
+    async def _connect_websocket(self) -> bool:
+        """Connect to SpiderRock WebSocket"""
+        try:
+            headers = self._get_auth_headers()
+
+            self.websocket = await websockets.connect(
+                self.config.websocket_url,
+                extra_headers=headers,
+                ping_interval=30,
+                ping_timeout=10,
+            )
+
+            logger.info("Connected to SpiderRock WebSocket")
+            return True
+
+        except Exception as e:
+            logger.error(f"Error connecting to SpiderRock WebSocket: {e}")
+            return False
+
+    async def _subscribe_symbol(self, symbol: str, callback: Callable):
+        """Subscribe to a symbol via WebSocket"""
+        try:
+            subscribe_msg = {
+                "action": "subscribe",
+                "ticker": symbol,
+                "dataType": "optionChain",
+            }
+
+            await self.websocket.send(json.dumps(subscribe_msg))
+            self.stream_callbacks[symbol] = callback
+
+            logger.debug(f"Subscribed to {symbol} via WebSocket")
+
+        except Exception as e:
+            logger.error(f"Error subscribing to {symbol}: {e}")
+
+    async def _handle_websocket_messages(self):
+        """Handle incoming WebSocket messages"""
+        try:
+            async for message in self.websocket:
+                try:
+                    data = json.loads(message)
+
+                    if "ticker" in data and data["ticker"] in self.stream_callbacks:
+                        callback = self.stream_callbacks[data["ticker"]]
+                        processed_data = self._process_websocket_message(data)
+
+                        if processed_data:
+                            await callback(processed_data)
+
+                except json.JSONDecodeError:
+                    logger.warning(f"Invalid JSON in WebSocket message: {message}")
+                except Exception as e:
+                    logger.error(f"Error processing WebSocket message: {e}")
+
+        except websockets.exceptions.ConnectionClosed:
+            logger.info("SpiderRock WebSocket connection closed")
+        except Exception as e:
+            logger.error(f"Error in WebSocket message handler: {e}")
+
+    def _process_websocket_message(self, data: Dict) -> Optional[Dict]:
+        """Process incoming WebSocket message"""
+        try:
+            if data.get("messageType") == "optionChain":
+                return self._process_options_chain(data["ticker"], data)
+            else:
+                return data
+
+        except Exception as e:
+            logger.error(f"Error processing WebSocket message: {e}")
+            return None
+
+    def _get_auth_headers(self) -> Dict[str, str]:
+        """Get authentication headers"""
+        headers = self.headers.copy()
+        if self.auth_token:
+            headers["Authorization"] = f"Bearer {self.auth_token}"
+        return headers
+
+    def _is_session_valid(self) -> bool:
+        """Check if authentication session is valid"""
+        if not self.auth_token or not self.session_expiry:
+            return False
+        return datetime.now() < self.session_expiry
+
+    async def _respect_rate_limit(self):
+        """Respect API rate limits"""
+        current_time = time.time()
+        time_since_last = current_time - self.last_request_time
+
+        # Minimum time between requests
+        min_interval = 1.0 / self.config.max_requests_per_second
+
+        if time_since_last < min_interval:
+            sleep_time = min_interval - time_since_last
+            await asyncio.sleep(sleep_time)
+
+        self.last_request_time = time.time()
+
+    def _is_connected(self) -> bool:
+        """Check if adapter is connected"""
+        return (
+            self.status == ConnectionStatus.CONNECTED
+            and self.session is not None
+            and self._is_session_valid()
+        )
+
+    def _is_cached(self, key: str) -> bool:
+        """Check if data is cached and not expired"""
+        if (
+            key not in self.cache
+            and key not in self.options_cache
+            and key not in self.iv_surface_cache
+        ):
+            return False
+
+        if key in self.cache_expiry:
+            return datetime.now() < self.cache_expiry[key]
+
+        return True
+
+    def _cache_data(self, key: str, data: Any):
+        """Cache data with expiration"""
+        self.cache[key] = data
+        self._set_cache_expiry(key)
+
+    def _set_cache_expiry(self, key: str):
+        """Set cache expiration time"""
+        self.cache_expiry[key] = datetime.now() + timedelta(
+            seconds=self.config.cache_duration
+        )
+
+
+# Logger setup
+logger = logging.getLogger(__name__)

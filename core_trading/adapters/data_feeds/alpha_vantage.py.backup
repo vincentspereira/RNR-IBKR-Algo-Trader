@@ -1,0 +1,913 @@
+"""
+Alpha Vantage Data Feed Adapter
+
+This module provides a comprehensive adapter for Alpha Vantage data integration,
+serving as a reliable fallback data source for the trading system. The adapter
+implements the BaseDataFeedAdapter interface and provides functionality for
+historical market data, fundamentals, and technical indicators.
+
+Features:
+- Free tier with generous limits
+- Comprehensive fundamental data
+- Built-in technical indicators
+- Multi-asset class support (stocks, forex, crypto)
+- Economic indicators and news sentiment
+- Comprehensive error handling and retry logic
+- Rate limiting and request management
+- Event-driven data distribution
+"""
+
+import asyncio
+import json
+import logging
+import threading
+import time
+from concurrent.futures import ThreadPoolExecutor
+from dataclasses import dataclass, field
+from datetime import datetime, timedelta, timezone
+from decimal import Decimal
+from enum import Enum
+from typing import Any, Callable, Dict, List, Optional, Union
+
+import aiohttp
+
+from ..base import (
+    AdapterConfig,
+    AdapterType,
+    BaseDataFeedAdapter,
+    ConnectionStatus,
+    HealthCheck,
+)
+
+# Alpha Vantage imports (would be installed via pip install alpha-vantage)
+try:
+    import pandas as pd
+    from alpha_vantage.cryptocurrencies import CryptoCurrencies
+    from alpha_vantage.foreignexchange import ForeignExchange
+    from alpha_vantage.fundamentaldata import FundamentalData
+    from alpha_vantage.techindicators import TechIndicators
+    from alpha_vantage.timeseries import TimeSeries
+
+    ALPHA_VANTAGE_AVAILABLE = True
+except ImportError:
+    ALPHA_VANTAGE_AVAILABLE = False
+    logging.warning(
+        "Alpha Vantage not available. Install with: pip install alpha-vantage pandas"
+    )
+
+
+class AlphaVantageFunction(Enum):
+    """Alpha Vantage API functions"""
+
+    # Time Series
+    TIME_SERIES_INTRADAY = "TIME_SERIES_INTRADAY"
+    TIME_SERIES_DAILY = "TIME_SERIES_DAILY"
+    TIME_SERIES_DAILY_ADJUSTED = "TIME_SERIES_DAILY_ADJUSTED"
+    TIME_SERIES_WEEKLY = "TIME_SERIES_WEEKLY"
+    TIME_SERIES_MONTHLY = "TIME_SERIES_MONTHLY"
+
+    # Fundamentals
+    COMPANY_OVERVIEW = "OVERVIEW"
+    INCOME_STATEMENT = "INCOME_STATEMENT"
+    BALANCE_SHEET = "BALANCE_SHEET"
+    CASH_FLOW = "CASH_FLOW"
+    EARNINGS = "EARNINGS"
+
+    # Technical Indicators
+    SMA = "SMA"
+    EMA = "EMA"
+    RSI = "RSI"
+    MACD = "MACD"
+    BBANDS = "BBANDS"
+
+    # Forex
+    FX_INTRADAY = "FX_INTRADAY"
+    FX_DAILY = "FX_DAILY"
+
+    # Crypto
+    DIGITAL_CURRENCY_INTRADAY = "DIGITAL_CURRENCY_INTRADAY"
+    DIGITAL_CURRENCY_DAILY = "DIGITAL_CURRENCY_DAILY"
+
+
+class AlphaVantageInterval(Enum):
+    """Alpha Vantage intervals"""
+
+    MIN_1 = "1min"
+    MIN_5 = "5min"
+    MIN_15 = "15min"
+    MIN_30 = "30min"
+    MIN_60 = "60min"
+
+
+@dataclass
+class AlphaVantageConfig(AdapterConfig):
+    """Alpha Vantage specific configuration"""
+
+    base_url: str = "https://www.alphavantage.co/query"
+    timeout: int = 30
+    max_requests_per_minute: int = 5  # Free tier limit
+
+    # Output format
+    output_format: str = "pandas"  # pandas or json
+
+    # Data parameters
+    outputsize: str = "compact"  # compact or full
+    datatype: str = "json"  # json or csv
+
+    # Retry and error handling
+    max_retries: int = 3
+    retry_delay: float = 12.0  # 12 seconds between retries (rate limit)
+    backoff_multiplier: float = 1.5
+
+    # Caching
+    enable_caching: bool = True
+    cache_duration_minutes: int = 15  # Longer cache for free tier
+
+    # Premium features (if available)
+    premium_key: bool = False
+    extended_hours: bool = False
+
+    # Required parameters (must come after all default parameters)
+    api_key: str = ""
+
+    def __post_init__(self):
+        """Validate configuration after initialization"""
+        super().__post_init__() if hasattr(super(), '__post_init__') else None
+        
+        if not self.api_key:
+            raise ValueError("Alpha Vantage API key is required")
+
+
+@dataclass
+class AlphaVantageBarData:
+    """Alpha Vantage bar data"""
+
+    symbol: str
+    timestamp: datetime
+    open: Decimal
+    high: Decimal
+    low: Decimal
+    close: Decimal
+    volume: int
+    adjusted_close: Optional[Decimal] = None
+    dividend_amount: Optional[Decimal] = None
+    split_coefficient: Optional[Decimal] = None
+    interval: str = "daily"
+
+    def to_dict(self) -> Dict[str, Any]:
+        """Convert to dictionary"""
+        return {
+            "symbol": self.symbol,
+            "timestamp": self.timestamp.isoformat(),
+            "open": float(self.open),
+            "high": float(self.high),
+            "low": float(self.low),
+            "close": float(self.close),
+            "volume": self.volume,
+            "adjusted_close": float(self.adjusted_close)
+            if self.adjusted_close
+            else None,
+            "dividend_amount": float(self.dividend_amount)
+            if self.dividend_amount
+            else None,
+            "split_coefficient": float(self.split_coefficient)
+            if self.split_coefficient
+            else None,
+            "interval": self.interval,
+        }
+
+
+@dataclass
+class AlphaVantageFundamentals:
+    """Alpha Vantage fundamental data"""
+
+    symbol: str
+    timestamp: datetime
+    data_type: str  # overview, income_statement, balance_sheet, etc.
+    data: Dict[str, Any]
+
+    def to_dict(self) -> Dict[str, Any]:
+        """Convert to dictionary"""
+        return {
+            "symbol": self.symbol,
+            "timestamp": self.timestamp.isoformat(),
+            "data_type": self.data_type,
+            "data": self.data,
+        }
+
+
+@dataclass
+class AlphaVantageIndicator:
+    """Alpha Vantage technical indicator data"""
+
+    symbol: str
+    timestamp: datetime
+    indicator: str
+    values: Dict[str, Decimal]
+    metadata: Dict[str, Any]
+
+    def to_dict(self) -> Dict[str, Any]:
+        """Convert to dictionary"""
+        return {
+            "symbol": self.symbol,
+            "timestamp": self.timestamp.isoformat(),
+            "indicator": self.indicator,
+            "values": {k: float(v) for k, v in self.values.items()},
+            "metadata": self.metadata,
+        }
+
+
+class AlphaVantageAdapter(BaseDataFeedAdapter):
+    """
+    Alpha Vantage data feed adapter implementation
+
+    Provides comprehensive integration with Alpha Vantage for financial data.
+    Serves as a reliable fallback data source with fundamental analysis
+    capabilities and built-in technical indicators.
+    """
+
+    def __init__(self, config: AlphaVantageConfig):
+        super().__init__(config)
+
+        if not ALPHA_VANTAGE_AVAILABLE:
+            raise ImportError(
+                "Alpha Vantage not available. Install with: pip install alpha-vantage pandas"
+            )
+
+        if not config.api_key:
+            raise ValueError("Alpha Vantage API key is required")
+
+        self.config = config
+        self.logger = logging.getLogger(__name__)
+
+        # Alpha Vantage clients
+        self.ts = TimeSeries(key=config.api_key, output_format=config.output_format)
+        self.fd = FundamentalData(
+            key=config.api_key, output_format=config.output_format
+        )
+        self.ti = TechIndicators(key=config.api_key, output_format=config.output_format)
+        self.fx = ForeignExchange(
+            key=config.api_key, output_format=config.output_format
+        )
+        self.cc = CryptoCurrencies(
+            key=config.api_key, output_format=config.output_format
+        )
+
+        # Connection management
+        self._connection_status = ConnectionStatus.DISCONNECTED
+
+        # Rate limiting
+        self._last_request_time = 0.0
+        self._request_count = 0
+        self._rate_limit_window = 60.0  # 1 minute window
+
+        # Threading and async
+        self._executor = ThreadPoolExecutor(max_workers=4)  # Conservative for free tier
+        self._lock = threading.RLock()
+
+        # Caching
+        self._cache: Dict[str, Dict[str, Any]] = {}
+        self._cache_timestamps: Dict[str, datetime] = {}
+
+        # Event callbacks
+        self._event_callbacks: Dict[str, List[Callable]] = {
+            "data_received": [],
+            "fundamentals": [],
+            "indicators": [],
+            "error": [],
+            "connection": [],
+        }
+
+        # HTTP session for direct API calls
+        self._session = None
+
+    async def connect(self) -> bool:
+        """Connect to Alpha Vantage"""
+        try:
+            self.logger.info("Connecting to Alpha Vantage data feed")
+
+            # Create HTTP session
+            self._session = aiohttp.ClientSession(
+                timeout=aiohttp.ClientTimeout(total=self.config.timeout)
+            )
+
+            # Test connectivity with a simple request
+            test_url = f"{self.config.base_url}?function=TIME_SERIES_INTRADAY&symbol=AAPL&interval=1min&apikey={self.config.api_key}&outputsize=compact"
+
+            async with self._session.get(test_url) as response:
+                if response.status == 200:
+                    data = await response.json()
+
+                    # Check for API errors
+                    if "Error Message" in data or "Note" in data:
+                        self.logger.error(f"Alpha Vantage API error: {data}")
+                        return False
+
+                    self._connection_status = ConnectionStatus.CONNECTED
+                    self.logger.info("Successfully connected to Alpha Vantage")
+                    return True
+                else:
+                    self.logger.error(f"HTTP error: {response.status}")
+                    return False
+
+        except Exception as e:
+            self.logger.error(f"Connection error: {e}")
+            self._connection_status = ConnectionStatus.ERROR
+            return False
+
+    async def disconnect(self) -> bool:
+        """Disconnect from Alpha Vantage"""
+        try:
+            self.logger.info("Disconnecting from Alpha Vantage")
+
+            # Close HTTP session
+            if self._session:
+                await self._session.close()
+                self._session = None
+
+            self._connection_status = ConnectionStatus.DISCONNECTED
+
+            # Clear cache
+            with self._lock:
+                self._cache.clear()
+                self._cache_timestamps.clear()
+
+            self.logger.info("Disconnected from Alpha Vantage")
+            return True
+
+        except Exception as e:
+            self.logger.error(f"Disconnection error: {e}")
+            return False
+
+    async def get_historical_data(
+        self, symbol: str, interval: str = "daily", outputsize: str = "compact"
+    ) -> List[AlphaVantageBarData]:
+        """Get historical time series data"""
+        try:
+            if not self.is_connected():
+                raise RuntimeError("Not connected to data feed")
+
+            # Check cache first
+            cache_key = f"{symbol}_{interval}_{outputsize}"
+            cached_data = self._get_cached_data(cache_key)
+            if cached_data:
+                return cached_data
+
+            # Rate limiting
+            await self._rate_limit()
+
+            # Get data based on interval
+            loop = asyncio.get_event_loop()
+
+            if interval == "daily":
+                data, meta_data = await loop.run_in_executor(
+                    self._executor,
+                    lambda: self.ts.get_daily_adjusted(
+                        symbol=symbol, outputsize=outputsize
+                    ),
+                )
+            elif interval in ["1min", "5min", "15min", "30min", "60min"]:
+                data, meta_data = await loop.run_in_executor(
+                    self._executor,
+                    lambda: self.ts.get_intraday(
+                        symbol=symbol, interval=interval, outputsize=outputsize
+                    ),
+                )
+            elif interval == "weekly":
+                data, meta_data = await loop.run_in_executor(
+                    self._executor, lambda: self.ts.get_weekly_adjusted(symbol=symbol)
+                )
+            elif interval == "monthly":
+                data, meta_data = await loop.run_in_executor(
+                    self._executor, lambda: self.ts.get_monthly_adjusted(symbol=symbol)
+                )
+            else:
+                raise ValueError(f"Unsupported interval: {interval}")
+
+            if data is None or data.empty:
+                self.logger.warning(f"No data returned for {symbol}")
+                return []
+
+            # Convert to bar data
+            bars = []
+            for timestamp, row in data.iterrows():
+                try:
+                    # Handle different column naming conventions
+                    open_col = next(
+                        (col for col in row.index if "open" in col.lower()), None
+                    )
+                    high_col = next(
+                        (col for col in row.index if "high" in col.lower()), None
+                    )
+                    low_col = next(
+                        (col for col in row.index if "low" in col.lower()), None
+                    )
+                    close_col = next(
+                        (
+                            col
+                            for col in row.index
+                            if "close" in col.lower() and "adjusted" not in col.lower()
+                        ),
+                        None,
+                    )
+                    volume_col = next(
+                        (col for col in row.index if "volume" in col.lower()), None
+                    )
+                    adj_close_col = next(
+                        (col for col in row.index if "adjusted close" in col.lower()),
+                        None,
+                    )
+                    dividend_col = next(
+                        (col for col in row.index if "dividend" in col.lower()), None
+                    )
+                    split_col = next(
+                        (col for col in row.index if "split" in col.lower()), None
+                    )
+
+                    if not all([open_col, high_col, low_col, close_col, volume_col]):
+                        continue
+
+                    bar = AlphaVantageBarData(
+                        symbol=symbol,
+                        timestamp=timestamp.to_pydatetime().replace(
+                            tzinfo=timezone.utc
+                        ),
+                        open=Decimal(str(row[open_col])),
+                        high=Decimal(str(row[high_col])),
+                        low=Decimal(str(row[low_col])),
+                        close=Decimal(str(row[close_col])),
+                        volume=int(float(row[volume_col])),
+                        adjusted_close=Decimal(str(row[adj_close_col]))
+                        if adj_close_col and pd.notna(row[adj_close_col])
+                        else None,
+                        dividend_amount=Decimal(str(row[dividend_col]))
+                        if dividend_col and pd.notna(row[dividend_col])
+                        else None,
+                        split_coefficient=Decimal(str(row[split_col]))
+                        if split_col and pd.notna(row[split_col])
+                        else None,
+                        interval=interval,
+                    )
+
+                    bars.append(bar)
+
+                except (ValueError, TypeError, KeyError) as e:
+                    self.logger.warning(f"Invalid data point for {symbol}: {e}")
+                    continue
+
+            # Sort by timestamp (Alpha Vantage returns newest first)
+            bars.sort(key=lambda x: x.timestamp)
+
+            # Cache results
+            if bars:
+                self._cache_data(cache_key, bars)
+
+            self.logger.info(f"Retrieved {len(bars)} bars for {symbol}")
+            return bars
+
+        except Exception as e:
+            self.logger.error(f"Historical data error for {symbol}: {e}")
+            return []
+
+    async def get_company_overview(
+        self, symbol: str
+    ) -> Optional[AlphaVantageFundamentals]:
+        """Get company overview/fundamentals"""
+        try:
+            if not self.is_connected():
+                raise RuntimeError("Not connected to data feed")
+
+            # Check cache first
+            cache_key = f"overview_{symbol}"
+            cached_data = self._get_cached_data(cache_key)
+            if cached_data:
+                return cached_data[0] if cached_data else None
+
+            # Rate limiting
+            await self._rate_limit()
+
+            # Get company overview
+            loop = asyncio.get_event_loop()
+            data = await loop.run_in_executor(
+                self._executor, lambda: self.fd.get_company_overview(symbol=symbol)[0]
+            )
+
+            if not data or data.empty:
+                return None
+
+            # Convert to fundamentals object
+            fundamentals = AlphaVantageFundamentals(
+                symbol=symbol,
+                timestamp=datetime.now(timezone.utc),
+                data_type="company_overview",
+                data=data.to_dict() if hasattr(data, "to_dict") else dict(data),
+            )
+
+            # Cache result
+            self._cache_data(cache_key, [fundamentals])
+
+            return fundamentals
+
+        except Exception as e:
+            self.logger.error(f"Company overview error for {symbol}: {e}")
+            return None
+
+    async def get_income_statement(
+        self, symbol: str
+    ) -> Optional[AlphaVantageFundamentals]:
+        """Get income statement"""
+        try:
+            if not self.is_connected():
+                raise RuntimeError("Not connected to data feed")
+
+            # Rate limiting
+            await self._rate_limit()
+
+            # Get income statement
+            loop = asyncio.get_event_loop()
+            data = await loop.run_in_executor(
+                self._executor,
+                lambda: self.fd.get_income_statement_annual(symbol=symbol)[0],
+            )
+
+            if not data or data.empty:
+                return None
+
+            # Convert to fundamentals object
+            fundamentals = AlphaVantageFundamentals(
+                symbol=symbol,
+                timestamp=datetime.now(timezone.utc),
+                data_type="income_statement",
+                data=data.to_dict() if hasattr(data, "to_dict") else dict(data),
+            )
+
+            return fundamentals
+
+        except Exception as e:
+            self.logger.error(f"Income statement error for {symbol}: {e}")
+            return None
+
+    async def get_technical_indicator(
+        self, symbol: str, indicator: str, interval: str = "daily", **kwargs
+    ) -> List[AlphaVantageIndicator]:
+        """Get technical indicator data"""
+        try:
+            if not self.is_connected():
+                raise RuntimeError("Not connected to data feed")
+
+            # Check cache first
+            cache_key = f"indicator_{symbol}_{indicator}_{interval}"
+            cached_data = self._get_cached_data(cache_key)
+            if cached_data:
+                return cached_data
+
+            # Rate limiting
+            await self._rate_limit()
+
+            # Get indicator data
+            loop = asyncio.get_event_loop()
+
+            if indicator.upper() == "SMA":
+                data, meta_data = await loop.run_in_executor(
+                    self._executor,
+                    lambda: self.ti.get_sma(symbol=symbol, interval=interval, **kwargs),
+                )
+            elif indicator.upper() == "EMA":
+                data, meta_data = await loop.run_in_executor(
+                    self._executor,
+                    lambda: self.ti.get_ema(symbol=symbol, interval=interval, **kwargs),
+                )
+            elif indicator.upper() == "RSI":
+                data, meta_data = await loop.run_in_executor(
+                    self._executor,
+                    lambda: self.ti.get_rsi(symbol=symbol, interval=interval, **kwargs),
+                )
+            elif indicator.upper() == "MACD":
+                data, meta_data = await loop.run_in_executor(
+                    self._executor,
+                    lambda: self.ti.get_macd(
+                        symbol=symbol, interval=interval, **kwargs
+                    ),
+                )
+            elif indicator.upper() == "BBANDS":
+                data, meta_data = await loop.run_in_executor(
+                    self._executor,
+                    lambda: self.ti.get_bbands(
+                        symbol=symbol, interval=interval, **kwargs
+                    ),
+                )
+            else:
+                raise ValueError(f"Unsupported indicator: {indicator}")
+
+            if data is None or data.empty:
+                return []
+
+            # Convert to indicator objects
+            indicators = []
+            for timestamp, row in data.iterrows():
+                try:
+                    values = {
+                        col: Decimal(str(row[col]))
+                        for col in row.index
+                        if pd.notna(row[col])
+                    }
+
+                    indicator_obj = AlphaVantageIndicator(
+                        symbol=symbol,
+                        timestamp=timestamp.to_pydatetime().replace(
+                            tzinfo=timezone.utc
+                        ),
+                        indicator=indicator.upper(),
+                        values=values,
+                        metadata=meta_data if meta_data else {},
+                    )
+
+                    indicators.append(indicator_obj)
+
+                except (ValueError, TypeError) as e:
+                    self.logger.warning(f"Invalid indicator data for {symbol}: {e}")
+                    continue
+
+            # Sort by timestamp
+            indicators.sort(key=lambda x: x.timestamp)
+
+            # Cache results
+            if indicators:
+                self._cache_data(cache_key, indicators)
+
+            self.logger.info(
+                f"Retrieved {len(indicators)} {indicator} values for {symbol}"
+            )
+            return indicators
+
+        except Exception as e:
+            self.logger.error(f"Technical indicator error for {symbol}: {e}")
+            return []
+
+    async def get_forex_data(
+        self, from_symbol: str, to_symbol: str, interval: str = "daily"
+    ) -> List[AlphaVantageBarData]:
+        """Get forex exchange rate data"""
+        try:
+            if not self.is_connected():
+                raise RuntimeError("Not connected to data feed")
+
+            # Rate limiting
+            await self._rate_limit()
+
+            # Get forex data
+            loop = asyncio.get_event_loop()
+
+            if interval == "daily":
+                data, meta_data = await loop.run_in_executor(
+                    self._executor,
+                    lambda: self.fx.get_currency_exchange_daily(
+                        from_symbol=from_symbol, to_symbol=to_symbol
+                    ),
+                )
+            else:
+                data, meta_data = await loop.run_in_executor(
+                    self._executor,
+                    lambda: self.fx.get_currency_exchange_intraday(
+                        from_symbol=from_symbol, to_symbol=to_symbol, interval=interval
+                    ),
+                )
+
+            if data is None or data.empty:
+                return []
+
+            # Convert to bar data
+            bars = []
+            symbol = f"{from_symbol}{to_symbol}"
+
+            for timestamp, row in data.iterrows():
+                try:
+                    bar = AlphaVantageBarData(
+                        symbol=symbol,
+                        timestamp=timestamp.to_pydatetime().replace(
+                            tzinfo=timezone.utc
+                        ),
+                        open=Decimal(str(row["1. open"])),
+                        high=Decimal(str(row["2. high"])),
+                        low=Decimal(str(row["3. low"])),
+                        close=Decimal(str(row["4. close"])),
+                        volume=0,  # Forex doesn't have volume
+                        interval=interval,
+                    )
+
+                    bars.append(bar)
+
+                except (ValueError, TypeError, KeyError) as e:
+                    self.logger.warning(f"Invalid forex data for {symbol}: {e}")
+                    continue
+
+            # Sort by timestamp
+            bars.sort(key=lambda x: x.timestamp)
+
+            self.logger.info(f"Retrieved {len(bars)} forex bars for {symbol}")
+            return bars
+
+        except Exception as e:
+            self.logger.error(f"Forex data error for {from_symbol}/{to_symbol}: {e}")
+            return []
+
+    async def get_crypto_data(
+        self, symbol: str, market: str = "USD", interval: str = "daily"
+    ) -> List[AlphaVantageBarData]:
+        """Get cryptocurrency data"""
+        try:
+            if not self.is_connected():
+                raise RuntimeError("Not connected to data feed")
+
+            # Rate limiting
+            await self._rate_limit()
+
+            # Get crypto data
+            loop = asyncio.get_event_loop()
+
+            if interval == "daily":
+                data, meta_data = await loop.run_in_executor(
+                    self._executor,
+                    lambda: self.cc.get_digital_currency_daily(
+                        symbol=symbol, market=market
+                    ),
+                )
+            else:
+                # Alpha Vantage doesn't support intraday crypto in free tier
+                self.logger.warning("Intraday crypto data not available in free tier")
+                return []
+
+            if data is None or data.empty:
+                return []
+
+            # Convert to bar data
+            bars = []
+            crypto_symbol = f"{symbol}{market}"
+
+            for timestamp, row in data.iterrows():
+                try:
+                    bar = AlphaVantageBarData(
+                        symbol=crypto_symbol,
+                        timestamp=timestamp.to_pydatetime().replace(
+                            tzinfo=timezone.utc
+                        ),
+                        open=Decimal(str(row[f"1a. open ({market})"])),
+                        high=Decimal(str(row[f"2a. high ({market})"])),
+                        low=Decimal(str(row[f"3a. low ({market})"])),
+                        close=Decimal(str(row[f"4a. close ({market})"])),
+                        volume=int(float(row["5. volume"])),
+                        interval=interval,
+                    )
+
+                    bars.append(bar)
+
+                except (ValueError, TypeError, KeyError) as e:
+                    self.logger.warning(f"Invalid crypto data for {crypto_symbol}: {e}")
+                    continue
+
+            # Sort by timestamp
+            bars.sort(key=lambda x: x.timestamp)
+
+            self.logger.info(f"Retrieved {len(bars)} crypto bars for {crypto_symbol}")
+            return bars
+
+        except Exception as e:
+            self.logger.error(f"Crypto data error for {symbol}: {e}")
+            return []
+
+    def is_connected(self) -> bool:
+        """Check if connected to data feed"""
+        return self._connection_status == ConnectionStatus.CONNECTED
+
+    async def get_health_check(self) -> HealthCheck:
+        """Get adapter health status"""
+        try:
+            is_healthy = self.is_connected()
+
+            # Test with a simple request
+            if is_healthy and self._session:
+                try:
+                    test_url = f"{self.config.base_url}?function=TIME_SERIES_INTRADAY&symbol=AAPL&interval=1min&apikey={self.config.api_key}&outputsize=compact"
+                    async with self._session.get(test_url) as response:
+                        is_healthy = response.status == 200
+                except:
+                    is_healthy = False
+
+            metrics = {
+                "connection_status": self._connection_status.value,
+                "cache_size": len(self._cache),
+                "request_count": self._request_count,
+                "rate_limit_active": time.time() - self._last_request_time < 12.0,
+                "premium_key": self.config.premium_key,
+            }
+
+            return HealthCheck(
+                adapter_type=AdapterType.DATA_FEED,
+                adapter_name="AlphaVantage",
+                is_healthy=is_healthy,
+                status_message="Connected and operational"
+                if is_healthy
+                else "Disconnected or error",
+                last_check=datetime.now(timezone.utc),
+                metrics=metrics,
+            )
+
+        except Exception as e:
+            return HealthCheck(
+                adapter_type=AdapterType.DATA_FEED,
+                adapter_name="AlphaVantage",
+                is_healthy=False,
+                status_message=f"Health check error: {e}",
+                last_check=datetime.now(timezone.utc),
+                metrics={},
+            )
+
+    async def _rate_limit(self):
+        """Apply rate limiting (Alpha Vantage has strict limits)"""
+        try:
+            current_time = time.time()
+
+            # Alpha Vantage free tier: 5 requests per minute
+            # Premium: 75 requests per minute
+            max_requests = 75 if self.config.premium_key else 5
+
+            # Reset counter if window expired
+            if current_time - self._last_request_time > self._rate_limit_window:
+                self._request_count = 0
+
+            # Check if we need to wait
+            if self._request_count >= max_requests:
+                wait_time = self._rate_limit_window - (
+                    current_time - self._last_request_time
+                )
+                if wait_time > 0:
+                    self.logger.info(
+                        f"Rate limit reached, waiting {wait_time:.1f} seconds"
+                    )
+                    await asyncio.sleep(wait_time)
+                    self._request_count = 0
+
+            # Additional delay between requests for free tier
+            if not self.config.premium_key and self._request_count > 0:
+                await asyncio.sleep(self.config.retry_delay)
+
+            # Update counters
+            self._request_count += 1
+            self._last_request_time = current_time
+
+        except Exception as e:
+            self.logger.warning(f"Rate limiting error: {e}")
+
+    def _get_cached_data(self, cache_key: str) -> Optional[List]:
+        """Get data from cache if valid"""
+        try:
+            if not self.config.enable_caching:
+                return None
+
+            with self._lock:
+                if cache_key in self._cache and cache_key in self._cache_timestamps:
+                    cache_time = self._cache_timestamps[cache_key]
+                    if datetime.now(timezone.utc) - cache_time < timedelta(
+                        minutes=self.config.cache_duration_minutes
+                    ):
+                        return self._cache[cache_key]
+
+            return None
+
+        except Exception:
+            return None
+
+    def _cache_data(self, cache_key: str, data: List):
+        """Cache data with timestamp"""
+        try:
+            if not self.config.enable_caching:
+                return
+
+            with self._lock:
+                self._cache[cache_key] = data
+                self._cache_timestamps[cache_key] = datetime.now(timezone.utc)
+
+                # Cleanup old cache entries (keep last 50 for longer cache duration)
+                if len(self._cache) > 50:
+                    oldest_key = min(
+                        self._cache_timestamps.keys(),
+                        key=lambda k: self._cache_timestamps[k],
+                    )
+                    del self._cache[oldest_key]
+                    del self._cache_timestamps[oldest_key]
+
+        except Exception as e:
+            self.logger.warning(f"Cache error: {e}")
+
+    def add_event_callback(self, event_type: str, callback: Callable):
+        """Add event callback"""
+        if event_type in self._event_callbacks:
+            self._event_callbacks[event_type].append(callback)
+
+    def remove_event_callback(self, event_type: str, callback: Callable):
+        """Remove event callback"""
+        if (
+            event_type in self._event_callbacks
+            and callback in self._event_callbacks[event_type]
+        ):
+            self._event_callbacks[event_type].remove(callback)

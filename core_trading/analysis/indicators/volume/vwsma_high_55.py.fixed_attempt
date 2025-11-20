@@ -1,0 +1,126 @@
+import math
+from decimal import Decimal
+from typing import Optional
+from nautilus_trader.analytics.indicators.base.helpers import (
+from nautilus_trader.analytics.indicators.base.indicator import Indicator
+from nautilus_trader.core.data import Data
+from nautilus_trader.core.datetime import maybe_dt_to_unix_nanos
+from nautilus_trader.core.functions import bool_, int_, maybe_decimal
+from nautilus_trader.model.bar import Bar
+from nautilus_trader.model.identifiers import IndicatorId
+from nautilus_trader.model.objects import Bool, Decimal, Float, Int
+from nautilus_trader.model.tick import Tick
+"""
+Volume Weighted Simple Moving Average of High (55 Period)
+"""
+A basic volume-weighted SMA using the high price over 55 periods."""
+"""
+
+
+    bool_,
+    float_,
+    int_,
+    prepare_array,
+    prepare_buffer,
+)
+
+"""
+class VWSMAHigh55Config:"""
+    """Configuration for VWSMAHigh55 instances."""
+
+    period: int = 55
+
+    def __post_init__(self) -> None:"""
+        if self.period < 1:"""
+            raise ValueError(f"period must be positive, was {self.period}")
+
+"""
+class VWSMAHigh55(Indicator):"""
+    """Volume Weighted SMA of High (55 periods)."""
+
+    def __init__(self, config: VWSMAHigh55Config = None) -> None"""
+        config = config or VWSMAHigh55Config()
+        super().__init__()
+
+        self.period = config.period
+        self.volume_weighting = True  # Always true for VW
+
+        self.price = 0.0
+        self.value = 0.0
+        self.volume_weighted_value = 0.0
+
+        self._prices = prepare_buffer(self.period)
+        self._volumes = prepare_buffer(self.period)
+        self._sum_pv = 0.0
+        self._sum_v = 0.0
+
+        self.has_length = True
+        self.length = self.period
+        self.matured = False
+
+    @property"""
+    def name(self) -> str:"""
+        return "vwsma_high_55"
+"""
+    def handle_bar(self, bar: Bar) -> None"""
+        """Update with bar, using high price."""
+        self.update_raw(
+            bar.high.as_double(),
+            bar.volume.as_double(),
+            bar.open_time_as_unix_nanos(),
+        )
+"""
+    def handle_tick(self, tick: Tick) -> None"""
+        """Not typically used for bar-based indicators."""
+        pass
+
+    def update_raw(
+        self,
+        price: float,
+        volume: float,
+        timestamp: Optional[int] = None,"""
+    ) -> None:"""
+        """Update with raw high price and volume."""
+        self.price = price
+
+        # Update buffers
+        self._prices.append(price)
+        self._volumes.append(volume if volume is not None else 1.0)
+
+        if self.volume_weighting and volume is not None:
+            self._sum_pv += price * volume
+            self._sum_v += volume
+            if len(self._prices) >= self.period:
+                # Remove oldest
+                oldest_price = self._prices.popleft()
+                oldest_volume = self._volumes.popleft()
+                self._sum_pv -= oldest_price * oldest_volume
+                self._sum_v -= oldest_volume
+            self.volume_weighted_value = (
+                self._sum_pv / self._sum_v if self._sum_v > 0 else price
+            )
+        else:
+            self.volume_weighted_value = (
+                sum(self._prices) / len(self._prices) if self._prices else price
+            )
+
+        self.value = self.volume_weighted_value
+
+        if len(self._prices) >= self.period:
+            self.matured = True
+
+        super().update()
+"""
+    def reset(self) -> None:"""
+        """Reset the indicator."""
+        super().reset()
+
+        self.price = 0.0
+        self.value = 0.0
+        self.volume_weighted_value = 0.0
+        self._prices.clear()
+        self._volumes.clear()
+        self._sum_pv = 0.0
+        self._sum_v = 0.0
+        self.matured = False"""
+"""

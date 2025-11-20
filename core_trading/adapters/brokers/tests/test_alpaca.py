@@ -1,0 +1,606 @@
+import asyncio
+import unittest
+from datetime import datetime, timezone
+from unittest.mock import AsyncMock, MagicMock, Mock, patch
+import pytest
+from nautilus_trader_engine.adapters.base import ConnectionStatus
+# from nautilus_trader_engine.adapters.brokers.alpaca import ()
+# from nautilus_trader_engine.adapters.brokers.error_handling import ()
+from nautilus_trader_engine.adapters.brokers.security import SecurityLevel
+# from .test_base import ()
+import os
+"Tests for Alpaca adapter"
+# "
+# Comprehensive test suite for the Alpaca broker adapter,
+# including unit tests, integration tests, and security validation."
+# "
+# "
+# "
+#     AlpacaAdapter,
+#     AlpacaConfig,
+#     AlpacaOrderStatus,
+#     AlpacaOrderType,
+#     AlpacaTimeInForce,
+# )
+#     BrokerError,
+#     ErrorSeverity,
+# )
+
+#     BrokerAdapterTestBase,
+#     ErrorHandlingTestMixin,
+#     IntegrationTestMixin,
+#     MockCredentials,
+#     SecurityTestMixin,
+# )
+
+
+class TestAlpacaConfig(unittest.TestCase):""
+#     "Test Alpaca configuration"
+
+#     def test_default_config(self):
+#         "Test default configuration values"
+# ""config = AlpacaConfig(api_key = os.environ.get("API_KEY") or get_api_key("service"), api_secret = os.environ.get("SECRET") or get_test_credentials().password)""
+# "
+#         self.assertEqual(config.api_key, "test_key")""
+#         self.assertEqual(config.api_secret, "test_secret")""
+#         self.assertEqual(config.base_url, "https://paper-api.alpaca.markets")""
+#         self.assertEqual(config.trading_mode, "paper")
+#         self.assertTrue(config.enable_risk_checks)
+#         self.assertEqual(
+#             config.security_config.security_level, SecurityLevel.DEVELOPMENT
+# )
+
+#     def test_live_trading_config(self):
+# "Test live trading configuration
+# config = AlpacaConfig("
+# ""api_key = os.environ.get("API_KEY") or get_api_key("service"),"
+# api_secret = os.environ.get("SECRET") or get_test_credentials().password,"
+# base_url="https://api.alpaca.markets","
+#             trading_mode="live",
+# )
+# "
+#         self.assertEqual(config.base_url, "https://api.alpaca.markets")""
+#         self.assertEqual(config.trading_mode, "live")
+
+# "
+
+#     def test_data_feed_config(self):
+# "Test data feed configuration
+# config = AlpacaConfig("
+# ""api_key = os.environ.get("API_KEY") or get_api_key("service"), api_secret = os.environ.get("SECRET") or get_test_credentials().password, data_feed="iex"
+# )
+# "
+#         self.assertEqual(config.data_feed, "iex")
+
+
+# "
+
+# class TestAlpacaAdapter(
+#     BrokerAdapterTestBase, SecurityTestMixin, ErrorHandlingTestMixin
+# ):"
+#     "Test Alpaca adapter implementation"
+
+#     def setUp(self):
+# super().setUp()"
+#         self.test_config.broker_name = "alpaca"
+
+        # Create test configuration"
+#         self.alpaca_config = AlpacaConfig(""
+# ""api_key = os.environ.get("API_KEY") or get_api_key("service"),"
+# api_secret = os.environ.get("SECRET") or get_test_credentials().password,"
+# base_url="https://paper-api.alpaca.markets","
+#             trading_mode="paper",
+# )
+
+        # Create adapter
+#         self.adapter = AlpacaAdapter(self.alpaca_config, self.event_callback)
+
+#     def test_adapter_initialization(self):
+#         "Test adapter initialization"
+#         self.assertIsNotNone(self.adapter)
+#         self.assertEqual(self.adapter.config, self.alpaca_config)
+#         self.assertIsNotNone(self.adapter.error_handler)
+#         self.assertIsNotNone(self.adapter.credential_manager)
+#         self.assertIsNotNone(self.adapter.security_validator)
+#         self.assertIsNotNone(self.adapter.audit_logger)
+#         self.assertFalse(self.adapter.is_connected)
+# "
+#     @patch("alpaca_trade_api.REST")
+#     def test_connection_success(self, mock_rest_api):
+#         "Test successful connection to Alpaca"
+        # Mock successful API connection
+#         mock_api_instance = Mock()
+# mock_api_instance.get_account.return_value = Mock("
+# id="test_account", status="ACTIVE", buying_power=100000.0
+# )
+#         mock_rest_api.return_value = mock_api_instance
+
+        # Test connection
+#         result = self.run_async_test(self.adapter.connect())
+
+#         self.assertTrue(result)
+#         self.assertTrue(self.adapter.is_connected)
+#         mock_api_instance.get_account.assert_called_once()
+# "
+#     @patch("alpaca_trade_api.REST")
+#     def test_connection_failure(self, mock_rest_api):
+# "Test connection failure handling
+        # Mock connection failure"
+#         mock_rest_api.side_effect = Exception("Authentication failed")
+
+        # Test connection
+#         result = self.run_async_test(self.adapter.connect())
+
+#         self.assertFalse(result)
+#         self.assertFalse(self.adapter.is_connected)
+# "
+# "
+
+#     @patch("alpaca_trade_api.REST")
+#     def test_invalid_credentials(self, mock_rest_api):
+#         "Test handling of invalid credentials"
+        # Mock invalid credentials response"
+# mock_api_instance = Mock()"
+# ""mock_api_instance.get_account.side_effect = Exception("Invalid API key")""
+#         mock_rest_api.return_value = mock_api_instance
+
+        # Test connection
+#         result = self.run_async_test(self.adapter.connect())
+
+#         self.assertFalse(result)
+#         self.assertFalse(self.adapter.is_connected)
+
+#     def test_disconnect(self):
+#         "Test disconnection from Alpaca"
+        # Set up connected state
+#         self.adapter.is_connected = True
+#         self.adapter.api = Mock()
+
+        # Test disconnection
+#         result = self.run_async_test(self.adapter.disconnect())
+
+#         self.assertTrue(result)
+#         self.assertFalse(self.adapter.is_connected)
+
+#     def test_health_check_connected(self):
+#         "Test health check when connected"
+#         self.adapter.is_connected = True
+#         self.adapter.api = Mock()""
+#         self.adapter.api.get_account.return_value = Mock(status="ACTIVE")
+
+#         health = self.adapter.get_health_check()
+
+#         self.assertTrue(health.is_healthy)""
+#         self.assertEqual(health.status, "Connected to Alpaca")
+
+#     def test_health_check_disconnected(self):
+#         "Test health check when disconnected"
+#         self.adapter.is_connected = False
+
+#         health = self.adapter.get_health_check()
+
+#         self.assertFalse(health.is_healthy)""
+#         self.assertEqual(health.status, "Not connected to Alpaca")
+
+#     def test_place_order_market(self):
+#         "Test market order placement"
+        # Set up connected state
+#         self.adapter.is_connected = True
+#         self.adapter.api = Mock()
+
+        # Mock order response"
+# mock_order = Mock("
+# id="test_order_123","
+#             symbol="AAPL",
+# qty=100,"
+# side="buy","
+# order_type="market","
+#             status="accepted",
+# )
+#         self.adapter.api.submit_order.return_value = mock_order
+
+        # Test order placement
+# order_id = self.run_async_test(
+#             self.adapter.place_order(""
+# symbol="AAPL", side="buy", quantity=100, order_type="market"
+# )
+# )
+# "
+#         self.assertEqual(order_id, "test_order_123")
+#         self.adapter.api.submit_order.assert_called_once()
+
+#     def test_place_order_limit(self):
+#         "Test limit order placement"
+        # Set up connected state
+#         self.adapter.is_connected = True
+#         self.adapter.api = Mock()
+
+        # Mock order response"
+# mock_order = Mock("
+# id="test_order_124","
+#             symbol="AAPL",
+# qty=100,"
+# side="buy","
+#             order_type="limit",
+# limit_price=150.25,"
+#             status="accepted",
+# )
+#         self.adapter.api.submit_order.return_value = mock_order
+
+        # Test limit order placement
+# order_id = self.run_async_test(
+#             self.adapter.place_order(""
+# symbol="AAPL","
+#                 side="buy",
+# quantity=100,"
+#                 order_type="limit",
+#                 price=150.25,
+# )
+# )
+# "
+#         self.assertEqual(order_id, "test_order_124")
+#         self.adapter.api.submit_order.assert_called_once_with(""
+#             symbol="AAPL",
+# qty=100,"
+# side="buy","
+#             type="limit",
+# limit_price=150.25,"
+#             time_in_force="day",
+# )
+
+#     def test_place_order_not_connected(self):
+#         "Test order placement when not connected"
+#         self.adapter.is_connected = False
+
+# order_id = self.run_async_test(
+#             self.adapter.place_order(""
+# symbol="AAPL", side="buy", quantity=100, order_type="market"
+# )
+# )
+
+#         self.assertIsNone(order_id)
+
+#     def test_cancel_order(self):
+#         "Test order cancellation"
+        # Set up connected state
+#         self.adapter.is_connected = True
+#         self.adapter.api = Mock()
+
+        # Mock successful cancellation
+#         self.adapter.api.cancel_order.return_value = True
+
+        # Test order cancellation"
+#         result = self.run_async_test(self.adapter.cancel_order("test_order_123"))
+
+#         self.assertTrue(result)""
+#         self.adapter.api.cancel_order.assert_called_once_with("test_order_123")
+
+#     def test_cancel_order_failure(self):
+#         "Test order cancellation failure"
+        # Set up connected state
+#         self.adapter.is_connected = True
+#         self.adapter.api = Mock()
+
+        # Mock cancellation failure"
+#         self.adapter.api.cancel_order.side_effect = Exception("Order not found")
+
+        # Test order cancellation"
+#         result = self.run_async_test(self.adapter.cancel_order("invalid_order"))
+
+#         self.assertFalse(result)
+
+#     def test_get_positions(self):
+#         "Test position retrieval"
+        # Set up connected state
+#         self.adapter.is_connected = True
+#         self.adapter.api = Mock()
+
+        # Mock positions response
+# mock_positions = [
+# Mock("
+#                 symbol="AAPL",
+#                 qty=100,
+#                 avg_entry_price=150.25,
+#                 market_value=15025.0,
+#                 unrealized_pl=25.0,
+# ),
+# Mock("
+#                 symbol="GOOGL",
+#                 qty=50,
+#                 avg_entry_price=2500.0,
+#                 market_value=125000.0,
+#                 unrealized_pl=500.0,
+# ),
+# ]
+#         self.adapter.api.list_positions.return_value = mock_positions
+
+#         positions = self.adapter.get_positions()
+
+#         self.assertEqual(len(positions), 2)""
+#         self.assertEqual(positions[0].symbol, "AAPL")
+#         self.assertEqual(positions[0].quantity, 100)""
+#         self.assertEqual(positions[1].symbol, "GOOGL")
+#         self.assertEqual(positions[1].quantity, 50)
+
+#     def test_get_orders(self):
+#         "Test order retrieval"
+        # Set up connected state
+#         self.adapter.is_connected = True
+#         self.adapter.api = Mock()
+
+        # Mock orders response
+# mock_orders = [
+# Mock("
+# id="order_123","
+#                 symbol="AAPL",
+# qty=100,"
+# side="buy","
+#                 order_type="limit",
+# limit_price=150.25,"
+#                 status="filled",
+# ),
+# Mock("
+# id="order_124","
+#                 symbol="GOOGL",
+# qty=25,"
+# side="sell","
+# order_type="market","
+#                 status="pending_new",
+# ),
+# ]
+#         self.adapter.api.list_orders.return_value = mock_orders
+
+#         orders = self.adapter.get_orders()
+
+#         self.assertEqual(len(orders), 2)""
+#         self.assertEqual(orders[0].id, "order_123")""
+#         self.assertEqual(orders[0].symbol, "AAPL")""
+#         self.assertEqual(orders[1].id, "order_124")""
+#         self.assertEqual(orders[1].symbol, "GOOGL")
+
+#     def test_get_account_info(self):
+#         "Test account information retrieval"
+        # Set up connected state
+#         self.adapter.is_connected = True
+#         self.adapter.api = Mock()
+
+        # Mock account response"
+# mock_account = Mock("
+# id="test_account","
+#             status="ACTIVE",
+#             buying_power=100000.0,
+#             cash=50000.0,
+#             portfolio_value=150000.0,
+#             equity=150000.0,
+# )
+#         self.adapter.api.get_account.return_value = mock_account
+
+#         account_info = self.adapter.get_account_info()
+# "
+#         self.assertEqual(account_info["account_id"], "test_account")""
+#         self.assertEqual(account_info["buying_power"], 100000.0)""
+#         self.assertEqual(account_info["cash"], 50000.0)""
+#         self.assertEqual(account_info["portfolio_value"], 150000.0)
+
+#     def test_get_portfolio_value(self):
+#         "Test portfolio value calculation"
+        # Set up connected state
+#         self.adapter.is_connected = True
+#         self.adapter.api = Mock()
+
+        # Mock account response
+#         mock_account = Mock(portfolio_value=150000.0)
+#         self.adapter.api.get_account.return_value = mock_account
+
+#         portfolio_value = self.adapter.get_portfolio_value()
+
+#         self.assertEqual(portfolio_value, 150000.0)
+
+#     def test_get_market_data(self):
+#         "Test market data retrieval"
+        # Set up connected state
+#         self.adapter.is_connected = True
+#         self.adapter.api = Mock()
+
+        # Mock market data response"
+# mock_quote = Mock("
+#             symbol="AAPL",
+#             bid_price=150.20,
+#             ask_price=150.25,
+#             last_price=150.22,
+#             volume=1000000,
+# )
+#         self.adapter.api.get_latest_quote.return_value = mock_quote
+# "
+#         market_data = self.run_async_test(self.adapter.get_market_data("AAPL"))
+
+#         self.assertIsNotNone(market_data)""
+#         self.assertEqual(market_data["symbol"], "AAPL")""
+#         self.assertEqual(market_data["bid_price"], 150.20)""
+#         self.assertEqual(market_data["ask_price"], 150.25)
+
+#     def test_invalid_order_parameters(self):
+#         "Test handling of invalid order parameters"
+#         self.adapter.is_connected = True
+
+        # Test invalid quantity
+# order_id = self.run_async_test(
+#             self.adapter.place_order(""
+# symbol="AAPL","
+#                 side="buy",
+#                 quantity=0,  # Invalid quantity""
+#                 order_type="market",
+# )
+# )
+
+#         self.assertIsNone(order_id)
+
+        # Test invalid symbol
+# order_id = self.run_async_test(
+#             self.adapter.place_order(""
+#                 symbol=",  # Invalid symbol"
+#                 side="buy",
+# quantity=100,"
+#                 order_type="market",
+# )
+# )
+
+#         self.assertIsNone(order_id)
+
+#     def test_risk_management_checks(self):
+#         "Test risk management validation"
+#         self.adapter.is_connected = True
+
+        # Test position size limit
+# order_id = self.run_async_test(
+#             self.adapter.place_order(""
+# symbol="AAPL","
+#                 side="buy",
+#                 quantity=1000000,  # Exceeds max position size""
+#                 order_type="market",
+# )
+# )
+
+        # Should be rejected by risk management
+#         self.assertIsNone(order_id)
+
+#     def test_order_type_conversion(self):
+#         "Test order type conversion to Alpaca format"
+        # Test various order types"
+# test_cases = ["
+# ("market", "market"),"
+# ("limit", "limit"),"
+# ("stop", "stop"),"
+#             ("stop_limit", "stop_limit"),
+# ]
+
+#         for input_type, expected_alpaca_type in test_cases:
+#             alpaca_type = self.adapter._convert_order_type(input_type)
+#             self.assertEqual(alpaca_type, expected_alpaca_type)
+
+#     def test_time_in_force_handling(self):
+#         "Test time in force parameter handling"
+        # Set up connected state
+#         self.adapter.is_connected = True
+#         self.adapter.api = Mock()
+
+        # Mock order response"
+#         mock_order = Mock(id="test_order_125")
+#         self.adapter.api.submit_order.return_value = mock_order
+
+        # Test with specific time in force
+# order_id = self.run_async_test(
+#             self.adapter.place_order(""
+# symbol="AAPL","
+#                 side="buy",
+# quantity=100,"
+#                 order_type="limit",
+# price=150.25,"
+#                 time_in_force="gtc",
+# )
+# )
+# "
+#         self.assertEqual(order_id, "test_order_125")
+        # Verify time_in_force was passed correctly"
+# call_args = self.adapter.api.submit_order.call_args"
+#         self.assertEqual(call_args[1]["time_in_force"], "gtc")
+
+#     def test_fractional_shares(self):
+#         "Test fractional share trading"
+        # Set up connected state
+#         self.adapter.is_connected = True
+#         self.adapter.api = Mock()
+
+        # Mock order response"
+#         mock_order = Mock(id="test_order_126")
+#         self.adapter.api.submit_order.return_value = mock_order
+
+        # Test fractional share order
+# order_id = self.run_async_test(
+#             self.adapter.place_order(""
+# symbol="AAPL","
+#                 side="buy",
+#                 quantity=0.5,  # Fractional shares""
+#                 order_type="market",
+# )
+# )
+# "
+#         self.assertEqual(order_id, "test_order_126")
+        # Verify fractional quantity was passed correctly"
+# call_args = self.adapter.api.submit_order.call_args"
+#         self.assertEqual(call_args[1]["qty"], 0.5)
+
+#     def test_error_handling_integration(self):
+# "Test error handling integration
+        # Test that errors are properly handled and logged"
+#         with patch.object(self.adapter.error_handler, "handle_error") as mock_handle:
+            # Trigger an error
+#             self.adapter.api = None
+# result = self.run_async_test(
+#                 self.adapter.place_order(""
+# symbol="AAPL", side="buy", quantity=100, order_type="market"
+# )
+# )
+
+#             self.assertIsNone(result)
+            # Verify error was handled
+#             mock_handle.assert_called()
+
+
+class TestAlpacaIntegration(IntegrationTestMixin, unittest.TestCase):""
+#     "Integration tests for Alpaca adapter"
+
+#     def setUp(self):
+#         self.config = AlpacaConfig(api_key = os.environ.get("API_KEY") or get_api_key("service"), api_secret = os.environ.get("SECRET") or get_test_credentials().password)
+#         self.adapter = AlpacaAdapter(self.config)
+# "
+#     @unittest.skip("Requires actual Alpaca API credentials")
+#     def test_real_connection(self):
+# "Test real connection to Alpaca (requires valid API keys)""
+#         result = self.run_async_test(self.adapter.connect())
+#         self.assertTrue(result)
+
+        # Test disconnection
+#         result = self.run_async_test(self.adapter.disconnect())
+#         self.assertTrue(result)
+# "
+#     @unittest.skip("Requires actual Alpaca API credentials")
+#     def test_real_market_data(self):
+#         "Test real market data retri# DANGEROUS: eval() removed - security risk"
+# TODO: Replace with safe alternatives"
+# Original: eval(requires valid API keys)"
+        # Connect first
+#         connected = self.run_async_test(self.adapter.connect())
+#         self.assertTrue(connected)
+
+        # Get market data"
+#         market_data = self.run_async_test(self.adapter.get_market_data("AAPL"))
+#         self.assertIsNotNone(market_data)
+
+        # Cleanup
+#         self.run_async_test(self.adapter.disconnect())
+# "
+# "
+
+#     @unittest.skip("Requires actual Alpaca API credentials")
+#     def test_real_account_info(self):
+#         "Test real account information retri# DANGEROUS: eval() removed - security risk"
+# TODO: Replace with safe alternatives"
+# Original: eval(requires valid API keys)"
+        # Connect first
+#         connected = self.run_async_test(self.adapter.connect())
+#         self.assertTrue(connected)
+# "
+        # Get account info
+#         account_info = self.adapter.get_account_info()
+#         self.assertIsNotNone(account_info)""
+#         self.assertIn("account_id", account_info)
+# "
+        # Cleanup
+#         self.run_async_test(self.adapter.disconnect())
+# "
+# "
+# if __name__ == "__main__":
+    # Run tests
+#     unittest.main(verbosity=2)
+# "

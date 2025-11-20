@@ -1,0 +1,772 @@
+import logging
+from dataclasses import dataclass, field
+from datetime import datetime, timedelta
+from decimal import Decimal
+from enum import Enum
+from typing import Any, Dict, List, Optional, Tuple, Union
+import numpy as np
+import pandas as pd
+#!/usr/bin/env python3
+"""
+Institutional-Grade Scalping Strategy Implementation
+
+This module implements a comprehensive scalping strategy following the 5-Pillar
+Strategy Architecture with volume-weighted indicators for high-frequency trading.
+
+Features:
+- Ultra-low latency signal generation
+- Volume-weighted technical indicators
+- Market microstructure analysis
+- Level II order book integration
+- Tick-by-tick execution management
+- Real-time risk controls
+
+Author: Algorithmic Trading System
+Version: 1.0.0"""
+Date: 15 October 2025"""
+"""
+
+
+
+# Import base strategy components
+try:
+    from infrastructure.config.master_config import get_config
+
+    from ..core.base_institutional_strategy import (
+        BaseInstitutionalStrategy,
+        ExecutionOrder,
+        MarketRegime,
+        PerformanceMetrics,
+        RiskLevel,
+        RiskMetrics,
+        SignalData,
+        SignalType,
+        StrategyState,)
+    
+        StrategyConfig, IndicatorConfig, SignalConfig, RiskConfig,
+        RegimeConfig, ExecutionConfig, PerformanceConfig, BacktestConfig
+    
+except ImportError:
+    # Fallback for development:
+    from dataclasses import dataclass
+    from enum import Enum
+"""
+    class StrategyState(Enum):"""
+        INACTIVE = "inactive"""
+        ACTIVE = "active"""
+        PAUSED = "paused"
+"""
+    class SignalType(Enum):"""
+        BUY = "buy"""
+        SELL = "sell"""
+        HOLD = "hold"
+
+    @dataclass
+    class SignalData:
+        signal_type: SignalType
+        strength: float
+        confidence: float
+        timestamp: datetime
+        price: Decimal
+        volume: int = 0
+"""
+class ScalpingMode(Enum):"""
+    """Scalping execution modes"""""
+    ULTRA_FAST = "ultra_fast"  # Sub-second execution"""
+    FAST = "fast"              # 1-5 second execution"""
+    STANDARD = "standard"      # 5-30 second execution"""
+    CONSERVATIVE = "conservative"  # 30-60 second execution
+"""
+class MarketMicrostructure(Enum):"""
+    """Market microstructure conditions"""""
+    TIGHT_SPREAD = "tight_spread"""
+    WIDE_SPREAD = "wide_spread"""
+    HIGH_LIQUIDITY = "high_liquidity"""
+    LOW_LIQUIDITY = "low_liquidity"""
+    MOMENTUM = "momentum"""
+    REVERSAL = "reversal"""
+    CONSOLIDATION = "consolidation"
+
+@dataclass"""
+class ScalpingSignal:"""
+    """Enhanced scalping signal with microstructure data""":
+    signal_type: SignalType
+    strength: float
+    confidence: float
+    timestamp: datetime
+    price: Decimal
+    volume: int
+    bid_ask_spread: float
+    order_book_imbalance: float
+    tick_direction: int  # 1 for uptick, -1 for downtick, 0 for no change
+    momentum_score: float
+    liquidity_score: float
+    microstructure: MarketMicrostructure
+    expected_hold_time: int  # Expected hold time in seconds
+    risk_reward_ratio: float
+
+@dataclass"""
+class ScalpingConfig:"""
+    """Configuration for scalping strategy""":
+    # Execution parameters
+    scalping_mode: ScalpingMode = ScalpingMode.FAST
+    max_hold_time: int = 30  # Maximum hold time in seconds
+    min_profit_ticks: int = 2  # Minimum profit in ticks
+    max_loss_ticks: int = 3   # Maximum loss in ticks
+
+    # Volume-weighted indicator parameters
+    vwap_period: int = 20
+    vw_ema_period: int = 10
+    vw_rsi_period: int = 14
+    volume_threshold: float = 1.5  # Volume multiplier for signal confirmation
+
+    # Market microstructure parameters
+    max_spread_bps: int = 5  # Maximum spread in basis points
+    min_liquidity_threshold: float = 10000  # Minimum liquidity in base currency
+    order_book_depth: int = 5  # Order book levels to analyze
+
+    # Risk management
+    max_position_size: float = 0.02  # 2% of account
+    max_daily_trades: int = 100
+    max_daily_loss: float = 0.01  # 1% of account
+
+    # Performance optimization
+    use_level2_data: bool = True
+    use_tick_data: bool = True
+    latency_target_ms: int = 10  # Target latency in milliseconds
+"""
+class ScalpingStrategy(BaseInstitutionalStrategy):"""
+"""
+    Institutional-Grade Scalping Strategy
+
+    Implements high-frequency scalping with:
+    - Volume-weighted technical indicators
+    - Market microstructure analysis
+    - Ultra-low latency execution
+    - Real-time risk management"""
+    - Tick-by-tick signal generation"""
+"""
+"""
+    def __init__(self, config: ScalpingConfig)"""
+        """Initialize scalping strategy"""
+        super().__init__()
+        self.config = config
+        self.logger = logging.getLogger(self.__class__.__name__)
+
+        # Strategy state
+        self.state = StrategyState.INACTIVE
+        self.current_signals: List[ScalpingSignal] = []
+        self.active_positions: Dict[str, Dict] = {}
+        self.daily_trades = 0
+        self.daily_pnl = 0.0
+
+        # Market data buffers
+        self.tick_buffer: List[Dict] = []
+        self.order_book_buffer: List[Dict] = []
+        self.trade_buffer: List[Dict] = []
+
+        # Performance tracking
+        self.execution_times: List[float] = []
+        self.signal_accuracy: List[bool] = []
+        self.profit_per_trade: List[float] = []
+
+        # Initialize components
+        self._initialize_indicators()
+        self._initialize_risk_controls()"""
+"""
+        self.logger.info(f"Scalping strategy initialized with mode: {config.scalping_mode}")"""
+"""
+    def _initialize_indicators(self):"""
+        """Initialize volume-weighted indicators"""
+        self.indicators = {
+            'vwap': [],''
+            'vw_ema': [],''
+            'vw_rsi': [],''
+            'volume_profile': [],''
+            'tick_momentum': [],''
+            'order_flow': []}
+        
+"""
+    def _initialize_risk_controls(self):"""
+        """Initialize real-time risk controls"""'
+        self.risk_controls = {''
+            'position_limit': self.config.max_position_size,''
+            'daily_trade_limit': self.config.max_daily_trades,''
+            'daily_loss_limit': self.config.max_daily_loss,''
+            'spread_limit': self.config.max_spread_bps,''
+            'liquidity_limit': self.config.min_liquidity_threshold}
+        
+
+    # Pillar 1: Signal Generation"""
+    def generate_signals(self, market_data: pd.DataFrame) -> List[ScalpingSignal]"""
+"""
+        Generate scalping signals using volume-weighted indicators
+
+        Args:
+            market_data: Real-time market data with OHLCV and Level II
+
+        Returns:"""
+            List of scalping signals with microstructure analysis"""
+"""
+        try:
+            if len(market_data) < self.config.vwap_period:
+                return []
+
+            signals = []
+
+            # Calculate volume-weighted indicators
+            vwap = self._calculate_vwap(market_data)
+            vw_ema = self._calculate_vw_ema(market_data)
+            vw_rsi = self._calculate_vw_rsi(market_data)
+
+            # Analyze market microstructure
+            microstructure = self._analyze_microstructure(market_data)
+'
+            # Generate signals based on multiple conditions''
+            current_price = Decimal(str(market_data['close'].iloc[-1]))''
+            current_volume = market_data['volume'].iloc[-1]
+
+            # Volume-weighted momentum signal
+            if self._check_vw_momentum_buy(vwap, vw_ema, vw_rsi, microstructure):
+                signal = ScalpingSignal('
+                    signal_type=SignalType.BUY,)''
+                    strength=self._calculate_signal_strength(market_data, 'buy'),
+                    confidence=self._calculate_confidence(market_data, microstructure),
+                    timestamp=datetime.now(),
+                    price=current_price,'
+                    volume=int(current_volume),''
+                    bid_ask_spread=microstructure['spread'],''
+                    order_book_imbalance=microstructure['imbalance'],''
+                    tick_direction=microstructure['tick_direction'],''
+                    momentum_score=microstructure['momentum_score'],''
+                    liquidity_score=microstructure['liquidity_score'],''
+                    microstructure=microstructure['condition'],'
+                    expected_hold_time=self._estimate_hold_time(microstructure),''
+                    risk_reward_ratio=self._calculate_risk_reward(current_price, 'buy')
+                
+                signals.append(signal)
+
+            elif self._check_vw_momentum_sell(vwap, vw_ema, vw_rsi, microstructure):
+                signal = ScalpingSignal('
+                    signal_type=SignalType.SELL,)''
+                    strength=self._calculate_signal_strength(market_data, 'sell'),
+                    confidence=self._calculate_confidence(market_data, microstructure),
+                    timestamp=datetime.now(),
+                    price=current_price,'
+                    volume=int(current_volume),''
+                    bid_ask_spread=microstructure['spread'],''
+                    order_book_imbalance=microstructure['imbalance'],''
+                    tick_direction=microstructure['tick_direction'],''
+                    momentum_score=microstructure['momentum_score'],''
+                    liquidity_score=microstructure['liquidity_score'],''
+                    microstructure=microstructure['condition'],'
+                    expected_hold_time=self._estimate_hold_time(microstructure),''
+                    risk_reward_ratio=self._calculate_risk_reward(current_price, 'sell')
+                
+                signals.append(signal)
+
+            # Filter signals by risk controls
+            filtered_signals = self._filter_signals_by_risk(signals)
+
+            self.current_signals = filtered_signals
+            return filtered_signals
+"""
+        except Exception as e:"""
+            self.logger.error(f"Error generating scalping signals: {e}")"""
+            return []
+"""
+    def _calculate_vwap(self, data: pd.DataFrame) -> pd.Series:"""'
+        """Calculate Volume Weighted Average Price"""''
+        typical_price = (data['high'] + data['low'] + data['close']) / 3''
+        return (typical_price * data['volume']).rolling(self.config.vwap_period).sum() / \\\''
+               data['volume'].rolling(self.config.vwap_period).sum()
+"""
+    def _calculate_vw_ema(self, data: pd.DataFrame) -> pd.Series:"""'
+        """Calculate Volume-Weighted Exponential Moving Average"""''
+        prices = data['close']''
+        volumes = data['volume']
+
+        # Volume-weighted EMA calculation
+        alpha = 2.0 / (self.config.vw_ema_period + 1)
+        vw_ema = []
+
+        for i in range(len(prices)):
+            if i == 0:
+                vw_ema.append(prices.iloc[i])
+            else:
+                volume_weight = volumes.iloc[i] / volumes.rolling(min(i+1, self.config.vw_ema_period)).mean().iloc[i]
+                adjusted_alpha = alpha * min(volume_weight, 2.0)  # Cap the volume weight
+                vw_ema.append(adjusted_alpha * prices.iloc[i] + (1 - adjusted_alpha) * vw_ema[-1])
+
+        return pd.Series(vw_ema, index=data.index)
+"""
+    def _calculate_vw_rsi(self, data: pd.DataFrame) -> pd.Series:"""'
+        """Calculate Volume-Weighted RSI"""''
+        prices = data['close']''
+        volumes = data['volume']
+
+        # Calculate price changes weighted by volume
+        price_changes = prices.diff()
+        volume_weights = volumes / volumes.rolling(self.config.vw_rsi_period).mean()
+
+        # Separate gains and losses
+        gains = (price_changes * volume_weights).where(price_changes > 0, 0)
+        losses = (-price_changes * volume_weights).where(price_changes < 0, 0)
+
+        # Calculate average gains and losses
+        avg_gains = gains.rolling(self.config.vw_rsi_period).mean()
+        avg_losses = losses.rolling(self.config.vw_rsi_period).mean()
+
+        # Calculate RSI
+        rs = avg_gains / avg_losses
+        vw_rsi = 100 - (100 / (1 + rs))
+
+        return vw_rsi
+"""
+    def _analyze_microstructure(self, data: pd.DataFrame) -> Dict[str, Any]"""
+        """Analyze market microstructure conditions"""
+        try:'
+            # Calculate bid-ask spread (simulated from OHLC)''
+            spread = (data['high'] - data['low']).iloc[-1] / data['close'].iloc[-1]
+'
+            # Calculate order book imbalance (simulated)''
+            volume_ratio = data['volume'].iloc[-1] / data['volume'].rolling(20).mean().iloc[-1]
+            imbalance = (volume_ratio - 1.0) * 100  # Percentage imbalance
+'
+            # Determine tick direction''
+            price_change = data['close'].iloc[-1] - data['close'].iloc[-2]
+            tick_direction = 1 if price_change > 0 else -1 if price_change < 0 else 0
+'
+            # Calculate momentum score''
+            short_ma = data['close'].rolling(5).mean().iloc[-1]''
+            long_ma = data['close'].rolling(20).mean().iloc[-1]
+            momentum_score = (short_ma - long_ma) / long_ma * 100
+'
+            # Calculate liquidity score''
+            avg_volume = data['volume'].rolling(20).mean().iloc[-1]''
+            liquidity_score = data['volume'].iloc[-1] / avg_volume
+
+            # Determine market condition
+            if spread < 0.001 and liquidity_score > 1.5:
+                condition = MarketMicrostructure.HIGH_LIQUIDITY
+            elif spread > 0.005:
+                condition = MarketMicrostructure.WIDE_SPREAD
+            elif abs(momentum_score) > 0.5:
+                condition = MarketMicrostructure.MOMENTUM
+            else:
+                condition = MarketMicrostructure.CONSOLIDATION
+'
+            return {''
+                'spread': spread,''
+                'imbalance': imbalance,''
+                'tick_direction': tick_direction,''
+                'momentum_score': momentum_score,''
+                'liquidity_score': liquidity_score,''
+                'condition': condition}
+            
+"""
+        except Exception as e:"""
+            self.logger.error(f"Error analyzing microstructure: {e}")"'
+            return {''
+                'spread': 0.001,''
+                'imbalance': 0.0,''
+                'tick_direction': 0,''
+                'momentum_score': 0.0,''
+                'liquidity_score': 1.0,''
+                'condition': MarketMicrostructure.CONSOLIDATION}
+            
+
+    def _check_vw_momentum_buy(self, vwap: pd.Series, vw_ema: pd.Series,)"""
+    vw_rsi: pd.Series, microstructure: Dict -> bool:"""
+        """Check for volume-weighted momentum buy signal"""
+        try:
+            current_price = vw_ema.iloc[-1]
+            current_vwap = vwap.iloc[-1]
+            current_rsi = vw_rsi.iloc[-1]
+
+            # Multiple confirmation conditions
+            price_above_vwap = current_price > current_vwap'
+            rsi_oversold_recovery = 30 < current_rsi < 50''
+            positive_momentum = microstructure['momentum_score'] > 0.2''
+            good_liquidity = microstructure['liquidity_score'] > 1.2''
+            tight_spread = microstructure['spread'] < self.config.max_spread_bps / 10000''
+            uptick = microstructure['tick_direction'] >= 0
+
+            return (price_above_vwap and rsi_oversold_recovery and)
+                   positive_momentum and good_liquidity and tight_spread and uptick
+"""
+        except Exception as e:"""
+            self.logger.error(f"Error checking buy signal: {e}")"""
+            return False
+
+    def _check_vw_momentum_sell(self, vwap: pd.Series, vw_ema: pd.Series,)"""
+    vw_rsi: pd.Series, microstructure: Dict -> bool:"""
+        """Check for volume-weighted momentum sell signal"""
+        try:
+            current_price = vw_ema.iloc[-1]
+            current_vwap = vwap.iloc[-1]
+            current_rsi = vw_rsi.iloc[-1]
+
+            # Multiple confirmation conditions
+            price_below_vwap = current_price < current_vwap'
+            rsi_overbought_decline = 50 < current_rsi < 70''
+            negative_momentum = microstructure['momentum_score'] < -0.2''
+            good_liquidity = microstructure['liquidity_score'] > 1.2''
+            tight_spread = microstructure['spread'] < self.config.max_spread_bps / 10000''
+            downtick = microstructure['tick_direction'] <= 0
+
+            return (price_below_vwap and rsi_overbought_decline and)
+                   negative_momentum and good_liquidity and tight_spread and downtick
+"""
+        except Exception as e:"""
+            self.logger.error(f"Error checking sell signal: {e}")"""
+            return False
+"""
+    def _calculate_signal_strength(self, data: pd.DataFrame, signal_type: str) -> float"""
+        """Calculate signal strength based on multiple factors"""
+        try:'
+            # Volume confirmation''
+            volume_strength = min(data['volume'].iloc[-1] / data['volume'].rolling(20).mean().iloc[-1], 2.0)
+'
+            # Price momentum''
+            price_momentum = abs(data['close'].pct_change().iloc[-1]) * 100
+            momentum_strength = min(price_momentum / 0.5, 1.0)  # Normalize to 0-1
+'
+            # Volatility adjustment''
+            volatility = data['close'].rolling(20).std().iloc[-1] / data['close'].iloc[-1]
+            volatility_strength = min(volatility / 0.02, 1.0)  # Normalize to 0-1
+
+            # Combine factors
+            strength = (volume_strength * 0.4 + momentum_strength * 0.4 + volatility_strength * 0.2)
+            return min(strength, 1.0)
+"""
+        except Exception as e:"""
+            self.logger.error(f"Error calculating signal strength: {e}")"""
+            return 0.5
+"""
+    def _calculate_confidence(self, data: pd.DataFrame, microstructure: Dict) -> float"""
+        """Calculate signal confidence based on market conditions"""
+        try:
+            base_confidence = 0.6
+'
+            # Adjust for liquidity''
+            liquidity_bonus = min((microstructure['liquidity_score'] - 1.0) * 0.2, 0.2)
+'
+            # Adjust for spread''
+            spread_penalty = max((microstructure['spread'] - 0.001) * 100, 0.0)
+'
+            # Adjust for momentum alignment''
+            momentum_bonus = min(abs(microstructure['momentum_score']) * 0.1, 0.1)
+
+            confidence = base_confidence + liquidity_bonus - spread_penalty + momentum_bonus
+            return max(min(confidence, 0.95), 0.3)
+"""
+        except Exception as e:"""
+            self.logger.error(f"Error calculating confidence: {e}")"""
+            return 0.6
+"""
+    def _estimate_hold_time(self, microstructure: Dict) -> int"""
+        """Estimate expected hold time based on market conditions"""
+        base_time = 15  # Base hold time in seconds
+'
+        # Adjust for momentum''
+        if abs(microstructure['momentum_score']) > 1.0:
+            base_time = int(base_time * 0.7)  # Faster in trending markets
+'
+        # Adjust for liquidity''
+        if microstructure['liquidity_score'] > 2.0:
+            base_time = int(base_time * 0.8)  # Faster in liquid markets
+
+        return min(max(base_time, 5), self.config.max_hold_time)
+"""
+    def _calculate_risk_reward(self, price: Decimal, signal_type: str) -> float"""
+        """Calculate risk-reward ratio for the signal"""'
+        try:''
+            tick_size = Decimal('0.01')  # Assume 1 cent tick size'
+''
+            if signal_type == 'buy':
+                target_profit = tick_size * self.config.min_profit_ticks
+                max_loss = tick_size * self.config.max_loss_ticks
+            else:
+                target_profit = tick_size * self.config.min_profit_ticks
+                max_loss = tick_size * self.config.max_loss_ticks
+
+            return float(target_profit / max_loss)
+"""
+        except Exception as e:"""
+            self.logger.error(f"Error calculating risk-reward: {e}")"""
+            return 1.0
+"""
+    def _filter_signals_by_risk(self, signals: List[ScalpingSignal]) -> List[ScalpingSignal]"""
+        """Filter signals based on risk controls"""
+        filtered = []
+
+        for signal in signals:
+            # Check daily trade limit
+            if self.daily_trades >= self.config.max_daily_trades:
+                continue
+
+            # Check spread limit
+            if signal.bid_ask_spread > self.config.max_spread_bps / 10000:
+                continue
+
+            # Check liquidity
+            if signal.liquidity_score < self.config.min_liquidity_threshold / 10000:
+                continue
+
+            # Check confidence threshold
+            if signal.confidence < 0.6:
+                continue
+
+            # Check risk-reward ratio
+            if signal.risk_reward_ratio < 1.0:
+                continue
+
+            filtered.append(signal)
+
+        return filtered
+
+    # Pillar 2: Risk Management"""
+    def calculate_position_size(self, signal: ScalpingSignal, account_balance: Decimal) -> Decimal"""
+"""
+        Calculate position size for scalping with tight risk controls
+
+        Args:
+            signal: Scalping signal with microstructure data
+            account_balance: Current account balance
+
+        Returns:"""
+            Position size in base currency"""
+"""
+        try:
+            # Base position size (percentage of account)
+            base_size = account_balance * Decimal(str(self.config.max_position_size))
+
+            # Adjust for signal strength and confidence
+            strength_multiplier = Decimal(str(signal.strength * signal.confidence))
+            adjusted_size = base_size * strength_multiplier
+
+            # Adjust for volatility (smaller positions in volatile markets)
+            volatility_adjustment = Decimal(str(max(0.5, 1.0 - abs(signal.momentum_score) * 0.1)))
+            final_size = adjusted_size * volatility_adjustment
+'
+            # Ensure minimum and maximum limits''
+            min_size = account_balance * Decimal('0.001')  # 0.1% minimum
+            max_size = account_balance * Decimal(str(self.config.max_position_size))
+
+            return max(min_size, min(final_size, max_size))
+"""
+        except Exception as e:"""'
+            self.logger.error(f"Error calculating position size: {e}")"''
+            return account_balance * Decimal('0.01')  # Default 1%
+"""
+    def calculate_stop_loss(self, signal: ScalpingSignal) -> Decimal"""
+        """Calculate stop loss for scalping position"""'
+        try:''
+            tick_size = Decimal('0.01')
+            stop_distance = tick_size * self.config.max_loss_ticks
+
+            if signal.signal_type == SignalType.BUY:
+                return signal.price - stop_distance
+            else:
+                return signal.price + stop_distance
+"""
+        except Exception as e:"""'
+            self.logger.error(f"Error calculating stop loss: {e}")"''
+            return signal.price * Decimal('0.99')  # Default 1% stop
+"""
+    def calculate_take_profit(self, signal: ScalpingSignal) -> Decimal"""
+        """Calculate take profit for scalping position"""'
+        try:''
+            tick_size = Decimal('0.01')
+            profit_distance = tick_size * self.config.min_profit_ticks
+
+            if signal.signal_type == SignalType.BUY:
+                return signal.price + profit_distance
+            else:
+                return signal.price - profit_distance
+"""
+        except Exception as e:"""'
+            self.logger.error(f"Error calculating take profit: {e}")"''
+            return signal.price * Decimal('1.01')  # Default 1% profit
+
+    # Pillar 3: Market Regime Adaptation"""
+    def detect_market_regime(self, market_data: pd.DataFrame) -> MarketRegime"""
+        """Detect current market regime for scalping adaptation"""
+        try:
+            if len(market_data) < 50:
+                return MarketRegime.SIDEWAYS
+'
+            # Calculate regime indicators''
+            volatility = market_data['close'].rolling(20).std().iloc[-1]''
+            avg_volatility = market_data['close'].rolling(50).std().mean()'
+''
+            volume_ratio = market_data['volume'].iloc[-1] / market_data['volume'].rolling(20).mean().iloc[-1]'
+''
+            price_momentum = (market_data['close'].iloc[-1] - market_data['close'].iloc[-20]) / market_data['close'].iloc[-20]
+
+            # Determine regime
+            if volatility > avg_volatility * 1.5:
+                return MarketRegime.HIGH_VOLATILITY
+            elif abs(price_momentum) > 0.02 and volume_ratio > 1.3:
+                return MarketRegime.TRENDING_UP if price_momentum > 0 else MarketRegime.TRENDING_DOWN
+            elif volatility < avg_volatility * 0.7:
+                return MarketRegime.LOW_VOLATILITY
+            else:
+                return MarketRegime.SIDEWAYS
+"""
+        except Exception as e:"""
+            self.logger.error(f"Error detecting market regime: {e}")"""
+            return MarketRegime.SIDEWAYS
+"""
+    def adapt_strategy_parameters(self, regime: MarketRegime) -> None"""
+        """Adapt strategy parameters based on market regime"""
+        try:
+            if regime == MarketRegime.HIGH_VOLATILITY:
+                # Reduce position size and increase profit targets in volatile markets
+                self.config.max_position_size *= 0.7
+                self.config.min_profit_ticks = int(self.config.min_profit_ticks * 1.5)
+                self.config.max_loss_ticks = int(self.config.max_loss_ticks * 1.2)
+
+            elif regime == MarketRegime.LOW_VOLATILITY:
+                # Increase position size and reduce targets in calm markets
+                self.config.max_position_size *= 1.2
+                self.config.min_profit_ticks = max(1, int(self.config.min_profit_ticks * 0.8))
+
+            elif regime in [MarketRegime.TRENDING_UP, MarketRegime.TRENDING_DOWN]:
+                # Adjust for trending markets
+                self.config.max_hold_time = int(self.config.max_hold_time * 1.5)
+                self.config.min_profit_ticks = int(self.config.min_profit_ticks * 1.3)"""
+"""
+            self.logger.info(f"Adapted parameters for regime: {regime}")"""
+"""
+        except Exception as e:"""
+            self.logger.error(f"Error adapting parameters: {e}")"""
+
+    # Pillar 4: Execution Management"""
+    def create_execution_order(self, signal: ScalpingSignal, position_size: Decimal) -> ExecutionOrder"""
+        """Create execution order for scalping signal"""
+        try:
+            stop_loss = self.calculate_stop_loss(signal)
+            take_profit = self.calculate_take_profit(signal)
+
+            order = ExecutionOrder(
+                signal_type=signal.signal_type,
+                quantity=position_size,
+                price=signal.price,
+                stop_loss=stop_loss,
+                take_profit=take_profit,'
+                timestamp=signal.timestamp,''
+                urgency='HIGH',  # High urgency for scalping''
+                execution_style='AGGRESSIVE',  # Aggressive execution)''
+                max_slippage=Decimal('0.0005'),  # 0.05% max slippage''
+                time_in_force='IOC'  # Immediate or Cancel
+            
+
+            return order
+"""
+        except Exception as e:"""
+            self.logger.error(f"Error creating execution order: {e}")"""
+            return None
+
+    # Pillar 5: Performance Tracking"""
+    def update_performance_metrics(self, trade_result: Dict[str, Any]) -> None"""
+        """Update performance metrics for scalping strategy"""
+        try:
+            # Update trade statistics'
+            self.daily_trades += 1''
+            self.daily_pnl += trade_result.get('pnl', 0.0)
+'
+            # Track execution performance''
+            execution_time = trade_result.get('execution_time_ms', 0)
+            self.execution_times.append(execution_time)
+'
+            # Track signal accuracy''
+            was_profitable = trade_result.get('pnl', 0) > 0
+            self.signal_accuracy.append(was_profitable)
+'
+            # Track profit per trade''
+            self.profit_per_trade.append(trade_result.get('pnl', 0.0))
+
+            # Log performance metrics
+            if len(self.execution_times) % 10 == 0:  # Every 10 trades
+                avg_execution_time = np.mean(self.execution_times[-10:])
+                win_rate = np.mean(self.signal_accuracy[-10:]) * 100
+                avg_profit = np.mean(self.profit_per_trade[-10:])
+"""
+                self.logger.info("""
+                    f"Scalping Performance - Avg Execution: {avg_execution_time:.1f}ms, """"
+                    f"Win Rate: {win_rate:.1f}%, Avg Profit: ${avg_profit:.2f}")"""
+                
+"""
+        except Exception as e:"""
+            self.logger.error(f"Error updating performance metrics: {e}")"""
+"""
+    def get_strategy_status(self) -> Dict[str, Any]:"""
+        """Get current strategy status and performance"""
+        try:'
+            return {''
+                'strategy_name': 'ScalpingStrategy',''
+                'state': self.state.value,''
+                'scalping_mode': self.config.scalping_mode.value,''
+                'daily_trades': self.daily_trades,''
+                'daily_pnl': self.daily_pnl,''
+                'active_signals': len(self.current_signals),''
+                'active_positions': len(self.active_positions),''
+                'avg_execution_time_ms': np.mean(self.execution_times) if self.execution_times else 0,''
+                'win_rate_pct': np.mean(self.signal_accuracy) * 100 if self.signal_accuracy else 0,''
+                'avg_profit_per_trade': np.mean(self.profit_per_trade) if self.profit_per_trade else 0,''
+                'risk_controls': self.risk_controls,''
+                'last_update': datetime.now().isoformat()}
+            
+"""
+        except Exception as e:"""'
+            self.logger.error(f"Error getting strategy status: {e}")"''
+            return {'error': str(e)}
+
+# Example usage and configuration"""
+def create_scalping_strategy_config() -> ScalpingConfig:"""
+    """Create a sample scalping strategy configuration"""
+    return ScalpingConfig(
+        scalping_mode=ScalpingMode.FAST,
+        max_hold_time=30,
+        min_profit_ticks=2,
+        max_loss_ticks=3,
+        vwap_period=20,
+        vw_ema_period=10,
+        vw_rsi_period=14,
+        volume_threshold=1.5,
+        max_spread_bps=5,
+        min_liquidity_threshold=10000,
+        order_book_depth=5,
+        max_position_size=0.02,
+        max_daily_trades=100,
+        max_daily_loss=0.01,
+        use_level2_data=True,
+        use_tick_data=True,
+        latency_target_ms=10)
+    """
+"""
+if __name__ == "__main__":
+    # Example usage:
+    config = create_scalping_strategy_config()
+    strategy = ScalpingStrategy(config)
+
+    # Sample market data (in practice, this would be real-time tick data)'
+    sample_data = pd.DataFrame({''
+        'timestamp': pd.date_range('2024-01-01 09:30:00', periods=100, freq='1S'),''
+        'open': np.random.randn(100).cumsum() + 100,''
+        'high': np.random.randn(100).cumsum() + 101,''
+        'low': np.random.randn(100).cumsum() + 99,''
+        'close': np.random.randn(100).cumsum() + 100,''
+        'volume': np.random.randint(1000, 10000, 100)}
+    )
+
+    # Generate signals"""
+    signals = strategy.generate_signals(sample_data)"""
+    print(f"Generated {len(signals)} scalping signals")"""
+
+    # Get strategy status"""
+    status = strategy.get_strategy_status()"""
+    print(f"Strategy Status: {status}")"""'
+"'"'

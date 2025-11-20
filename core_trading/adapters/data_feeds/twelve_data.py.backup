@@ -1,0 +1,891 @@
+"""Twelve Data Feed Adapter
+
+This module provides a comprehensive adapter for Twelve Data API integration,
+serving as a professional data source for stocks, forex, cryptocurrencies,
+ETFs, indices, and commodities. The adapter implements the BaseDataFeedAdapter
+interface and provides functionality for real-time and historical market data.
+
+Features:
+- Comprehensive market coverage (stocks, forex, crypto, ETFs, indices, commodities)
+- Real-time and historical data with multiple intervals
+- Technical indicators integration
+- Fundamental data and earnings information
+- Economic calendar and market statistics
+- WebSocket streaming for real-time data
+- Professional-grade API with high rate limits
+- Comprehensive error handling and retry logic
+- Rate limiting and request management
+- Event-driven data distribution
+"""
+
+import asyncio
+import json
+import logging
+import threading
+import time
+from concurrent.futures import ThreadPoolExecutor
+from dataclasses import dataclass, field
+from datetime import datetime, timedelta, timezone
+from decimal import Decimal
+from enum import Enum
+from typing import Any, Callable, Dict, List, Optional, Union
+from urllib.parse import urlencode, urljoin
+
+import aiohttp
+
+from ..base import (
+    AdapterConfig,
+    AdapterType,
+    BaseDataFeedAdapter,
+    ConnectionStatus,
+    HealthCheck,
+)
+
+# Twelve Data imports (would be installed via pip install twelvedata pandas websockets)
+try:
+    import pandas as pd
+    import websockets
+
+    TWELVE_DATA_AVAILABLE = True
+except ImportError:
+    TWELVE_DATA_AVAILABLE = False
+    logging.warning(
+        "Twelve Data dependencies not available. Install with: pip install pandas websockets"
+    )
+
+
+class TwelveDataInterval(Enum):
+    """Twelve Data supported intervals"""
+
+    MIN_1 = "1min"
+    MIN_5 = "5min"
+    MIN_15 = "15min"
+    MIN_30 = "30min"
+    MIN_45 = "45min"
+    HOUR_1 = "1h"
+    HOUR_2 = "2h"
+    HOUR_4 = "4h"
+    DAY_1 = "1day"
+    WEEK_1 = "1week"
+    MONTH_1 = "1month"
+
+
+class TwelveDataAssetType(Enum):
+    """Twelve Data asset types"""
+
+    STOCK = "stock"
+    ETF = "etf"
+    INDEX = "index"
+    FOREX = "forex"
+    CRYPTOCURRENCY = "cryptocurrency"
+    COMMODITY = "commodity"
+    BOND = "bond"
+    MUTUAL_FUND = "mutual_fund"
+
+
+class TwelveDataOutputSize(Enum):
+    """Twelve Data output size options"""
+
+    COMPACT = "compact"  # Latest 100 data points
+    FULL = "full"  # Full historical data
+
+
+@dataclass
+class TwelveDataConfig(AdapterConfig):
+    """Twelve Data specific configuration"""
+
+    api_key: str = ""  # Required for production use
+    base_url: str = "https://api.twelvedata.com"
+    websocket_url: str = "wss://ws.twelvedata.com/v1/quotes/price"
+    timeout: int = 30
+    max_requests_per_minute: int = 800  # Free tier: 8/min, paid tiers much higher
+    retry_attempts: int = 3
+    retry_delay: float = 1.0
+    cache_duration: int = 60  # 1 minute cache
+
+    # API settings
+    output_size: str = TwelveDataOutputSize.COMPACT.value
+    format_type: str = "json"
+
+    # WebSocket settings
+    enable_websocket: bool = True
+    websocket_heartbeat: int = 30
+    websocket_reconnect_delay: float = 5.0
+
+    # Supported exchanges
+    supported_exchanges: List[str] = field(
+        default_factory=lambda: [
+            "NYSE",
+            "NASDAQ",
+            "AMEX",
+            "LSE",
+            "TSX",
+            "ASX",
+            "NSE",
+            "BSE",
+            "EURONEXT",
+            "XETRA",
+            "SIX",
+            "HKEX",
+            "JPX",
+            "KRX",
+            "SSE",
+            "SZSE",
+        ]
+    )
+
+    # Popular symbols for testing
+    popular_symbols: Dict[str, str] = field(
+        default_factory=lambda: {
+            "AAPL": "Apple Inc.",
+            "MSFT": "Microsoft Corporation",
+            "GOOGL": "Alphabet Inc.",
+            "TSLA": "Tesla Inc.",
+            "AMZN": "Amazon.com Inc.",
+            "EUR/USD": "Euro to US Dollar",
+            "GBP/USD": "British Pound to US Dollar",
+            "BTC/USD": "Bitcoin to US Dollar",
+            "ETH/USD": "Ethereum to US Dollar",
+            "SPY": "SPDR S&P 500 ETF",
+            "QQQ": "Invesco QQQ Trust",
+        }
+    )
+
+
+class TwelveDataAdapter(BaseDataFeedAdapter):
+    """
+    Twelve Data feed adapter implementation
+
+    Provides comprehensive integration with Twelve Data API for multi-asset market data.
+    Supports real-time streaming, historical data, and technical indicators.
+    """
+
+    def __init__(self, config: TwelveDataConfig):
+        super().__init__(config)
+        self.config = config
+        self.session: Optional[aiohttp.ClientSession] = None
+        self.websocket: Optional[websockets.WebSocketServerProtocol] = None
+        self.rate_limiter = asyncio.Semaphore(config.max_requests_per_minute)
+        self.cache: Dict[str, Any] = {}
+        self.last_request_time = 0.0
+
+        # Request headers
+        self.headers = {
+            "User-Agent": "TwelveData-Python-Client/1.0",
+            "Accept": "application/json",
+            "Content-Type": "application/json",
+        }
+
+        # Add API key to headers if provided
+        if config.api_key:
+            self.headers["Authorization"] = f"apikey {config.api_key}"
+
+        # Initialize caches
+        self.symbol_info_cache: Dict[str, Dict] = {}
+        self.cache_expiry: Dict[str, datetime] = {}
+
+        # WebSocket management
+        self.websocket_subscriptions: Dict[str, Callable] = {}
+        self.websocket_task: Optional[asyncio.Task] = None
+
+        logger.info(f"Initialized Twelve Data adapter with config: {config.name}")
+
+    async def connect(self) -> bool:
+        """Establish connection to Twelve Data API"""
+        try:
+            if not TWELVE_DATA_AVAILABLE:
+                logger.error("Twelve Data dependencies not available")
+                self.status = ConnectionStatus.FAILED
+                return False
+
+            # Create HTTP session
+            connector = aiohttp.TCPConnector(
+                limit=50, limit_per_host=20, ttl_dns_cache=300, use_dns_cache=True
+            )
+
+            timeout = aiohttp.ClientTimeout(total=self.config.timeout)
+            self.session = aiohttp.ClientSession(
+                connector=connector, timeout=timeout, headers=self.headers
+            )
+
+            # Test API connection
+            test_url = f"{self.config.base_url}/quote"
+            params = {"symbol": "AAPL", "apikey": self.config.api_key}
+
+            async with self.rate_limiter:
+                async with self.session.get(test_url, params=params) as response:
+                    if response.status == 200:
+                        data = await response.json()
+                        if "price" in data or "close" in data:
+                            self.status = ConnectionStatus.CONNECTED
+                            logger.info("Successfully connected to Twelve Data API")
+
+                            # Initialize WebSocket if enabled
+                            if self.config.enable_websocket:
+                                await self._initialize_websocket()
+
+                            return True
+                        else:
+                            logger.error(f"Invalid API response: {data}")
+                            self.status = ConnectionStatus.FAILED
+                            return False
+                    elif response.status == 401:
+                        logger.error("Invalid API key for Twelve Data")
+                        self.status = ConnectionStatus.FAILED
+                        return False
+                    else:
+                        logger.error(
+                            f"Failed to connect to Twelve Data: HTTP {response.status}"
+                        )
+                        self.status = ConnectionStatus.FAILED
+                        return False
+
+        except Exception as e:
+            logger.error(f"Error connecting to Twelve Data: {e}")
+            self.status = ConnectionStatus.FAILED
+            return False
+
+    async def disconnect(self) -> bool:
+        """Disconnect from Twelve Data API"""
+        try:
+            # Close WebSocket connection
+            if self.websocket_task:
+                self.websocket_task.cancel()
+                try:
+                    await self.websocket_task
+                except asyncio.CancelledError:
+                    logger.debug(
+                        "Twelve Data WebSocket task cancelled during disconnect"
+                    )
+
+            if self.websocket:
+                await self.websocket.close()
+                self.websocket = None
+
+            # Close HTTP session
+            if self.session:
+                await self.session.close()
+                self.session = None
+
+            self.status = ConnectionStatus.DISCONNECTED
+            logger.info("Disconnected from Twelve Data API")
+            return True
+
+        except Exception as e:
+            logger.error(f"Error disconnecting from Twelve Data: {e}")
+            return False
+
+    async def get_historical_data(
+        self,
+        symbol: str,
+        start_date: datetime,
+        end_date: datetime,
+        interval: str = "1day",
+        **kwargs,
+    ) -> Optional[pd.DataFrame]:
+        """Get historical market data from Twelve Data"""
+        try:
+            if not self._is_connected():
+                await self.connect()
+
+            # Validate interval
+            if interval not in [e.value for e in TwelveDataInterval]:
+                logger.warning(f"Invalid interval {interval}, using 1day")
+                interval = "1day"
+
+            # Prepare API parameters
+            params = {
+                "symbol": symbol,
+                "interval": interval,
+                "start_date": start_date.strftime("%Y-%m-%d"),
+                "end_date": end_date.strftime("%Y-%m-%d"),
+                "format": self.config.format_type,
+                "outputsize": kwargs.get("outputsize", self.config.output_size),
+            }
+
+            if self.config.api_key:
+                params["apikey"] = self.config.api_key
+
+            # Make API request
+            url = f"{self.config.base_url}/time_series"
+
+            async with self.rate_limiter:
+                await self._respect_rate_limit()
+
+                async with self.session.get(url, params=params) as response:
+                    if response.status == 200:
+                        data = await response.json()
+
+                        if "values" in data:
+                            # Convert to DataFrame
+                            df = pd.DataFrame(data["values"])
+
+                            if not df.empty:
+                                # Process and standardize data
+                                df = self._process_time_series_data(
+                                    df, data.get("meta", {})
+                                )
+
+                                # Add metadata
+                                df.attrs = {
+                                    "symbol": symbol,
+                                    "source": "twelve_data",
+                                    "interval": interval,
+                                    "start_date": start_date,
+                                    "end_date": end_date,
+                                    "meta": data.get("meta", {}),
+                                }
+
+                                logger.info(
+                                    f"Retrieved {len(df)} historical data points for {symbol}"
+                                )
+                                return df
+
+                        elif "code" in data:
+                            logger.error(
+                                f"API error for {symbol}: {data.get('message', 'Unknown error')}"
+                            )
+
+                        return None
+
+                    else:
+                        logger.error(f"HTTP error {response.status} for {symbol}")
+                        return None
+
+        except Exception as e:
+            logger.error(f"Error getting historical data for {symbol}: {e}")
+            return None
+
+    async def get_real_time_quote(self, symbol: str) -> Optional[Dict[str, Any]]:
+        """Get real-time quote from Twelve Data"""
+        try:
+            if not self._is_connected():
+                await self.connect()
+
+            # Check cache first
+            cache_key = f"quote_{symbol}"
+            if self._is_cached(cache_key):
+                return self.cache[cache_key]
+
+            # Prepare API parameters
+            params = {"symbol": symbol, "format": self.config.format_type}
+
+            if self.config.api_key:
+                params["apikey"] = self.config.api_key
+
+            # Make API request
+            url = f"{self.config.base_url}/quote"
+
+            async with self.rate_limiter:
+                await self._respect_rate_limit()
+
+                async with self.session.get(url, params=params) as response:
+                    if response.status == 200:
+                        data = await response.json()
+
+                        if "close" in data or "price" in data:
+                            # Process quote data
+                            quote_data = self._process_quote_data(symbol, data)
+
+                            # Cache the result
+                            self._cache_data(cache_key, quote_data)
+
+                            logger.debug(
+                                f"Retrieved quote for {symbol}: {quote_data.get('price')}"
+                            )
+                            return quote_data
+
+                        elif "code" in data:
+                            logger.error(
+                                f"API error for {symbol}: {data.get('message', 'Unknown error')}"
+                            )
+
+                        return None
+
+                    else:
+                        logger.error(f"HTTP error {response.status} for {symbol}")
+                        return None
+
+        except Exception as e:
+            logger.error(f"Error getting quote for {symbol}: {e}")
+            return None
+
+    async def get_technical_indicators(
+        self, symbol: str, indicator: str, interval: str = "1day", **kwargs
+    ) -> Optional[pd.DataFrame]:
+        """Get technical indicators from Twelve Data"""
+        try:
+            if not self._is_connected():
+                await self.connect()
+
+            # Prepare API parameters
+            params = {
+                "symbol": symbol,
+                "interval": interval,
+                "format": self.config.format_type,
+                "outputsize": kwargs.get("outputsize", self.config.output_size),
+            }
+
+            # Add indicator-specific parameters
+            for key, value in kwargs.items():
+                if key not in ["outputsize"]:
+                    params[key] = value
+
+            if self.config.api_key:
+                params["apikey"] = self.config.api_key
+
+            # Make API request
+            url = f"{self.config.base_url}/{indicator}"
+
+            async with self.rate_limiter:
+                await self._respect_rate_limit()
+
+                async with self.session.get(url, params=params) as response:
+                    if response.status == 200:
+                        data = await response.json()
+
+                        if "values" in data:
+                            # Convert to DataFrame
+                            df = pd.DataFrame(data["values"])
+
+                            if not df.empty:
+                                # Process indicator data
+                                df = self._process_indicator_data(
+                                    df, indicator, data.get("meta", {})
+                                )
+
+                                logger.info(
+                                    f"Retrieved {indicator} indicator for {symbol}: {len(df)} points"
+                                )
+                                return df
+
+                        elif "code" in data:
+                            logger.error(
+                                f"API error for {symbol} {indicator}: {data.get('message', 'Unknown error')}"
+                            )
+
+                        return None
+
+                    else:
+                        logger.error(
+                            f"HTTP error {response.status} for {symbol} {indicator}"
+                        )
+                        return None
+
+        except Exception as e:
+            logger.error(f"Error getting {indicator} for {symbol}: {e}")
+            return None
+
+    async def get_symbol_search(self, query: str, **kwargs) -> List[Dict[str, Any]]:
+        """Search for symbols using Twelve Data"""
+        try:
+            if not self._is_connected():
+                await self.connect()
+
+            # Prepare API parameters
+            params = {"symbol": query, "format": self.config.format_type}
+
+            if self.config.api_key:
+                params["apikey"] = self.config.api_key
+
+            # Make API request
+            url = f"{self.config.base_url}/symbol_search"
+
+            async with self.rate_limiter:
+                await self._respect_rate_limit()
+
+                async with self.session.get(url, params=params) as response:
+                    if response.status == 200:
+                        data = await response.json()
+
+                        if "data" in data:
+                            symbols = data["data"]
+                            logger.info(
+                                f"Found {len(symbols)} symbols for query: {query}"
+                            )
+                            return symbols
+
+                        return []
+
+                    else:
+                        logger.error(
+                            f"HTTP error {response.status} for symbol search: {query}"
+                        )
+                        return []
+
+        except Exception as e:
+            logger.error(f"Error searching symbols for {query}: {e}")
+            return []
+
+    async def subscribe_to_stream(self, symbols: List[str], callback: Callable) -> bool:
+        """Subscribe to real-time data stream via WebSocket"""
+        try:
+            if not symbols:
+                return False
+
+            if not self.config.enable_websocket:
+                logger.info("WebSocket disabled, using polling for real-time data")
+                return await self._start_polling_stream(symbols, callback)
+
+            # Store callback for symbols
+            for symbol in symbols:
+                self.websocket_subscriptions[symbol] = callback
+
+            # Start WebSocket connection if not already running
+            if not self.websocket_task:
+                self.websocket_task = asyncio.create_task(self._websocket_handler())
+
+            # Subscribe to symbols
+            await self._websocket_subscribe(symbols)
+
+            self.is_streaming = True
+            logger.info(f"Subscribed to WebSocket stream for {len(symbols)} symbols")
+            return True
+
+        except Exception as e:
+            logger.error(f"Error subscribing to Twelve Data stream: {e}")
+            return False
+
+    async def unsubscribe_from_stream(self) -> bool:
+        """Unsubscribe from real-time data stream"""
+        try:
+            # Clear subscriptions
+            self.websocket_subscriptions.clear()
+
+            # Cancel WebSocket task
+            if self.websocket_task:
+                self.websocket_task.cancel()
+                try:
+                    await self.websocket_task
+                except asyncio.CancelledError:
+                    logger.debug(
+                        "Twelve Data WebSocket task cancelled during unsubscribe"
+                    )
+                self.websocket_task = None
+
+            # Close WebSocket
+            if self.websocket:
+                await self.websocket.close()
+                self.websocket = None
+
+            self.is_streaming = False
+            logger.info("Unsubscribed from Twelve Data stream")
+            return True
+
+        except Exception as e:
+            logger.error(f"Error unsubscribing from Twelve Data stream: {e}")
+            return False
+
+    async def health_check(self) -> HealthCheck:
+        """Perform health check"""
+        start_time = time.time()
+
+        try:
+            if not self._is_connected():
+                return HealthCheck(
+                    is_healthy=False,
+                    status="disconnected",
+                    latency_ms=0,
+                    error_message="Not connected to Twelve Data API",
+                )
+
+            # Test with a simple quote request
+            params = {"symbol": "AAPL", "apikey": self.config.api_key}
+
+            url = f"{self.config.base_url}/quote"
+
+            async with self.session.get(url, params=params) as response:
+                latency = (time.time() - start_time) * 1000
+
+                if response.status == 200:
+                    data = await response.json()
+                    if "close" in data or "price" in data:
+                        return HealthCheck(
+                            is_healthy=True,
+                            status="connected",
+                            latency_ms=latency,
+                            additional_info={
+                                "cache_size": len(self.cache),
+                                "websocket_enabled": self.config.enable_websocket,
+                                "websocket_connected": self.websocket is not None,
+                                "subscriptions": len(self.websocket_subscriptions),
+                            },
+                        )
+                    else:
+                        return HealthCheck(
+                            is_healthy=False,
+                            status="error",
+                            latency_ms=latency,
+                            error_message="Invalid API response format",
+                        )
+                else:
+                    return HealthCheck(
+                        is_healthy=False,
+                        status="error",
+                        latency_ms=latency,
+                        error_message=f"HTTP {response.status}",
+                    )
+
+        except Exception as e:
+            latency = (time.time() - start_time) * 1000
+            return HealthCheck(
+                is_healthy=False,
+                status="error",
+                latency_ms=latency,
+                error_message=str(e),
+            )
+
+    # Private helper methods
+
+    async def _initialize_websocket(self):
+        """Initialize WebSocket connection"""
+        try:
+            if not self.config.api_key:
+                logger.warning("WebSocket requires API key, skipping initialization")
+                return
+
+            logger.info("WebSocket initialization ready for Twelve Data")
+
+        except Exception as e:
+            logger.error(f"Error initializing WebSocket: {e}")
+
+    async def _websocket_handler(self):
+        """Handle WebSocket connection and messages"""
+        try:
+            while self.is_streaming:
+                try:
+                    # Connect to WebSocket
+                    ws_url = f"{self.config.websocket_url}?apikey={self.config.api_key}"
+
+                    async with websockets.connect(ws_url) as websocket:
+                        self.websocket = websocket
+                        logger.info("Connected to Twelve Data WebSocket")
+
+                        # Send heartbeat and handle messages
+                        while True:
+                            try:
+                                # Wait for message with timeout
+                                message = await asyncio.wait_for(
+                                    websocket.recv(),
+                                    timeout=self.config.websocket_heartbeat,
+                                )
+
+                                # Process message
+                                await self._process_websocket_message(message)
+
+                            except asyncio.TimeoutError:
+                                # Send heartbeat
+                                await websocket.ping()
+
+                except websockets.exceptions.ConnectionClosed:
+                    logger.warning("WebSocket connection closed, reconnecting...")
+                    await asyncio.sleep(self.config.websocket_reconnect_delay)
+
+                except Exception as e:
+                    logger.error(f"WebSocket error: {e}")
+                    await asyncio.sleep(self.config.websocket_reconnect_delay)
+
+        except asyncio.CancelledError:
+            logger.info("WebSocket handler cancelled")
+        except Exception as e:
+            logger.error(f"Fatal WebSocket error: {e}")
+
+    async def _websocket_subscribe(self, symbols: List[str]):
+        """Subscribe to symbols via WebSocket"""
+        try:
+            if not self.websocket:
+                return
+
+            # Send subscription message
+            subscribe_msg = {
+                "action": "subscribe",
+                "params": {"symbols": ",".join(symbols)},
+            }
+
+            await self.websocket.send(json.dumps(subscribe_msg))
+            logger.info(f"Subscribed to WebSocket for symbols: {symbols}")
+
+        except Exception as e:
+            logger.error(f"Error subscribing to WebSocket: {e}")
+
+    async def _process_websocket_message(self, message: str):
+        """Process incoming WebSocket message"""
+        try:
+            data = json.loads(message)
+
+            if "symbol" in data and "price" in data:
+                symbol = data["symbol"]
+
+                if symbol in self.websocket_subscriptions:
+                    # Process quote data
+                    quote_data = self._process_quote_data(symbol, data)
+
+                    # Call callback
+                    callback = self.websocket_subscriptions[symbol]
+                    await callback(quote_data)
+
+        except Exception as e:
+            logger.error(f"Error processing WebSocket message: {e}")
+
+    async def _start_polling_stream(
+        self, symbols: List[str], callback: Callable
+    ) -> bool:
+        """Start polling-based streaming as fallback"""
+        try:
+            logger.info(f"Starting polling stream for {len(symbols)} symbols")
+
+            # Store callback for symbols
+            for symbol in symbols:
+                self.websocket_subscriptions[symbol] = callback
+
+            # Start polling task
+            self.streaming_task = asyncio.create_task(
+                self._polling_stream(symbols, callback)
+            )
+
+            return True
+
+        except Exception as e:
+            logger.error(f"Error starting polling stream: {e}")
+            return False
+
+    async def _polling_stream(self, symbols: List[str], callback: Callable):
+        """Polling-based streaming for real-time data"""
+        try:
+            while self.is_streaming:
+                for symbol in symbols:
+                    try:
+                        quote = await self.get_real_time_quote(symbol)
+                        if quote:
+                            await callback(quote)
+                    except Exception as e:
+                        logger.error(f"Error in polling stream for {symbol}: {e}")
+
+                # Wait before next poll (respect rate limits)
+                await asyncio.sleep(1.0)  # 1 second between polls
+
+        except asyncio.CancelledError:
+            logger.info("Polling stream cancelled")
+        except Exception as e:
+            logger.error(f"Error in polling stream: {e}")
+
+    def _process_time_series_data(self, df: pd.DataFrame, meta: Dict) -> pd.DataFrame:
+        """Process and standardize time series data"""
+        try:
+            # Convert datetime column
+            if "datetime" in df.columns:
+                df["datetime"] = pd.to_datetime(df["datetime"])
+                df.set_index("datetime", inplace=True)
+
+            # Convert numeric columns
+            numeric_columns = ["open", "high", "low", "close", "volume"]
+            for col in numeric_columns:
+                if col in df.columns:
+                    df[col] = pd.to_numeric(df[col], errors="coerce")
+
+            # Sort by datetime
+            df.sort_index(inplace=True)
+
+            return df
+
+        except Exception as e:
+            logger.error(f"Error processing time series data: {e}")
+            return df
+
+    def _process_quote_data(self, symbol: str, data: Dict) -> Dict[str, Any]:
+        """Process and standardize quote data"""
+        try:
+            current_time = datetime.now(timezone.utc)
+
+            # Extract price information
+            price = float(data.get("close", data.get("price", 0)))
+
+            quote_data = {
+                "symbol": symbol,
+                "price": price,
+                "last_price": price,
+                "open": float(data.get("open", price)),
+                "high": float(data.get("high", price)),
+                "low": float(data.get("low", price)),
+                "close": price,
+                "volume": int(data.get("volume", 0)),
+                "change": float(data.get("change", 0)),
+                "percent_change": float(data.get("percent_change", 0)),
+                "timestamp": current_time,
+                "source": "twelve_data",
+                "exchange": data.get("exchange", ""),
+                "currency": data.get("currency", "USD"),
+                "type": data.get("type", "stock"),
+            }
+
+            return quote_data
+
+        except Exception as e:
+            logger.error(f"Error processing quote data for {symbol}: {e}")
+            return {}
+
+    def _process_indicator_data(
+        self, df: pd.DataFrame, indicator: str, meta: Dict
+    ) -> pd.DataFrame:
+        """Process and standardize technical indicator data"""
+        try:
+            # Convert datetime column
+            if "datetime" in df.columns:
+                df["datetime"] = pd.to_datetime(df["datetime"])
+                df.set_index("datetime", inplace=True)
+
+            # Convert numeric columns (indicator-specific)
+            for col in df.columns:
+                if col != "datetime":
+                    df[col] = pd.to_numeric(df[col], errors="coerce")
+
+            # Sort by datetime
+            df.sort_index(inplace=True)
+
+            # Add metadata
+            df.attrs = {"indicator": indicator, "meta": meta, "source": "twelve_data"}
+
+            return df
+
+        except Exception as e:
+            logger.error(f"Error processing indicator data: {e}")
+            return df
+
+    async def _respect_rate_limit(self):
+        """Respect API rate limits"""
+        current_time = time.time()
+        time_since_last = current_time - self.last_request_time
+
+        # Minimum time between requests (based on rate limit)
+        min_interval = 60.0 / self.config.max_requests_per_minute
+
+        if time_since_last < min_interval:
+            sleep_time = min_interval - time_since_last
+            await asyncio.sleep(sleep_time)
+
+        self.last_request_time = time.time()
+
+    def _is_connected(self) -> bool:
+        """Check if adapter is connected"""
+        return self.status == ConnectionStatus.CONNECTED and self.session is not None
+
+    def _is_cached(self, key: str) -> bool:
+        """Check if data is cached and not expired"""
+        if key not in self.cache:
+            return False
+
+        if key in self.cache_expiry:
+            return datetime.now() < self.cache_expiry[key]
+
+        return True
+
+    def _cache_data(self, key: str, data: Any):
+        """Cache data with expiration"""
+        self.cache[key] = data
+        self.cache_expiry[key] = datetime.now() + timedelta(
+            seconds=self.config.cache_duration
+        )
+
+
+# Logger setup
+logger = logging.getLogger(__name__)

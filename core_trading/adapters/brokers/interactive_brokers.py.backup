@@ -1,0 +1,848 @@
+"""
+Interactive Brokers Adapter
+
+This module provides a comprehensive adapter for Interactive Brokers (IBKR) integration,
+supporting both paper and live trading modes. The adapter implements the BaseBrokerAdapter
+interface and provides full functionality for order management, position tracking,
+and account monitoring.
+
+Features:
+- Paper and live trading mode support
+- Real-time order execution and status updates
+- Position and portfolio management
+- Market data integration
+- Risk management and compliance checks
+- Multi-asset class support (stocks, options, futures, forex, crypto)
+- Advanced order types (market, limit, stop, VWAP, TWAP)
+- Event-driven architecture with Kafka integration
+"""
+
+import asyncio
+import logging
+import threading
+from concurrent.futures import ThreadPoolExecutor
+from dataclasses import dataclass, field
+from datetime import datetime, timezone
+from decimal import Decimal
+from enum import Enum
+from typing import Any, Callable, Dict, List, Optional
+
+from ..base import (
+    AdapterConfig,
+    AdapterType,
+    BaseBrokerAdapter,
+    ConnectionStatus,
+    HealthCheck,
+)
+from .error_handling import (
+    BrokerError,
+    BrokerErrorHandler,
+    BrokerLogger,
+    ErrorCategory,
+    ErrorSeverity,
+    RetryConfig,
+    with_error_handling,
+)
+from .security import (
+    AuthenticationType,
+    CredentialManager,
+    Credentials,
+    SecurityAuditLogger,
+    SecurityConfig,
+    SecurityLevel,
+    SecurityValidator,
+)
+
+# IB API imports (would be installed via pip install ibapi)
+try:
+    from ibapi.client import EClient
+    from ibapi.commission_report import CommissionReport
+    from ibapi.contract import Contract
+    from ibapi.execution import Execution
+    from ibapi.order import Order
+    from ibapi.wrapper import EWrapper
+
+    IB_AVAILABLE = True
+except ImportError:
+    IB_AVAILABLE = False
+    logging.warning(
+        "Interactive Brokers API not available. Install with: pip install ibapi"
+    )
+
+
+class IBOrderType(Enum):
+    """Interactive Brokers order types"""
+
+    MARKET = "MKT"
+    LIMIT = "LMT"
+    STOP = "STP"
+    STOP_LIMIT = "STP LMT"
+    VWAP = "VWAP"
+    TWAP = "TWAP"
+    ICEBERG = "ICEBERG"
+    BRACKET = "BRACKET"
+
+
+class IBOrderStatus(Enum):
+    """Interactive Brokers order status"""
+
+    PENDING_SUBMIT = "PendingSubmit"
+    PENDING_CANCEL = "PendingCancel"
+    PRE_SUBMITTED = "PreSubmitted"
+    SUBMITTED = "Submitted"
+    CANCELLED = "Cancelled"
+    FILLED = "Filled"
+    INACTIVE = "Inactive"
+    PARTIAL_FILLED = "PartiallyFilled"
+    API_CANCELLED = "ApiCancelled"
+    API_PENDING = "ApiPending"
+
+
+@dataclass
+class IBConfig(AdapterConfig):
+    """Interactive Brokers specific configuration"""
+
+    host: str = "127.0.0.1"
+    port: int = 7497  # Paper trading port (7496 for live)
+    client_id: int = 1
+    is_paper_trading: bool = True
+    account_id: Optional[str] = None
+    timeout: int = 30
+    max_requests_per_second: int = 50
+    enable_logging: bool = True
+    log_level: str = "INFO"
+
+    # Trading parameters
+    default_currency: str = "USD"
+    enable_outside_rth: bool = False  # Regular trading hours only
+    enable_block_order: bool = False
+    enable_sweep_to_fill: bool = False
+
+    # Risk management
+    max_order_size: Optional[Decimal] = None
+    max_daily_loss: Optional[Decimal] = None
+    position_size_limit: Optional[Decimal] = None
+
+    # Security configuration
+    security_config: SecurityConfig = field(
+        default_factory=lambda: SecurityConfig(
+            security_level=SecurityLevel.DEVELOPMENT,
+            encrypt_credentials=True,
+            require_https=False,  # IB uses proprietary protocol
+            validate_certificates=False,
+            request_timeout_seconds=30,
+            rate_limit_requests_per_second=50,  # IB has high rate limits
+            log_security_events=True,
+        )
+    )
+
+    # Error handling configuration
+    retry_config: RetryConfig = field(
+        default_factory=lambda: RetryConfig(
+            max_retries=3,
+            base_delay=1.0,
+            max_delay=60.0,
+            exponential_base=2.0,
+            jitter=True,
+        )
+    )
+
+
+@dataclass
+class IBPosition:
+    """Interactive Brokers position data"""
+
+    symbol: str
+    contract: Contract
+    position: Decimal
+    market_price: Decimal
+    market_value: Decimal
+    average_cost: Decimal
+    unrealized_pnl: Decimal
+    realized_pnl: Decimal
+    account: str
+    timestamp: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
+
+
+@dataclass
+class IBOrder:
+    """Interactive Brokers order data"""
+
+    order_id: int
+    client_id: int
+    perm_id: int
+    contract: Contract
+    order: Order
+    status: IBOrderStatus
+    filled: Decimal = Decimal("0")
+    remaining: Decimal = Decimal("0")
+    avg_fill_price: Decimal = Decimal("0")
+    last_fill_price: Decimal = Decimal("0")
+    why_held: str = ""
+    mkt_cap_price: Decimal = Decimal("0")
+    timestamp: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
+
+
+class IBWrapper(EWrapper):
+    """Interactive Brokers API wrapper for handling callbacks"""
+
+    def __init__(self, adapter: "InteractiveBrokersAdapter"):
+        super().__init__()
+        self.adapter = adapter
+        self.logger = logging.getLogger(__name__)
+
+    def error(
+        self,
+        reqId: int,
+        errorCode: int,
+        errorString: str,
+        advancedOrderRejectJson: str = "",
+    ):
+        """Handle API errors"""
+        self.logger.error(
+            f"IB Error - ReqId: {reqId}, Code: {errorCode}, Message: {errorString}"
+        )
+        self.adapter._handle_error(reqId, errorCode, errorString)
+
+    def connectAck(self):
+        """Connection acknowledgment"""
+        self.logger.info("IB API connection acknowledged")
+        self.adapter._connection_status = ConnectionStatus.CONNECTED
+
+    def nextValidId(self, orderId: int):
+        """Next valid order ID"""
+        self.adapter._next_order_id = orderId
+        self.logger.info(f"Next valid order ID: {orderId}")
+
+    def managedAccounts(self, accountsList: str):
+        """Available accounts"""
+        accounts = accountsList.split(",")
+        self.adapter._accounts = accounts
+        self.logger.info(f"Available accounts: {accounts}")
+
+    def accountSummary(
+        self, reqId: int, account: str, tag: str, value: str, currency: str
+    ):
+        """Account summary data"""
+        self.adapter._handle_account_summary(reqId, account, tag, value, currency)
+
+    def position(
+        self, account: str, contract: Contract, position: Decimal, avgCost: float
+    ):
+        """Position updates"""
+        self.adapter._handle_position_update(account, contract, position, avgCost)
+
+    def orderStatus(
+        self,
+        orderId: int,
+        status: str,
+        filled: Decimal,
+        remaining: Decimal,
+        avgFillPrice: float,
+        permId: int,
+        parentId: int,
+        lastFillPrice: float,
+        clientId: int,
+        whyHeld: str,
+        mktCapPrice: float,
+    ):
+        """Order status updates"""
+        self.adapter._handle_order_status(
+            orderId,
+            status,
+            filled,
+            remaining,
+            avgFillPrice,
+            permId,
+            parentId,
+            lastFillPrice,
+            clientId,
+            whyHeld,
+            mktCapPrice,
+        )
+
+    def openOrder(self, orderId: int, contract: Contract, order: Order, orderState):
+        """Open order updates"""
+        self.adapter._handle_open_order(orderId, contract, order, orderState)
+
+    def execDetails(self, reqId: int, contract: Contract, execution: Execution):
+        """Execution details"""
+        self.adapter._handle_execution(reqId, contract, execution)
+
+    def commissionReport(self, commissionReport: CommissionReport):
+        """Commission report"""
+        self.adapter._handle_commission_report(commissionReport)
+
+
+class IBClient(EClient):
+    """Interactive Brokers API client"""
+
+    def __init__(self, wrapper: IBWrapper):
+        super().__init__(wrapper)
+        self.wrapper = wrapper
+
+
+class InteractiveBrokersAdapter(BaseBrokerAdapter):
+    """
+    Interactive Brokers adapter implementation
+
+    Provides comprehensive integration with Interactive Brokers API for both
+    paper and live trading. Supports multiple asset classes and advanced
+    order types with real-time updates and risk management.
+    """
+
+    def __init__(self, config: IBConfig):
+        super().__init__(config)
+
+        if not IB_AVAILABLE:
+            raise ImportError(
+                "Interactive Brokers API not available. Install with: pip install ibapi"
+            )
+
+        self.config = config
+
+        # Initialize error handling and security
+        self.error_handler = BrokerErrorHandler(
+            "interactive_brokers", config.retry_config
+        )
+        self.credential_manager = CredentialManager(config.security_config)
+        self.security_validator = SecurityValidator()
+        self.audit_logger = SecurityAuditLogger("interactive_brokers")
+        self.broker_logger = BrokerLogger("interactive_brokers")
+
+        self.logger = self.broker_logger.get_logger()
+
+        # IB API components
+        self.wrapper = IBWrapper(self)
+        self.client = IBClient(self.wrapper)
+
+        # Connection management
+        self._connection_status = ConnectionStatus.DISCONNECTED
+        self._next_order_id = 1
+        self._accounts: List[str] = []
+        self._current_account: Optional[str] = None
+
+        # Data storage
+        self._positions: Dict[str, IBPosition] = {}
+        self._orders: Dict[int, IBOrder] = {}
+        self._account_summary: Dict[str, Dict[str, Any]] = {}
+        self._executions: List[Execution] = []
+
+        # Threading and async
+        self._api_thread: Optional[threading.Thread] = None
+        self._executor = ThreadPoolExecutor(max_workers=4)
+        self._lock = threading.RLock()
+
+        # Event callbacks
+        self._event_callbacks: Dict[str, List[Callable]] = {
+            "order_status": [],
+            "position_update": [],
+            "execution": [],
+            "error": [],
+            "connection": [],
+        }
+
+        # Request tracking
+        self._request_counter = 0
+        self._pending_requests: Dict[int, Any] = {}
+
+    @with_error_handling
+    async def connect(self) -> bool:
+        """Connect to Interactive Brokers API"""
+        try:
+            # Validate connection parameters
+            if not self.security_validator.validate_url(
+                f"tcp://{self.config.host}:{self.config.port}", require_https=False
+            ):
+                raise BrokerError(
+                    "INVALID_CONNECTION_PARAMS",
+                    f"Invalid connection parameters: {self.config.host}:{self.config.port}",
+                    ErrorSeverity.HIGH,
+                    ErrorCategory.CONFIGURATION,
+                )
+
+            self.logger.info(
+                f"Connecting to IB API at {self.config.host}:{self.config.port}"
+            )
+            self.audit_logger.log_security_event(
+                "CONNECTION_ATTEMPT",
+                "INFO",
+                {
+                    "host": self.config.host,
+                    "port": self.config.port,
+                    "client_id": self.config.client_id,
+                },
+            )
+
+            # Start connection in separate thread
+            self._api_thread = threading.Thread(
+                target=self._run_api_connection, daemon=True
+            )
+            self._api_thread.start()
+
+            # Wait for connection with timeout
+            timeout = self.config.timeout
+            while timeout > 0 and self._connection_status != ConnectionStatus.CONNECTED:
+                await asyncio.sleep(0.1)
+                timeout -= 0.1
+
+            if self._connection_status == ConnectionStatus.CONNECTED:
+                self.logger.info("Successfully connected to IB API")
+                self.audit_logger.log_authentication_attempt(
+                    True, {"client_id": self.config.client_id}
+                )
+
+                # Request account information
+                await self._initialize_account_data()
+                return True
+            else:
+                error_msg = "Failed to connect to IB API within timeout"
+                self.audit_logger.log_authentication_attempt(
+                    False, {"reason": "connection_timeout"}
+                )
+                raise BrokerError(
+                    "CONNECTION_FAILED",
+                    error_msg,
+                    ErrorSeverity.HIGH,
+                    ErrorCategory.CONNECTION,
+                )
+
+        except Exception as e:
+            self.error_handler.handle_error(
+                e, {"method": "connect", "config": str(self.config)}
+            )
+            self._connection_status = ConnectionStatus.ERROR
+            return False
+
+    def _run_api_connection(self):
+        """Run IB API connection in separate thread"""
+        try:
+            self.client.connect(
+                self.config.host, self.config.port, self.config.client_id
+            )
+            self.client.run()
+        except Exception as e:
+            self.logger.error(f"API connection thread error: {e}")
+            self._connection_status = ConnectionStatus.ERROR
+
+    async def _initialize_account_data(self):
+        """Initialize account data after connection"""
+        try:
+            # Request account summary
+            self.client.reqAccountSummary(
+                self._get_next_request_id(), "All", "$LEDGER:USD"
+            )
+
+            # Request positions
+            self.client.reqPositions()
+
+            # Request open orders
+            self.client.reqAllOpenOrders()
+
+            # Set current account
+            if self._accounts and not self._current_account:
+                self._current_account = self._accounts[0]
+                if self.config.account_id:
+                    if self.config.account_id in self._accounts:
+                        self._current_account = self.config.account_id
+                    else:
+                        self.logger.warning(
+                            f"Specified account {self.config.account_id} not found"
+                        )
+
+            self.logger.info(f"Using account: {self._current_account}")
+
+        except Exception as e:
+            self.logger.error(f"Account initialization error: {e}")
+
+    async def disconnect(self) -> bool:
+        """Disconnect from Interactive Brokers API"""
+        try:
+            self.logger.info("Disconnecting from IB API")
+
+            if self.client.isConnected():
+                self.client.disconnect()
+
+            if self._api_thread and self._api_thread.is_alive():
+                self._api_thread.join(timeout=5)
+
+            self._connection_status = ConnectionStatus.DISCONNECTED
+            self.logger.info("Disconnected from IB API")
+            return True
+
+        except Exception as e:
+            self.logger.error(f"Disconnection error: {e}")
+            return False
+
+    async def place_order(
+        self,
+        symbol: str,
+        quantity: Decimal,
+        order_type: str,
+        price: Optional[Decimal] = None,
+        **kwargs,
+    ) -> Optional[str]:
+        """Place an order"""
+        try:
+            if not self.is_connected():
+                raise RuntimeError("Not connected to broker")
+
+            # Create contract
+            contract = self._create_contract(symbol, kwargs.get("asset_class", "STK"))
+
+            # Create order
+            order = self._create_order(quantity, order_type, price, **kwargs)
+
+            # Get next order ID
+            order_id = self._next_order_id
+            self._next_order_id += 1
+
+            # Place order
+            self.client.placeOrder(order_id, contract, order)
+
+            # Store order
+            ib_order = IBOrder(
+                order_id=order_id,
+                client_id=self.config.client_id,
+                perm_id=0,  # Will be updated in callback
+                contract=contract,
+                order=order,
+                status=IBOrderStatus.PENDING_SUBMIT,
+            )
+
+            with self._lock:
+                self._orders[order_id] = ib_order
+
+            self.logger.info(
+                f"Placed order {order_id} for {symbol}: {quantity} @ {order_type}"
+            )
+            return str(order_id)
+
+        except Exception as e:
+            self.logger.error(f"Order placement error: {e}")
+            return None
+
+    async def cancel_order(self, order_id: str) -> bool:
+        """Cancel an order"""
+        try:
+            if not self.is_connected():
+                raise RuntimeError("Not connected to broker")
+
+            ib_order_id = int(order_id)
+            self.client.cancelOrder(ib_order_id, "")
+
+            self.logger.info(f"Cancelled order {order_id}")
+            return True
+
+        except Exception as e:
+            self.logger.error(f"Order cancellation error: {e}")
+            return False
+
+    async def get_positions(self) -> List[Dict[str, Any]]:
+        """Get current positions"""
+        try:
+            positions = []
+
+            with self._lock:
+                for position in self._positions.values():
+                    positions.append(
+                        {
+                            "symbol": position.symbol,
+                            "quantity": float(position.position),
+                            "market_value": float(position.market_value),
+                            "average_cost": float(position.average_cost),
+                            "unrealized_pnl": float(position.unrealized_pnl),
+                            "realized_pnl": float(position.realized_pnl),
+                            "timestamp": position.timestamp.isoformat(),
+                        }
+                    )
+
+            return positions
+
+        except Exception as e:
+            self.logger.error(f"Get positions error: {e}")
+            return []
+
+    async def get_orders(
+        self, status_filter: Optional[str] = None
+    ) -> List[Dict[str, Any]]:
+        """Get orders with optional status filter"""
+        try:
+            orders = []
+
+            with self._lock:
+                for order in self._orders.values():
+                    if status_filter and order.status.value != status_filter:
+                        continue
+
+                    orders.append(
+                        {
+                            "order_id": str(order.order_id),
+                            "symbol": order.contract.symbol,
+                            "quantity": float(order.order.totalQuantity),
+                            "order_type": order.order.orderType,
+                            "status": order.status.value,
+                            "filled": float(order.filled),
+                            "remaining": float(order.remaining),
+                            "avg_fill_price": float(order.avg_fill_price),
+                            "timestamp": order.timestamp.isoformat(),
+                        }
+                    )
+
+            return orders
+
+        except Exception as e:
+            self.logger.error(f"Get orders error: {e}")
+            return []
+
+    async def get_account_info(self) -> Dict[str, Any]:
+        """Get account information"""
+        try:
+            if not self._current_account:
+                return {}
+
+            account_data = self._account_summary.get(self._current_account, {})
+
+            return {
+                "account_id": self._current_account,
+                "buying_power": account_data.get("BuyingPower", 0),
+                "total_cash": account_data.get("TotalCashValue", 0),
+                "net_liquidation": account_data.get("NetLiquidation", 0),
+                "gross_position_value": account_data.get("GrossPositionValue", 0),
+                "currency": account_data.get("Currency", self.config.default_currency),
+                "is_paper_trading": self.config.is_paper_trading,
+                "timestamp": datetime.now(timezone.utc).isoformat(),
+            }
+
+        except Exception as e:
+            self.logger.error(f"Get account info error: {e}")
+            return {}
+
+    def is_connected(self) -> bool:
+        """Check if connected to broker"""
+        return (
+            self._connection_status == ConnectionStatus.CONNECTED
+            and self.client.isConnected()
+        )
+
+    async def get_health_check(self) -> HealthCheck:
+        """Get adapter health status"""
+        try:
+            is_healthy = self.is_connected()
+
+            metrics = {
+                "connection_status": self._connection_status.value,
+                "accounts_count": len(self._accounts),
+                "positions_count": len(self._positions),
+                "orders_count": len(self._orders),
+                "current_account": self._current_account,
+                "is_paper_trading": self.config.is_paper_trading,
+            }
+
+            return HealthCheck(
+                adapter_type=AdapterType.BROKER,
+                adapter_name="InteractiveBrokers",
+                is_healthy=is_healthy,
+                status_message="Connected and operational"
+                if is_healthy
+                else "Disconnected",
+                last_check=datetime.now(timezone.utc),
+                metrics=metrics,
+            )
+
+        except Exception as e:
+            return HealthCheck(
+                adapter_type=AdapterType.BROKER,
+                adapter_name="InteractiveBrokers",
+                is_healthy=False,
+                status_message=f"Health check error: {e}",
+                last_check=datetime.now(timezone.utc),
+                metrics={},
+            )
+
+    def _create_contract(self, symbol: str, asset_class: str = "STK") -> Contract:
+        """Create IB contract from symbol"""
+        contract = Contract()
+        contract.symbol = symbol
+        contract.secType = asset_class
+        contract.exchange = "SMART"
+        contract.currency = self.config.default_currency
+
+        # Handle different asset classes
+        if asset_class == "STK":
+            contract.primaryExchange = "NASDAQ"  # Default, can be overridden
+        elif asset_class == "OPT":
+            # Options require additional parameters
+            self.logger.debug(
+                f"Options contract creation for {symbol} not yet fully implemented"
+            )
+        elif asset_class == "FUT":
+            # Futures require additional parameters
+            self.logger.debug(
+                f"Futures contract creation for {symbol} not yet fully implemented"
+            )
+        elif asset_class == "CASH":
+            # Forex
+            contract.exchange = "IDEALPRO"
+
+        return contract
+
+    def _create_order(
+        self,
+        quantity: Decimal,
+        order_type: str,
+        price: Optional[Decimal] = None,
+        **kwargs,
+    ) -> Order:
+        """Create IB order from parameters"""
+        order = Order()
+        order.totalQuantity = float(abs(quantity))
+        order.action = "BUY" if quantity > 0 else "SELL"
+        order.orderType = order_type
+
+        if price is not None:
+            order.lmtPrice = float(price)
+
+        # Additional order parameters
+        order.outsideRth = kwargs.get("outside_rth", self.config.enable_outside_rth)
+        order.blockOrder = kwargs.get("block_order", self.config.enable_block_order)
+        order.sweepToFill = kwargs.get(
+            "sweep_to_fill", self.config.enable_sweep_to_fill
+        )
+
+        # Time in force
+        order.tif = kwargs.get("time_in_force", "DAY")
+
+        return order
+
+    def _get_next_request_id(self) -> int:
+        """Get next request ID"""
+        self._request_counter += 1
+        return self._request_counter
+
+    # Event handlers
+    def _handle_error(self, req_id: int, error_code: int, error_string: str):
+        """Handle API errors"""
+        error_info = {
+            "req_id": req_id,
+            "error_code": error_code,
+            "error_string": error_string,
+            "timestamp": datetime.now(timezone.utc),
+        }
+
+        # Notify error callbacks
+        for callback in self._event_callbacks.get("error", []):
+            try:
+                callback(error_info)
+            except Exception as e:
+                self.logger.error(f"Error callback failed: {e}")
+
+    def _handle_account_summary(
+        self, req_id: int, account: str, tag: str, value: str, currency: str
+    ):
+        """Handle account summary updates"""
+        with self._lock:
+            if account not in self._account_summary:
+                self._account_summary[account] = {}
+            self._account_summary[account][tag] = value
+
+    def _handle_position_update(
+        self, account: str, contract: Contract, position: Decimal, avg_cost: float
+    ):
+        """Handle position updates"""
+        position_key = f"{account}_{contract.symbol}"
+
+        ib_position = IBPosition(
+            symbol=contract.symbol,
+            contract=contract,
+            position=position,
+            market_price=Decimal("0"),  # Will be updated with market data
+            market_value=position * Decimal(str(avg_cost)),
+            average_cost=Decimal(str(avg_cost)),
+            unrealized_pnl=Decimal("0"),
+            realized_pnl=Decimal("0"),
+            account=account,
+        )
+
+        with self._lock:
+            self._positions[position_key] = ib_position
+
+        # Notify position callbacks
+        for callback in self._event_callbacks.get("position_update", []):
+            try:
+                callback(ib_position)
+            except Exception as e:
+                self.logger.error(f"Position callback failed: {e}")
+
+    def _handle_order_status(
+        self,
+        order_id: int,
+        status: str,
+        filled: Decimal,
+        remaining: Decimal,
+        avg_fill_price: float,
+        perm_id: int,
+        parent_id: int,
+        last_fill_price: float,
+        client_id: int,
+        why_held: str,
+        mkt_cap_price: float,
+    ):
+        """Handle order status updates"""
+        with self._lock:
+            if order_id in self._orders:
+                order = self._orders[order_id]
+                order.status = IBOrderStatus(status)
+                order.filled = filled
+                order.remaining = remaining
+                order.avg_fill_price = Decimal(str(avg_fill_price))
+                order.last_fill_price = Decimal(str(last_fill_price))
+                order.perm_id = perm_id
+                order.why_held = why_held
+                order.mkt_cap_price = Decimal(str(mkt_cap_price))
+                order.timestamp = datetime.now(timezone.utc)
+
+        # Notify order status callbacks
+        for callback in self._event_callbacks.get("order_status", []):
+            try:
+                callback(order_id, status, filled, remaining, avg_fill_price)
+            except Exception as e:
+                self.logger.error(f"Order status callback failed: {e}")
+
+    def _handle_open_order(
+        self, order_id: int, contract: Contract, order: Order, order_state
+    ):
+        """Handle open order updates"""
+        # Update stored order if exists
+        with self._lock:
+            if order_id in self._orders:
+                self._orders[order_id].contract = contract
+                self._orders[order_id].order = order
+
+    def _handle_execution(self, req_id: int, contract: Contract, execution: Execution):
+        """Handle execution reports"""
+        self._executions.append(execution)
+
+        # Notify execution callbacks
+        for callback in self._event_callbacks.get("execution", []):
+            try:
+                callback(req_id, contract, execution)
+            except Exception as e:
+                self.logger.error(f"Execution callback failed: {e}")
+
+    def _handle_commission_report(self, commission_report: CommissionReport):
+        """Handle commission reports"""
+        self.logger.info(f"Commission report: {commission_report}")
+
+    def add_event_callback(self, event_type: str, callback: Callable):
+        """Add event callback"""
+        if event_type in self._event_callbacks:
+            self._event_callbacks[event_type].append(callback)
+
+    def remove_event_callback(self, event_type: str, callback: Callable):
+        """Remove event callback"""
+        if (
+            event_type in self._event_callbacks
+            and callback in self._event_callbacks[event_type]
+        ):
+            self._event_callbacks[event_type].remove(callback)

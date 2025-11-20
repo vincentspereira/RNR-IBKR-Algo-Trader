@@ -99,7 +99,7 @@ The platform is designed to be accessible to both non-technical retail traders a
   - Resource pools for non-ATS infrastructure.
   - No shared topics to prevent contention.
 - **State-Managed Coordination:** LangGraph state machines for agent workflows and context preservation.
-- Resilient Error Handling: Health checks, shadow mode, and rollback for fault tolerance.
+- **Resilient Error Handling:** Health checks, shadow mode, and rollback for fault tolerance.
 - **Comprehensive Security:** Zero-trust with data isolation, audit logging, and SOC 2 compliance.
 - **Advanced Observability:** Agent-specific metrics and distributed tracing.
 - **Consolidated Frontend:** Monorepo with shared React components.
@@ -244,7 +244,7 @@ The platform is designed to be accessible to both non-technical retail traders a
   - **AI-Assisted Development & Debugging Agent:** Assists with Python code for strategies and integrations.
   - **Agentic AI Assistant:** Natural language commands for trading, research, and development assistance.
   - **Python Studio:** Traditional Python-based coding environment.
-- **Agentic AI Assistant:**
+- **Agentic AI Assistant**
   - Core user-interaction model via a Chatbot.
   - Uses an Agentic **Retrieval-Augmented Generation (RAG)** pipeline to process and query user-uploaded documents.
   - Composed of a collaborative network of specialised agents (Analyst, Researcher, Risk Manager, Compliance, etc.). **All inter-agent communication will occur asynchronously via the Apache Kafka event bus.** This ensures agents are fully decoupled, enables flexible, one-to-many information flows, and creates a complete, auditable log of the AI's reasoning process.
@@ -343,7 +343,7 @@ The platform is designed to be accessible to both non-technical retail traders a
 - **Integration of AI Assistants:** LobeChat, which is the user-facing frontend for conversational AI, integrates with OpenHands (backend agent for autonomous coding), Kilo Code (VS Code extension for workflows), RAGFlow (RAG pipeline for document-based queries), the Agentic AI Assistant (core brain for trading tasks), and the Intelligent User Guidance System (proactive recommendations/next-steps).
   - Workflow:
     - LobeChat handles UI/voice input, publishes to Kafka
-    - OpenHands/Kilo Code process coding tasks via MCPs
+    - Claude Code/OpenHands/Kilo Code process coding tasks via MCPs
     - RAGFlow grounds responses
     - AI Assistant orchestrates
     - Intelligent Guidance System suggests tools/steps
@@ -933,7 +933,7 @@ Dual Memory Layer that captures System 1 (Programming Concepts & Business Logic 
       - Multiple recall paired with fused re-ranking.
       - Intuitive APIs for seamless integration with business.
   - <https://github.com/infiniflow/ragflow>
-- **Database**:
+- **Database - Current Implementation**:
   - **PostgreSQL with pgvector:**
     - **Description:** The system uses **PostgreSQL** with the **pgvector** extension enabled, allowing it to function as an all-in-one database for both traditional relational data and vector embeddings for the AI.
     - **Features:**
@@ -948,27 +948,6 @@ Dual Memory Layer that captures System 1 (Programming Concepts & Business Logic 
     - Column oriented database management system that allows generating analytical data reports in real-time.
     - High-speed, large-scale time-series analytics.
     - <https://github.com/ClickHouse/ClickHouse>
-  - **DuckDB:**
-    - Fast, in-process OLAP queries for research.
-    - High performance analytical database system.
-    - Designed to be fast, reliable, portable, and easy to use.
-    - Provides a rich SQL dialect, with support far beyond basic SQL.
-    - Supports arbitrary and nested correlated subqueries, window functions, collations, complex types (arrays, structs, maps), and [several extensions designed to make SQL easier to use](https://duckdb.org/docs/stable/sql/dialect/friendly_sql.html).
-    - <http://github.com/duckdb/duckdb>
-  - **Qdrant:**
-    - **Description:** Qdrant is a high-performance, massive-scale Vector Database and Vector Search Engine.
-    - **Features:**
-      - It provides a production-ready service with a convenient API to store, search, and manage points - vectors with an additional payload.
-      - It is tailored to extended filtering support.
-      - It makes it useful for all sorts of neural-network or semantic-based matching, faceted search, and other applications.
-      - Qdrant is written in Rust, which makes it fast and reliable even under high load.
-      - With Qdrant, embeddings or neural network encoders can be turned into full-fledged applications for matching, searching, recommending, and much more.
-    - <https://github.com/qdrant/qdrant>
-  - **Apache Iceberg:**
-    - Long-term, immutable data storage.
-    - High performance format for huge analytic tables.
-    - Iceberg brings the reliability and simplicity of SQL tables to big data, while making it possible for engines like Spark, Trino, Flink, Presto, Hive, and Impala to safely work with the same tables, at the same time.
-    - <https://github.com/apache/iceberg>
   - **Redis:**
     - Caching and session storage.
     - For developers, who are building real-time data-driven applications, Redis is the preferred, fastest, and most feature-rich cache, data structure server, and document and vector query engine.
@@ -982,6 +961,35 @@ Dual Memory Layer that captures System 1 (Programming Concepts & Business Logic 
       - Vector Store for GenAI: Integrates with AI applications (e.g. LangGraph, mem0) for short-term memory, long-term memory, LLM response caching (semantic caching), and retrieval augmented generation (RAG).
       - Real-Time Analytics: Powers personalisation, recommendations, fraud detection, and risk assessment.
     - <https://github.com/redis/redis>
+  - **Neo4j:**
+    - It is the world's leading Graph Database.
+    - It is a high-performance graph store with all the features expected of a mature and robust database, like a friendly query language and ACID transactions.
+    - The programmer works with a flexible network structure of nodes and relationships rather than static tables - yet enjoys all the benefits of enterprise-quality database.
+    - For many applications, Neo4j offers orders of magnitude performance benefits compared to relational DBs.
+    - Neo4j is available both as a standalone server, or an embeddable component.
+    - <https://github.com/neo4j/neo4j>
+  - **Apache Iceberg:**
+    - Long-term, immutable data storage.
+    - High performance format for huge analytic tables.
+    - Iceberg brings the reliability and simplicity of SQL tables to big data, while making it possible for engines like Spark, Trino, Flink, Presto, Hive, and Impala to safely work with the same tables, at the same time.
+    - <https://github.com/apache/iceberg>
+  - **Qdrant:**
+    - **Description:** Qdrant is a high-performance, massive-scale Vector Database and Vector Search Engine.
+    - **Features:**
+      - It provides a production-ready service with a convenient API to store, search, and manage points - vectors with an additional payload.
+      - It is tailored to extended filtering support.
+      - It makes it useful for all sorts of neural-network or semantic-based matching, faceted search, and other applications.
+      - Qdrant is written in Rust, which makes it fast and reliable even under high load.
+      - With Qdrant, embeddings or neural network encoders can be turned into full-fledged applications for matching, searching, recommending, and much more.
+    - <https://github.com/qdrant/qdrant>
+- **Database - Implementation based on Future Requirement**:
+  - **DuckDB:**
+    - Fast, in-process OLAP queries for research.
+    - High performance analytical database system.
+    - Designed to be fast, reliable, portable, and easy to use.
+    - Provides a rich SQL dialect, with support far beyond basic SQL.
+    - Supports arbitrary and nested correlated subqueries, window functions, collations, complex types (arrays, structs, maps), and [several extensions designed to make SQL easier to use](https://duckdb.org/docs/stable/sql/dialect/friendly_sql.html).
+    - <http://github.com/duckdb/duckdb>
   - **InfluxDB:**
     - It is a scalable datastore for metrics, events, and real-time analytics.
     - InfluxDB Core is a database built to collect, process, transform, and store event and time series data. It is ideal for use cases that require real-time ingest and fast query response times to build user interfaces, monitoring, and automation solutions.
@@ -1075,13 +1083,6 @@ Dual Memory Layer that captures System 1 (Programming Concepts & Business Logic 
       - Data storage for Artificial Intelligence (AI) and machine learning, which requires fluid and instantly accessible data.
       - Managing large volumes of data and enabling rapid development cycles.
     - <https://github.com/mongodb/mongo>
-  - **Neo4j:**
-    - It is the world's leading Graph Database.
-    - It is a high-performance graph store with all the features expected of a mature and robust database, like a friendly query language and ACID transactions.
-    - The programmer works with a flexible network structure of nodes and relationships rather than static tables - yet enjoys all the benefits of enterprise-quality database.
-    - For many applications, Neo4j offers orders of magnitude performance benefits compared to relational DBs.
-    - Neo4j is available both as a standalone server, or an embeddable component.
-    - <https://github.com/neo4j/neo4j>
 - **Order Management & Execution Layer:**
   - **FIX Gateway:**
     - Institutional-grade trading connectivity.
@@ -1790,10 +1791,10 @@ To ensure comprehensive guidance for each phase of the Nautilus Trader algorithm
 **Phase 0: Dependency Management Setup Prompt**
 
 - **Objective:**
-  - To establish a foundational, automated dependency management framework that proactively monitors, updates, and integrates over 70+ external open-source repositories and best-of-breed components (e.g., NautilusTrader, Apache Kafka, LangChain, LangGraph, TradingAgent, OpenBB, TA-Lib/ta-lib-python & Bukosabino/ta, VectorBT, TradingGym, PyPortfolioOpt, Riskfolio-Lib, PyOD, Blockly, react-financial-charts, Plotly Dash, SHAP, FinRL, Transformers, PyTorch, QuantLib, Stock-Prediction-Models, LSTM-Neural-Network-for-Time-Series-Prediction, Real-time-stock-market-prediction, Unstructured.io, Qdrant, PostgreSQL/pgvector, DuckDB, ClickHouse, InfluxDB, MinIO/S3, Apache Iceberg, Elasticsearch, Apache Cassandra, MongoDB, Redis, Neo4j, Kubernetes, Docker, Istio, NGINX, Prometheus, Grafana, Jaeger, Loki, Unleash, Bandit, Whisper, WebXR, Lobe Chat, OpenHands, Kilo Code, Archon, Feast/Tecton, QuickFIX/J, FIX8, and others as identified in the comprehensive system architecture). This phase ensures long-term system stability, security, compliance, and scalability by categorising dependencies into tiers based on criticality, forking repositories for customisations, implementing automated monitoring and update pipelines, and integrating with CI/CD workflows. The framework minimises manual overhead, detects vulnerabilities early, assesses update impacts, and maintains control over integrations critical to the algorithmic trading system's modular, event-driven, cloud-native architecture. It aligns with the "Best-of-Breed" philosophy, supporting technology diversity, fault isolation, and automated self-healing while preparing for subsequent phases by ensuring all dependencies are versioned, tested, and documented.
+  - To establish a foundational, automated dependency management framework that proactively monitors, updates, and integrates over 70+ external open-source repositories and best-of-breed components (e.g., NautilusTrader, Apache Kafka, LangChain, LangGraph, TradingAgent, OpenBB, TA-Lib/ta-lib-python & Bukosabino/ta, VectorBT, TradingGym, PyPortfolioOpt, Riskfolio-Lib, PyOD, Blockly, react-financial-charts, Plotly Dash, SHAP, FinRL, Transformers, PyTorch, QuantLib, Stock-Prediction-Models, LSTM-Neural-Network-for-Time-Series-Prediction, Real-time-stock-market-prediction, Unstructured.io, PostgreSQL/pgvector, ClickHouse, Redis, Neo4j, Apache Iceberg, Qdrant, \[_DuckDB, InfluxDB, MinIO/S3, Elasticsearch, Apache Cassandra, MongoDB_\], Kubernetes, Docker, Istio, NGINX, Prometheus, Grafana, Jaeger, Loki, Unleash, Bandit, Whisper, WebXR, Lobe Chat, OpenHands, Kilo Code, Archon, Feast/Tecton, QuickFIX/J, FIX8, and others as identified in the comprehensive system architecture). This phase ensures long-term system stability, security, compliance, and scalability by categorising dependencies into tiers based on criticality, forking repositories for customisations, implementing automated monitoring and update pipelines, and integrating with CI/CD workflows. The framework minimises manual overhead, detects vulnerabilities early, assesses update impacts, and maintains control over integrations critical to the algorithmic trading system's modular, event-driven, cloud-native architecture. It aligns with the "Best-of-Breed" philosophy, supporting technology diversity, fault isolation, and automated self-healing while preparing for subsequent phases by ensuring all dependencies are versioned, tested, and documented.
 - **Key Tasks:**
   - **Repository Forking and Tiered Organisation:**
-    - Fork all 70+ external repositories into private GitHub forks, organised by criticality tiers: Tier 1 (Critical: e.g., NautilusTrader, Apache Kafka, LangGraph, TradingAgent - core to trading engine and AI workflows); Tier 2 (Important: e.g., PyPortfolioOpt, Riskfolio-Lib, FinRL, PyOD - essential for portfolio/risk/ML); Tier 3 (Supporting: e.g., Blockly, Lobe Chat, Whisper, WebXR - for no-code/UI/AI interfaces); Tier 4 (Infrastructure: e.g., Kubernetes, Docker, Istio, Prometheus - for deployment/monitoring).
+    - Create Wrappers for all the 80+ external repositories, organised by criticality tiers: Tier 1 (Critical: e.g., NautilusTrader, Apache Kafka, LangGraph, TradingAgent - core to trading engine and AI workflows); Tier 2 (Important: e.g., PyPortfolioOpt, Riskfolio-Lib, FinRL, PyOD - essential for portfolio/risk/ML); Tier 3 (Supporting: e.g., Blockly, Lobe Chat, Whisper, WebXR - for no-code/UI/AI interfaces); Tier 4 (Infrastructure: e.g., Kubernetes, Docker, Istio, Prometheus - for deployment/monitoring).
     - Establish branch protection rules (e.g., require at least 2 approvals, code owners, restricted pushes to main), access controls (RBAC via GitHub teams: core-devs for Tier 1, support-devs for Tier 3), and metadata inventory (e.g., JSON file tracking tier, customisations needed, integration points).
     - Track customisations in forked repos (e.g., Rust enhancements in NautilusTrader for latency, volume-weighted indicators in TA-Lib) with detailed commit messages, PR descriptions, CHANGELOG.md, and Git diff tools for traceability.
   - **Automated Update Monitoring System:**
@@ -1862,14 +1863,14 @@ Be assigned to the "Placeholder Review" backlog.
 **Integration Plan - Phase 0: Dependency Management Setup**
 
 - **Objective:**
-  - To create a proactive, automated system for managing dependencies across the algorithmic trading platform's 60+ best-of-breed components, ensuring stability, security, and seamless integration into the microservices architecture. This plan outlines the setup of forked repositories, tiered monitoring, update pipelines, notifications, and a health dashboard, aligning with event-driven (Kafka), cloud-native (Kubernetes/Docker), and API-first principles while supporting customisations (e.g., volume-weighted indicators in TA-Lib, Rust paths in NautilusTrader).
+  - To create a proactive, automated system for managing dependencies across the algorithmic trading platform's 80+ best-of-breed components, ensuring stability, security, and seamless integration into the microservices architecture. This plan outlines the setup of forked repositories, tiered monitoring, update pipelines, notifications, and a health dashboard, aligning with event-driven (Kafka), cloud-native (Kubernetes/Docker), and API-first principles while supporting customisations (e.g., volume-weighted indicators in TA-Lib, Rust paths in NautilusTrader).
 - **Key Tasks:**
   - **Initialise Master Repository and Inventory:**
     - Set up the master Git repository with modular structure (/nautilus_trader_engine, /ai_assistant, /frontend, /market_data_service, /risk_manager, /portfolio_manager, /oms, /market_scanner, /agentic_ai, /security, /docs, /infrastructure).
     - Create an inventory metadata file (e.g., dependencies.json) listing all 60+ components with attributes (tier, upstream URL, customisation needs, integration points like API contracts or Kafka topics).
     - Configure Git hooks for pre-commit validations (linting with flake8, security scans with Bandit) and branch protection (require reviews, code owners).
-  - **Fork and Organise Repositories:**
-    - Fork repositories into tiers as defined, creating private forks for control (e.g., Tier 1: NautilusTrader for trading core; Tier 4: Istio for service mesh).
+  - **Create Wrappers and Organise Repositories:**
+    - Create Wrappers of the repositories into tiers as defined, creating private forks for control (e.g., Tier 1: NautilusTrader for trading core; Tier 4: Istio for service mesh).
     - Set up access controls (GitHub teams integrated with Keycloak for SSO) and branch management (e.g., feature/update-nautilustrader-v2).
     - Document customisations (e.g., CHANGELOG.md for Kafka enhancements in OpenHands, event sourcing integrations) and track with Git tags.
   - **Implement Automated Monitoring Workflows:**

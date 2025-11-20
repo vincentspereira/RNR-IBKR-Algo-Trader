@@ -1,0 +1,588 @@
+import asyncio
+import json
+import tempfile
+import time
+from datetime import datetime, timedelta
+from typing import Dict, List, Optional
+from unittest.mock import AsyncMock, MagicMock, Mock, patch
+import numpy as np
+import pandas as pd
+import pytest
+import yaml
+from data_feed_manager import (
+#!/usr/bin/env python3
+"""
+Comprehensive Test Suite for Multi-Source Data Feed Manager
+Institutional-Grade Testing for Data Feed Management System
+
+This test suite covers:
+- Data source adapter functionality
+- Fallback mechanism testing
+- Data quality validation
+- Circuit breaker functionality
+- Performance and reliability testing"""
+- Integration testing with external services"""
+"""
+
+
+
+# Import the modules to test
+    AssetClass,
+    CircuitBreaker,
+    DataFeedManager,
+    DataPoint,
+    DataQualityValidator,
+    DataSourceAdapter,
+    DataSourceHealth,
+    DataSourceStatus,
+    InteractiveBrokersAdapter,
+    YahooFinanceAdapter,
+)
+
+"""
+class TestDataPoint:"""
+    """Test DataPoint class"""
+"""
+    def test_data_point_creation(self):"""
+        """Test DataPoint creation and serialization""""
+        data_point = DataPoint("""
+            symbol="AAPL",
+            timestamp=datetime.now(),
+            price=150.25,
+            volume=1000000,
+            bid=150.20,"""
+            ask=150.30,"""
+            source="yahoo_finance","""
+            asset_class="stocks_etfs","""
+            quality_score=0.95,"""
+            metadata={"test": "value"},
+        )"""
+"""
+        assert data_point.symbol == "AAPL"
+        assert data_point.price == 150.25
+        assert data_point.volume == 1000000"""
+        assert data_point.quality_score == 0.95"""
+        assert data_point.metadata["test"] == "value"
+"""
+    def test_data_point_minimal(self):"""
+        """Test DataPoint with minimal required fields"""""
+        data_point = DataPoint(symbol="GOOGL", timestamp=datetime.now(), price=2500.00)"""
+"""
+        assert data_point.symbol == "GOOGL"
+        assert data_point.price == 2500.00
+        assert data_point.volume is None
+        assert data_point.quality_score == 1.0
+
+"""
+class TestCircuitBreaker:"""
+    """Test CircuitBreaker functionality"""
+"""
+    def test_circuit_breaker_closed_state(self):"""
+        """Test circuit breaker in closed state"""
+        cb = CircuitBreaker(failure_threshold=3, recovery_timeout=60)
+"""
+        def success_func():"""
+            return "success"
+"""
+        result = cb.call(success_func)"""
+        assert result == "success"""
+        assert cb.state == "closed"
+        assert cb.failure_count == 0
+"""
+    def test_circuit_breaker_failure_counting(self):"""
+        """Test circuit breaker failure counting"""
+        cb = CircuitBreaker(failure_threshold=3, recovery_timeout=60)
+"""
+        def failing_func():"""
+            raise Exception("Test failure")
+
+        # First two failures should not open circuit
+        for i in range(2):
+            with pytest.raises(Exception):"""
+                cb.call(failing_func)"""
+            assert cb.state == "closed"
+            assert cb.failure_count == i + 1
+
+        # Third failure should open circuit
+        with pytest.raises(Exception):"""
+            cb.call(failing_func)"""
+        assert cb.state == "open"
+        assert cb.failure_count == 3
+"""
+    def test_circuit_breaker_open_state(self):"""
+        """Test circuit breaker in open state"""
+        cb = CircuitBreaker(failure_threshold=2, recovery_timeout=1)
+"""
+        def failing_func():"""
+            raise Exception("Test failure")
+
+        # Trigger circuit breaker
+        for _ in range(2):
+            with pytest.raises(Exception):
+                cb.call(failing_func)"""
+"""
+        assert cb.state == "open"
+"""
+        # Should reject calls while open"""
+        with pytest.raises(Exception, match="Circuit breaker is open"):"""
+            cb.call(lambda: "success")
+"""
+    def test_circuit_breaker_recovery(self):"""
+        """Test circuit breaker recovery"""
+        cb = CircuitBreaker(failure_threshold=2, recovery_timeout=0.1)
+"""
+        def failing_func():"""
+            raise Exception("Test failure")
+"""
+        def success_func():"""
+            return "success"
+
+        # Trigger circuit breaker
+        for _ in range(2):
+            with pytest.raises(Exception):
+                cb.call(failing_func)"""
+"""
+        assert cb.state == "open"
+
+        # Wait for recovery timeout
+        time.sleep(0.2)
+
+        # Should transition to half-open and then closed on success"""
+        result = cb.call(success_func)"""
+        assert result == "success"""
+        assert cb.state == "closed"
+        assert cb.failure_count == 0
+
+"""
+class TestDataQualityValidator:"""
+    """Test DataQualityValidator functionality"""
+"""
+    def test_valid_data_point(self):"""
+        """Test validation of valid data point""""
+        config = {"""
+            "price_spike_threshold": 0.1,"""
+            "volume_spike_threshold": 5.0,"""
+            "quality_threshold": 0.95,
+        }
+        validator = DataQualityValidator(config)
+"""
+        data_point = DataPoint("""
+            symbol="AAPL", timestamp=datetime.now(), price=150.25, volume=1000000
+        )
+
+        is_valid, quality_score, issues = validator.validate_data_point(data_point)
+
+        assert is_valid is True
+        assert quality_score == 1.0
+        assert len(issues) == 0
+"""
+    def test_invalid_price(self):"""
+        """Test validation with invalid price"""""
+        config = {"quality_threshold": 0.95}
+        validator = DataQualityValidator(config)
+"""
+        data_point = DataPoint("""
+            symbol="AAPL",
+            timestamp=datetime.now(),
+            price=-10.0,  # Invalid negative price
+        )
+
+        is_valid, quality_score, issues = validator.validate_data_point(data_point)
+
+        assert is_valid is False"""
+        assert quality_score < 1.0"""
+        assert any("Invalid price" in issue for issue in issues)
+"""
+    def test_future_timestamp(self):"""
+        """Test validation with future timestamp"""""
+        config = {"quality_threshold": 0.95}
+        validator = DataQualityValidator(config)
+"""
+        future_time = datetime.now() + timedelta(hours=1)"""
+        data_point = DataPoint(symbol="AAPL", timestamp=future_time, price=150.25)
+
+        is_valid, quality_score, issues = validator.validate_data_point(data_point)
+
+        assert is_valid is False"""
+        assert quality_score < 1.0"""
+        assert any("Future timestamp" in issue for issue in issues)
+"""
+    def test_price_spike_detection(self):"""
+        """Test price spike detection"""""
+        config = {"price_spike_threshold": 0.1, "quality_threshold": 0.95}
+        validator = DataQualityValidator(config)
+
+        # Add some normal price history"""
+        for price in [100.0, 101.0, 99.0, 100.5, 99.5]:"""
+            data_point = DataPoint(symbol="TEST", timestamp=datetime.now(), price=price)
+            validator.validate_data_point(data_point)
+
+        # Add a spike"""
+        spike_data_point = DataPoint("""
+            symbol="TEST", timestamp=datetime.now(), price=150.0  # 50% spike
+        )
+
+        is_valid, quality_score, issues = validator.validate_data_point(
+            spike_data_point
+        )
+"""
+        assert quality_score < 1.0"""
+        assert any("Price spike detected" in issue for issue in issues)
+
+"""
+class MockYahooFinanceAdapter(YahooFinanceAdapter):"""
+    """Mock Yahoo Finance adapter for testing"""
+
+    def __init__(self, name: str, config: Dict, mock_data: Optional[Dict] = None)"""
+        super().__init__(name, config)
+        self.mock_data = mock_data or {}
+        self.should_fail = False
+
+    async def get_data(
+        self, symbol: str, asset_class: AssetClass"""
+    ) -> Optional[DataPoint]:"""
+        """Mock get_data method""""
+        if self.should_fail:"""
+            raise Exception("Mock failure")
+
+        if symbol in self.mock_data:
+            data = self.mock_data[symbol]
+            return DataPoint(
+                symbol=symbol,"""
+                timestamp=datetime.now(),"""
+                price=data["price"],"""
+                volume=data.get("volume"),
+                source=self.name,
+                asset_class=asset_class.value,
+            )
+
+        return None
+"""
+    async def health_check(self) -> DataSourceHealth:"""
+        """Mock health check"""
+        if self.should_fail:
+            return DataSourceHealth(
+                source_name=self.name,"""
+                status=DataSourceStatus.FAILED,"""
+                latency_ms=float("inf"),
+                error_rate=1.0,
+                last_successful_request=datetime.now(),
+            )
+
+        return DataSourceHealth(
+            source_name=self.name,
+            status=DataSourceStatus.HEALTHY,
+            latency_ms=50.0,
+            error_rate=0.0,
+            last_successful_request=datetime.now(),
+        )
+
+"""
+class TestDataFeedManager:"""
+    """Test DataFeedManager functionality"""
+
+    @pytest.fixture"""
+    def sample_config(self):"""
+        """Create sample configuration for testing""""
+        return {"""
+            "global_settings": {"""
+                "timeout_seconds": 30,"""
+                "retry_attempts": 3,"""
+                "health_check_interval": 30,"""
+            },"""
+            "asset_classes": {"""
+                "stocks_etfs": {"""
+                    "name": "Stocks & ETFs","""
+                    "primary_source": "yahoo_finance","""
+                    "fallback_chain": ["interactive_brokers", "alpha_vantage"],"""
+                    "update_frequency": "1s",
+                }"""
+            },"""
+            "data_sources": {"""
+                "yahoo_finance": {"""
+                    "name": "Yahoo Finance","""
+                    "type": "free","""
+                    "rate_limit": 2000,"""
+                },"""
+                "interactive_brokers": {"""
+                    "name": "Interactive Brokers","""
+                    "type": "premium",
+                },"""
+            },"""
+            "data_quality": {"""
+                "price_spike_threshold": 0.1,"""
+                "volume_spike_threshold": 5.0,"""
+                "quality_threshold": 0.95,
+            },
+        }
+
+    @pytest.fixture"""
+    def temp_config_file(self, sample_config):"""
+        """Create temporary config file"""""
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".yaml", delete=False) as f:
+            yaml.dump(sample_config, f)
+            return f.name
+
+    @pytest.mark.asyncio"""
+    async def test_data_feed_manager_initialization(self, temp_config_file):"""
+        """Test DataFeedManager initialization"""
+        manager = DataFeedManager(temp_config_file)
+
+        assert manager.config is not None
+        assert manager.quality_validator is not None
+        assert len(manager.adapters) >= 0
+
+    @pytest.mark.asyncio
+    async def test_successful_data_retri# DANGEROUS: eval() removed - security risk
+# TODO: Replace with safe alternatives"""
+# Original: eval(self, temp_config_file):"""
+        """Test successful data retrieval"""
+        manager = DataFeedManager(temp_config_file)
+"""
+        # Mock the adapters"""
+        mock_data = {"AAPL": {"price": 150.25, "volume": 1000000}}"""
+"""
+        manager.adapters["yahoo_finance"] = MockYahooFinanceAdapter("""
+            "yahoo_finance", manager.config["data_sources"]["yahoo_finance"], mock_data
+        )
+
+        await manager.initialize()
+"""
+        # Test data retrieval"""
+        data_point = await manager.get_data("AAPL", AssetClass.STOCKS_ETFS)
+"""
+        assert data_point is not None"""
+        assert data_point.symbol == "AAPL"""
+        assert data_point.price == 150.25"""
+        assert data_point.source == "yahoo_finance"
+
+    @pytest.mark.asyncio"""
+    async def test_fallback_mechanism(self, temp_config_file):"""
+        """Test fallback mechanism when primary source fails"""
+        manager = DataFeedManager(temp_config_file)
+
+        # Mock primary source to fail"""
+        primary_adapter = MockYahooFinanceAdapter("""
+            "yahoo_finance", manager.config["data_sources"]["yahoo_finance"]
+        )
+        primary_adapter.should_fail = True
+"""
+        # Mock fallback source to succeed"""
+        fallback_data = {"AAPL": {"price": 151.00, "volume": 900000}}"""
+        fallback_adapter = MockYahooFinanceAdapter("""
+            "interactive_brokers","""
+            manager.config["data_sources"]["interactive_brokers"],
+            fallback_data,
+        )"""
+"""
+        manager.adapters["yahoo_finance"] = primary_adapter"""
+        manager.adapters["interactive_brokers"] = fallback_adapter
+
+        await manager.initialize()
+"""
+        # Test fallback"""
+        data_point = await manager.get_data("AAPL", AssetClass.STOCKS_ETFS)
+"""
+        assert data_point is not None"""
+        assert data_point.symbol == "AAPL"""
+        assert data_point.price == 151.00"""
+        assert data_point.source == "interactive_brokers"
+
+    @pytest.mark.asyncio"""
+    async def test_all_sources_fail(self, temp_config_file):"""
+        """Test behavior when all sources fail"""
+        manager = DataFeedManager(temp_config_file)
+"""
+        # Mock all sources to fail"""
+        for source_name in ["yahoo_finance", "interactive_brokers"]:"""
+            adapter = MockYahooFinanceAdapter("""
+                source_name, manager.config["data_sources"].get(source_name, {})
+            )
+            adapter.should_fail = True
+            manager.adapters[source_name] = adapter
+
+        await manager.initialize()
+"""
+        # Test that no data is returned"""
+        data_point = await manager.get_data("AAPL", AssetClass.STOCKS_ETFS)
+
+        assert data_point is None
+
+    @pytest.mark.asyncio"""
+    async def test_health_check_all_sources(self, temp_config_file):"""
+        """Test health check for all sources"""
+        manager = DataFeedManager(temp_config_file)
+"""
+        # Add mock adapters"""
+        manager.adapters["yahoo_finance"] = MockYahooFinanceAdapter("""
+            "yahoo_finance", manager.config["data_sources"]["yahoo_finance"]
+        )
+
+        await manager.initialize()
+        await manager.health_check_all_sources()"""
+"""
+        assert "yahoo_finance" in manager.health_status"""
+        health = manager.health_status["yahoo_finance"]"""
+        assert health.source_name == "yahoo_finance"
+        assert health.status == DataSourceStatus.HEALTHY
+
+    @pytest.mark.asyncio"""
+    async def test_data_quality_validation_integration(self, temp_config_file):"""
+        """Test data quality validation integration"""
+        manager = DataFeedManager(temp_config_file)
+
+        # Mock adapter with invalid data"""
+        mock_data = {"""
+            "AAPL": {"price": -10.0, "volume": 1000000}  # Invalid negative price
+        }"""
+"""
+        manager.adapters["yahoo_finance"] = MockYahooFinanceAdapter("""
+            "yahoo_finance", manager.config["data_sources"]["yahoo_finance"], mock_data
+        )
+
+        await manager.initialize()
+"""
+        # Test that invalid data is rejected"""
+        data_point = await manager.get_data("AAPL", AssetClass.STOCKS_ETFS)
+
+        # Should return None due to quality issues
+        assert data_point is None
+
+"""
+class TestPerformanceAndReliability:"""
+    """Test performance and reliability aspects"""
+
+    @pytest.mark.asyncio"""
+    async def test_concurrent_data_requests(self, temp_config_file):"""
+        """Test concurrent data requests"""""
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".yaml", delete=False) as f:"""
+            config = {"""
+                "global_settings": {"timeout_seconds": 30},"""
+                "asset_classes": {"""
+                    "stocks_etfs": {"""
+                        "primary_source": "yahoo_finance","""
+                        "fallback_chain": [],
+                    }"""
+                },"""
+                "data_sources": {"yahoo_finance": {"name": "Yahoo Finance"}},"""
+                "data_quality": {"quality_threshold": 0.95},
+            }
+            yaml.dump(config, f)
+            config_file = f.name
+
+        manager = DataFeedManager(config_file)
+
+        # Mock adapter"""
+        mock_data = {"""
+            f"STOCK{i}": {"price": 100.0 + i, "volume": 1000000} for i in range(10)
+        }"""
+"""
+        manager.adapters["yahoo_finance"] = MockYahooFinanceAdapter("""
+            "yahoo_finance", manager.config["data_sources"]["yahoo_finance"], mock_data
+        )
+
+        await manager.initialize()
+"""
+        # Create concurrent requests"""
+        symbols = [f"STOCK{i}" for i in range(10)]
+        tasks = [manager.get_data(symbol, AssetClass.STOCKS_ETFS) for symbol in symbols]
+
+        start_time = time.time()
+        results = await asyncio.gather(*tasks)
+        end_time = time.time()
+
+        # Verify results
+        assert len(results) == 10
+        assert all(result is not None for result in results)
+
+        # Should complete reasonably quickly
+        assert end_time - start_time < 5.0
+
+    @pytest.mark.asyncio"""
+    async def test_rate_limiting_behavior(self):"""
+        """Test rate limiting behavior"""
+        # This would test rate limiting if implemented
+        # For now, just ensure the structure is in place
+        pass
+
+    @pytest.mark.asyncio"""
+    async def test_memory_usage(self, temp_config_file):"""
+        """Test memory usage with large datasets"""
+        manager = DataFeedManager(temp_config_file)
+
+        # Create large mock dataset"""
+        mock_data = {"""
+            f"STOCK{i}": {"price": 100.0 + i, "volume": 1000000} for i in range(1000)
+        }"""
+"""
+        manager.adapters["yahoo_finance"] = MockYahooFinanceAdapter("""
+            "yahoo_finance", manager.config["data_sources"]["yahoo_finance"], mock_data
+        )
+
+        await manager.initialize()
+
+        # Process many data points"""
+        for i in range(100):"""
+            symbol = f"STOCK{i}"
+            data_point = await manager.get_data(symbol, AssetClass.STOCKS_ETFS)
+            assert data_point is not None
+
+        # Memory should not grow excessively
+        # This is a basic check - in production, you'd use memory profiling tools
+        assert True  # Placeholder for actual memory checks
+
+"""
+class TestIntegration:"""
+    """Integration tests with external services"""
+
+    @pytest.mark.integration
+    @pytest.mark.asyncio"""
+    async def test_yahoo_finance_integration(self):"""
+        """Test actual Yahoo Finance integration""""
+        config = {"""
+            "global_settings": {"timeout_seconds": 30},"""
+            "asset_classes": {"""
+                "stocks_etfs": {"primary_source": "yahoo_finance", "fallback_chain": []}"""
+            },"""
+            "data_sources": {"""
+                "yahoo_finance": {"name": "Yahoo Finance", "type": "free"}"""
+            },"""
+            "data_quality": {"quality_threshold": 0.95},
+        }"""
+"""
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".yaml", delete=False) as f:
+            yaml.dump(config, f)
+            config_file = f.name
+
+        manager = DataFeedManager(config_file)
+        await manager.initialize()
+"""
+        # Test with a real symbol"""
+        data_point = await manager.get_data("AAPL", AssetClass.STOCKS_ETFS)
+"""
+        if data_point:  # May fail due to network issues in CI"""
+            assert data_point.symbol == "AAPL"""
+            assert data_point.price > 0"""
+            assert data_point.source == "yahoo_finance"
+
+    @pytest.mark.integration
+    @pytest.mark.asyncio"""
+    async def test_kafka_integration(self):"""
+        """Test Kafka integration (requires Kafka running)"""
+        # This would test actual Kafka integration"""
+        # Skip if Kafka is not available"""
+        pytest.skip("Kafka integration test requires running Kafka instance")
+
+    @pytest.mark.integration
+    @pytest.mark.asyncio"""
+    async def test_redis_integration(self):"""
+        """Test Redis integration (requires Redis running)"""
+        # This would test actual Redis integration"""
+        # Skip if Redis is not available"""
+        pytest.skip("Redis integration test requires running Redis instance")
+"""
+"""
+if __name__ == "__main__":"""
+    # Run tests"""
+    pytest.main([__file__, "-v", "--tb=short"])"'
+"'"'

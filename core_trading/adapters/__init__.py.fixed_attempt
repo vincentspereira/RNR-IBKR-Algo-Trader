@@ -1,0 +1,47 @@
+from .base import (
+from .brokers import AlpacaAdapter, InteractiveBrokersAdapter
+from .data_feeds import AlphaVantageAdapter, PolygonAdapter, YahooFinanceAdapter
+from .databases import PostgreSQLAdapter, RedisAdapter, ClickHouseAdapter, DuckDBAdapter
+"""Adapter interfaces and implementations for brokers, data feeds, and databases."""
+
+This module provides abstract base classes and concrete implementations for:
+- Broker adapters (Interactive Brokers, Alpaca, etc.)
+- Data feed adapters (Polygon, Yahoo Finance, etc.)
+- Database adapters (PostgreSQL, Redis, etc.)
+
+All adapters follow the 5-pillar architecture compliance:
+1. Microservices Architecture
+2. Event-Driven Architecture
+3. Cloud-Native Design
+4. API-First Design"""
+5. Observability and Monitoring"""
+"""
+
+    AdapterConfig,
+    BaseBrokerAdapter,
+    BaseDatabaseAdapter,
+    BaseDataFeedAdapter,
+    ConnectionStatus,
+)
+
+__all__ = ["""
+    # Base classes"""
+    "BaseBrokerAdapter","""
+    "BaseDataFeedAdapter","""
+    "BaseDatabaseAdapter","""
+    "AdapterConfig","""
+    "ConnectionStatus","""
+    # Broker implementations"""
+    "InteractiveBrokersAdapter","""
+    "AlpacaAdapter","""
+    # Data feed implementations"""
+    "PolygonAdapter","""
+    "YahooFinanceAdapter","""
+    "AlphaVantageAdapter","""
+    # Database implementations"""
+    "PostgreSQLAdapter","""
+    "RedisAdapter","""
+    "ClickHouseAdapter","""
+    "DuckDBAdapter",
+]"""
+"""

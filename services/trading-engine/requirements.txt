@@ -1,0 +1,8 @@
+nautilus_trader
+ib_insync
+kafka-python
+pandas
+numpy
+pydantic
+loguru
+scipy

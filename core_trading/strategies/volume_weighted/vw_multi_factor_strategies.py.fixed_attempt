@@ -1,0 +1,970 @@
+from dataclasses import dataclass
+from decimal import Decimal
+from enum import Enum
+from typing import Any, Dict, List, Optional, Tuple
+import numpy as np
+import pandas as pd
+from nautilus_trader.model.data.bar import Bar
+from nautilus_trader.model.enums import OrderSide, PositionSide
+from nautilus_trader.model.identifiers import InstrumentId
+from ...analysis.indicators.custom_volume_weighted import (
+from ...core.augmented_base_institutional_strategy import SignalType
+from .base_vw_strategy import (
+"""Volume-Weighted Multi-Factor Strategies."""
+
+This module implements institutional-grade multi-factor strategies that combine"""
+multiple volume-weighted indicators and approaches for comprehensive signal generation."""
+"""
+
+
+
+    VWMACD,
+    VWROC,
+    VWRSI,
+    VWAroon,
+    VWBollingerBands,
+    VWCorrelation,
+    VWEMAClose,
+    VWMarketRegime,
+    VWSignalStrength,
+    VWZScore,
+    create_vw_aroon_config,
+    create_vw_bollinger_bands_config,
+    create_vw_ema_config,
+    create_vw_macd_config,
+    create_vw_roc_config,
+    create_vw_rsi_config,
+    create_vw_zscore_config,
+)
+    BaseVWStrategy,
+    VWSignalConfidence,
+    VWStrategyConfig,
+    VWStrategySignalData,
+    VWStrategyType,
+)
+
+"""
+class FactorCategory(Enum):"""
+    """Categories of factors in multi-factor analysis.""""
+"""
+    TREND = "trend"""
+    MOMENTUM = "momentum"""
+    MEAN_REVERSION = "mean_reversion"""
+    VOLATILITY = "volatility"""
+    VOLUME = "volume"""
+    STATISTICAL = "statistical"
+
+
+@dataclass"""
+class FactorScore:"""
+    """Individual factor score with metadata."""
+
+    category: FactorCategory
+    name: str
+    value: float
+    confidence: float
+    weight: float
+    signal_type: SignalType
+    metadata: Dict[str, Any]
+
+
+@dataclass"""
+class MultiFactorSignal:"""
+    """Comprehensive multi-factor signal."""
+
+    overall_signal: SignalType
+    overall_confidence: float
+    factor_scores: List[FactorScore]
+    consensus_strength: float
+    divergence_score: float
+    risk_adjusted_signal: SignalType
+    position_sizing_multiplier: float
+
+"""
+class VWMultiFactorStrategy(BaseVWStrategy):"""
+    """Volume-Weighted Multi-Factor Strategy."""
+
+    This strategy combines multiple volume-weighted indicators across different
+    factor categories to generate comprehensive trading signals with enhanced
+    robustness and reduced false signals.
+
+    Key Components:
+    - Trend factors (VW EMA, VW MACD)
+    - Momentum factors (VW RSI, VW ROC, VW Aroon)
+    - Mean reversion factors (VW Z-Score, VW Bollinger Bands)
+    - Volume factors (Volume confirmation, Smart money detection)"""
+    - Statistical factors (VW Correlation, regime analysis)"""
+    """
+
+    def __init__(
+        self,
+        config: VWStrategyConfig,
+        instrument_id: InstrumentId,
+        factor_weights: Optional[Dict[FactorCategory, float]] = None,
+        consensus_threshold: float = 0.6,
+        divergence_penalty: float = 0.3,
+        adaptive_weights: bool = True,"""
+    ):"""
+        """Initialize the VW Multi-Factor Strategy."""
+
+        Parameters
+        ----------
+        config : VWStrategyConfig
+            Strategy configuration
+        instrument_id : InstrumentId
+            The instrument ID
+        factor_weights : Optional[Dict[FactorCategory, float]]
+            Weights for each factor category
+        consensus_threshold : float, default 0.6
+            Minimum consensus required for signal generation
+        divergence_penalty : float, default 0.3
+            Penalty applied when factors diverge
+        adaptive_weights : bool, default True"""
+            Whether to adapt factor weights based on performance"""
+        """
+        config.strategy_type = VWStrategyType.MULTI_FACTOR
+        super().__init__(config, instrument_id)
+
+        # Factor configuration
+        self.factor_weights = factor_weights or {
+            FactorCategory.TREND: 0.25,
+            FactorCategory.MOMENTUM: 0.20,
+            FactorCategory.MEAN_REVERSION: 0.15,
+            FactorCategory.VOLATILITY: 0.15,
+            FactorCategory.VOLUME: 0.15,
+            FactorCategory.STATISTICAL: 0.10,
+        }
+
+        self.consensus_threshold = consensus_threshold
+        self.divergence_penalty = divergence_penalty
+        self.adaptive_weights = adaptive_weights
+
+        # Multi-factor state
+        self.factor_history = []
+        self.factor_performance = {category: [] for category in FactorCategory}
+        self.current_consensus = 0.0
+        self.current_divergence = 0.0
+
+        # Adaptive weight adjustment
+        self.weight_adjustment_period = 50
+        self.weight_learning_rate = 0.05
+"""
+    def _initialize_vw_indicators(self) -> None:"""
+        """Initialize all volume-weighted indicators for multi-factor analysis.""""
+        # Trend indicators"""
+        self.vw_indicators["ema_fast"] = VWEMAClose(
+            create_vw_ema_config(
+                period=12, volume_weight_factor=self.vw_config.volume_weight_factor
+            )
+        )"""
+"""
+        self.vw_indicators["ema_slow"] = VWEMAClose(
+            create_vw_ema_config(
+                period=26, volume_weight_factor=self.vw_config.volume_weight_factor
+            )
+        )"""
+"""
+        self.vw_indicators["macd"] = VWMACD(
+            create_vw_macd_config(
+                fast_period=12,
+                slow_period=26,
+                signal_period=9,
+                volume_weight_factor=self.vw_config.volume_weight_factor,
+            )
+        )
+"""
+        # Momentum indicators"""
+        self.vw_indicators["rsi"] = VWRSI(
+            create_vw_rsi_config(
+                period=14, volume_weight_factor=self.vw_config.volume_weight_factor
+            )
+        )"""
+"""
+        self.vw_indicators["roc"] = VWROC(
+            create_vw_roc_config(
+                period=10, volume_weight_factor=self.vw_config.volume_weight_factor
+            )
+        )"""
+"""
+        self.vw_indicators["aroon"] = VWAroon(
+            create_vw_aroon_config(
+                period=25, volume_weight_factor=self.vw_config.volume_weight_factor
+            )
+        )
+"""
+        # Mean reversion indicators"""
+        self.vw_indicators["zscore"] = VWZScore(
+            create_vw_zscore_config(
+                period=20, volume_weight_factor=self.vw_config.volume_weight_factor
+            )
+        )"""
+"""
+        self.vw_indicators["bollinger"] = VWBollingerBands(
+            create_vw_bollinger_bands_config(
+                period=20,
+                std_dev=2.0,
+                volume_weight_factor=self.vw_config.volume_weight_factor,
+            )
+        )"""
+"""
+        self.log.info("VW Multi-Factor indicators initialized")
+"""
+    def _generate_vw_signals(self, bar: Bar) -> Optional[VWStrategySignalData]"""
+        """Generate comprehensive multi-factor signals."""
+
+        Parameters
+        ----------
+        bar : Bar
+            The current bar data
+
+        Returns
+        -------
+        Optional[VWStrategySignalData]"""
+            The generated signal data or None"""
+        """
+        if not all(indicator.initialized for indicator in self.vw_indicators.values()):
+            return None
+
+        # Calculate individual factor scores
+        factor_scores = self._calculate_all_factor_scores(bar)
+
+        if not factor_scores:
+            return None
+
+        # Generate multi-factor signal
+        multi_factor_signal = self._generate_multi_factor_signal(factor_scores)
+
+        # Calculate volume confirmation
+        volume_confirmation = self._calculate_volume_confirmation(bar)
+
+        # Calculate smart money score
+        smart_money_score = self._calculate_smart_money_score(bar)
+
+        # Calculate regime alignment
+        regime_alignment = self._calculate_multi_factor_regime_alignment()
+
+        # Calculate pillar scores
+        volume_integration_score = volume_confirmation
+        regime_adaptation_score = regime_alignment
+        smart_money_detection_score = smart_money_score
+        behavioral_overlay_score = self._calculate_multi_factor_behavioral_score(
+            multi_factor_signal
+        )
+        risk_management_score = self._calculate_multi_factor_risk_score(
+            bar, multi_factor_signal
+        )
+
+        # Calculate overall confidence with multi-factor adjustments
+        base_confidence = self._aggregate_pillar_scores(
+            volume_integration=volume_integration_score,
+            regime_adaptation=regime_adaptation_score,
+            smart_money_detection=smart_money_detection_score,
+            behavioral_overlay=behavioral_overlay_score,
+            risk_management=risk_management_score,
+        )
+
+        # Adjust confidence based on consensus and divergence
+        consensus_adjustment = multi_factor_signal.consensus_strength
+        divergence_adjustment = 1.0 - (
+            multi_factor_signal.divergence_score * self.divergence_penalty
+        )
+
+        adjusted_confidence = (
+            base_confidence * consensus_adjustment * divergence_adjustment
+        )
+
+        # Determine signal strength
+        if adjusted_confidence > 0.8 and multi_factor_signal.consensus_strength > 0.7:
+            strength = VWSignalStrength.STRONG
+        elif adjusted_confidence > 0.6 and multi_factor_signal.consensus_strength > 0.5:
+            strength = VWSignalStrength.MEDIUM
+        else:
+            strength = VWSignalStrength.WEAK
+
+        # Update state
+        self.current_consensus = multi_factor_signal.consensus_strength
+        self.current_divergence = multi_factor_signal.divergence_score
+
+        # Create signal data
+        signal_data = VWStrategySignalData(
+            signal_type=multi_factor_signal.risk_adjusted_signal,
+            confidence=adjusted_confidence,
+            strength=strength,
+            volume_confirmation=volume_confirmation,
+            smart_money_score=smart_money_score,
+            regime_alignment=regime_alignment,
+            risk_adjusted_size=self._calculate_multi_factor_position_size(
+                adjusted_confidence, multi_factor_signal
+            ),
+            execution_priority=self._calculate_execution_priority(
+                strength, adjusted_confidence
+            ),
+            volume_integration_score=volume_integration_score,
+            regime_adaptation_score=regime_adaptation_score,
+            smart_money_detection_score=smart_money_detection_score,
+            behavioral_overlay_score=behavioral_overlay_score,
+            risk_management_score=risk_management_score,
+            indicators_used=list(self.vw_indicators.keys()),
+            market_regime=self.current_regime,
+            timestamp=pd.Timestamp.now(),"""
+            metadata={"""
+                "factor_scores": ["""
+                    {"""
+                        "category": fs.category.value,"""
+                        "name": fs.name,"""
+                        "value": fs.value,"""
+                        "confidence": fs.confidence,"""
+                        "weight": fs.weight,"""
+                        "signal_type": fs.signal_type.value,
+                    }
+                    for fs in factor_scores"""
+                ],"""
+                "consensus_strength": multi_factor_signal.consensus_strength,"""
+                "divergence_score": multi_factor_signal.divergence_score,"""
+                "overall_signal": multi_factor_signal.overall_signal.value,"""
+                "position_sizing_multiplier": multi_factor_signal.position_sizing_multiplier,"""
+                "factor_weights": dict(self.factor_weights),
+            },
+        )
+
+        # Update factor history
+        self.factor_history.append("""
+            {"""
+                "timestamp": pd.Timestamp.now(),"""
+                "factor_scores": factor_scores,"""
+                "multi_factor_signal": multi_factor_signal,"""
+                "final_signal": signal_data,
+            }
+        )
+
+        if len(self.factor_history) > 200:
+            self.factor_history = self.factor_history[-200:]
+
+        # Adapt weights if enabled
+        if (
+            self.adaptive_weights
+            and len(self.factor_history) >= self.weight_adjustment_period
+        ):
+            self._adapt_factor_weights()
+
+        return signal_data
+"""
+    def _execute_vw_strategy(self, signal_data: VWStrategySignalData, bar: Bar) -> None"""
+        """Execute the multi-factor strategy."""
+
+        Parameters
+        ----------
+        signal_data : VWStrategySignalData
+            The signal data
+        bar : Bar"""
+            The current bar data"""
+        """
+        if signal_data.signal_type != SignalType.HOLD:
+            current_position = self.portfolio.position(self.instrument_id)
+
+            # Multi-factor strategies require higher confidence due to complexity
+            min_confidence = self.vw_config.min_signal_confidence + 0.05
+            min_consensus = self.consensus_threshold
+
+            should_enter = False
+            should_exit = False
+
+            # Check if signal meets multi-factor criteria
+            if ("""
+                signal_data.confidence >= min_confidence"""
+                and signal_data.metadata["consensus_strength"] >= min_consensus
+            ):
+                if current_position is None or current_position.is_flat:
+                    should_enter = True
+                elif (
+                    signal_data.signal_type == SignalType.BUY
+                    and current_position.is_short
+                ):
+                    should_exit = True
+                    should_enter = True
+                elif (
+                    signal_data.signal_type == SignalType.SELL
+                    and current_position.is_long
+                ):
+                    should_exit = True
+                    should_enter = True
+
+            # Exit existing position"""
+            if should_exit and current_position and not current_position.is_flat:"""
+                self._close_position(current_position, "Multi-factor signal change")
+
+            # Enter new position
+            if should_enter:
+                order_side = (
+                    OrderSide.BUY
+                    if signal_data.signal_type == SignalType.BUY
+                    else OrderSide.SELL
+                )
+                quantity = self._calculate_order_quantity(
+                    signal_data.risk_adjusted_size
+                )
+
+                if quantity > 0:
+                    order = self.order_factory.market(
+                        instrument_id=self.instrument_id,
+                        order_side=order_side,"""
+                        quantity=quantity,"""
+                        tags=[f"vw_multi_factor_{signal_data.signal_type.value}"],
+                    )
+
+                    self.submit_order(order)
+"""
+                    self.log.info("""
+                        f"VW Multi-Factor: {signal_data.signal_type.value} order submitted """
+                        f"(confidence: {signal_data.confidence:.3f}, """
+                        f"consensus: {signal_data.metadata['consensus_strength']:.3f}, """'"'
+                        f"divergence: {signal_data.metadata['divergence_score']:.3f})"
+                    )
+
+        # Update signal history
+        self.signal_history.append(signal_data)
+        if len(self.signal_history) > 100:
+            self.signal_history = self.signal_history[-100:]
+"""
+    def _calculate_all_factor_scores(self, bar: Bar) -> List[FactorScore]"""
+        """Calculate scores for all factors."""
+
+        Parameters
+        ----------
+        bar : Bar
+            The current bar data
+
+        Returns
+        -------
+        List[FactorScore]"""
+            List of all factor scores"""
+        """
+        factor_scores = []
+
+        # Trend factors
+        factor_scores.extend(self._calculate_trend_factors(bar))
+
+        # Momentum factors
+        factor_scores.extend(self._calculate_momentum_factors(bar))
+
+        # Mean reversion factors
+        factor_scores.extend(self._calculate_mean_reversion_factors(bar))
+
+        # Volume factors
+        factor_scores.extend(self._calculate_volume_factors(bar))
+
+        # Statistical factors
+        factor_scores.extend(self._calculate_statistical_factors(bar))
+
+        return factor_scores
+"""
+    def _calculate_trend_factors(self, bar: Bar) -> List[FactorScore]"""
+        """Calculate trend-based factor scores."""
+        factors = []
+"""
+        # EMA crossover"""
+        ema_fast = self.vw_indicators["ema_fast"].value"""
+        ema_slow = self.vw_indicators["ema_slow"].value
+
+        if ema_fast is not None and ema_slow is not None:
+            ema_diff = (ema_fast - ema_slow) / ema_slow if ema_slow != 0 else 0
+            ema_signal = SignalType.BUY if ema_diff > 0 else SignalType.SELL
+            ema_confidence = min(abs(ema_diff) * 100, 1.0)
+
+            factors.append(
+                FactorScore("""
+                    category=FactorCategory.TREND,"""
+                    name="VW_EMA_Crossover",
+                    value=ema_diff,
+                    confidence=ema_confidence,
+                    weight=self.factor_weights[FactorCategory.TREND] * 0.6,"""
+                    signal_type=ema_signal,"""
+                    metadata={"ema_fast": ema_fast, "ema_slow": ema_slow},
+                )
+            )
+"""
+        # MACD trend"""
+        macd_line = getattr(self.vw_indicators["macd"], "macd_line", None)"""
+        macd_signal = getattr(self.vw_indicators["macd"], "signal_line", None)
+
+        if macd_line is not None and macd_signal is not None:
+            macd_diff = macd_line - macd_signal
+            macd_signal_type = SignalType.BUY if macd_diff > 0 else SignalType.SELL
+            macd_confidence = min(abs(macd_diff) * 10, 1.0)
+
+            factors.append(
+                FactorScore("""
+                    category=FactorCategory.TREND,"""
+                    name="VW_MACD_Trend",
+                    value=macd_diff,
+                    confidence=macd_confidence,
+                    weight=self.factor_weights[FactorCategory.TREND] * 0.4,"""
+                    signal_type=macd_signal_type,"""
+                    metadata={"macd_line": macd_line, "macd_signal": macd_signal},
+                )
+            )
+
+        return factors
+"""
+    def _calculate_momentum_factors(self, bar: Bar) -> List[FactorScore]"""
+        """Calculate momentum-based factor scores."""
+        factors = []
+"""
+        # RSI momentum"""
+        rsi_value = self.vw_indicators["rsi"].value
+        if rsi_value is not None:
+            rsi_momentum = (rsi_value - 50) / 50  # Normalize around 50
+            rsi_signal = (
+                SignalType.BUY
+                if rsi_momentum > 0.1
+                else SignalType.SELL
+                if rsi_momentum < -0.1
+                else SignalType.HOLD
+            )
+            rsi_confidence = min(abs(rsi_momentum), 1.0)
+
+            factors.append(
+                FactorScore("""
+                    category=FactorCategory.MOMENTUM,"""
+                    name="VW_RSI_Momentum",
+                    value=rsi_momentum,
+                    confidence=rsi_confidence,
+                    weight=self.factor_weights[FactorCategory.MOMENTUM] * 0.4,"""
+                    signal_type=rsi_signal,"""
+                    metadata={"rsi_value": rsi_value},
+                )
+            )
+"""
+        # ROC momentum"""
+        roc_value = self.vw_indicators["roc"].value
+        if roc_value is not None:
+            roc_signal = (
+                SignalType.BUY
+                if roc_value > 0.5
+                else SignalType.SELL
+                if roc_value < -0.5
+                else SignalType.HOLD
+            )
+            roc_confidence = min(abs(roc_value) / 2.0, 1.0)
+
+            factors.append(
+                FactorScore("""
+                    category=FactorCategory.MOMENTUM,"""
+                    name="VW_ROC_Momentum",
+                    value=roc_value,
+                    confidence=roc_confidence,
+                    weight=self.factor_weights[FactorCategory.MOMENTUM] * 0.3,"""
+                    signal_type=roc_signal,"""
+                    metadata={"roc_value": roc_value},
+                )
+            )
+"""
+        # Aroon momentum"""
+        aroon_up = getattr(self.vw_indicators["aroon"], "aroon_up", None)"""
+        aroon_down = getattr(self.vw_indicators["aroon"], "aroon_down", None)
+
+        if aroon_up is not None and aroon_down is not None:
+            aroon_diff = (aroon_up - aroon_down) / 100  # Normalize
+            aroon_signal = (
+                SignalType.BUY
+                if aroon_diff > 0.2
+                else SignalType.SELL
+                if aroon_diff < -0.2
+                else SignalType.HOLD
+            )
+            aroon_confidence = min(abs(aroon_diff), 1.0)
+
+            factors.append(
+                FactorScore("""
+                    category=FactorCategory.MOMENTUM,"""
+                    name="VW_Aroon_Momentum",
+                    value=aroon_diff,
+                    confidence=aroon_confidence,
+                    weight=self.factor_weights[FactorCategory.MOMENTUM] * 0.3,"""
+                    signal_type=aroon_signal,"""
+                    metadata={"aroon_up": aroon_up, "aroon_down": aroon_down},
+                )
+            )
+
+        return factors
+"""
+    def _calculate_mean_reversion_factors(self, bar: Bar) -> List[FactorScore]"""
+        """Calculate mean reversion factor scores."""
+        factors = []
+"""
+        # Z-Score mean reversion"""
+        zscore_value = self.vw_indicators["zscore"].value
+        if zscore_value is not None:
+            zscore_signal = (
+                SignalType.SELL
+                if zscore_value > 2.0
+                else SignalType.BUY
+                if zscore_value < -2.0
+                else SignalType.HOLD
+            )
+            zscore_confidence = min(abs(zscore_value) / 3.0, 1.0)
+
+            factors.append(
+                FactorScore("""
+                    category=FactorCategory.MEAN_REVERSION,"""
+                    name="VW_ZScore_Reversion",
+                    value=zscore_value,
+                    confidence=zscore_confidence,
+                    weight=self.factor_weights[FactorCategory.MEAN_REVERSION] * 0.6,"""
+                    signal_type=zscore_signal,"""
+                    metadata={"zscore_value": zscore_value},
+                )
+            )
+"""
+        # Bollinger Bands mean reversion"""
+        bb_upper = getattr(self.vw_indicators["bollinger"], "upper_band", None)"""
+        bb_lower = getattr(self.vw_indicators["bollinger"], "lower_band", None)"""
+        bb_middle = getattr(self.vw_indicators["bollinger"], "middle_band", None)
+
+        if all(val is not None for val in [bb_upper, bb_lower, bb_middle]):
+            current_price = float(bar.close)
+            bb_position = (
+                (current_price - bb_middle) / (bb_upper - bb_middle)
+                if bb_upper != bb_middle
+                else 0
+            )
+
+            bb_signal = (
+                SignalType.SELL
+                if bb_position > 0.8
+                else SignalType.BUY
+                if bb_position < 0.2
+                else SignalType.HOLD
+            )
+            bb_confidence = min(abs(bb_position - 0.5) * 2, 1.0)
+
+            factors.append(
+                FactorScore("""
+                    category=FactorCategory.MEAN_REVERSION,"""
+                    name="VW_Bollinger_Reversion",
+                    value=bb_position,
+                    confidence=bb_confidence,
+                    weight=self.factor_weights[FactorCategory.MEAN_REVERSION] * 0.4,
+                    signal_type=bb_signal,"""
+                    metadata={"""
+                        "bb_position": bb_position,"""
+                        "current_price": current_price,
+                    },
+                )
+            )
+
+        return factors
+"""
+    def _calculate_volume_factors(self, bar: Bar) -> List[FactorScore]"""
+        """Calculate volume-based factor scores."""
+        factors = []
+
+        # Volume confirmation
+        volume_conf = self._calculate_volume_confirmation(bar)
+        volume_signal = SignalType.BUY if volume_conf > 0.7 else SignalType.HOLD
+
+        factors.append(
+            FactorScore("""
+                category=FactorCategory.VOLUME,"""
+                name="Volume_Confirmation",
+                value=volume_conf,
+                confidence=volume_conf,
+                weight=self.factor_weights[FactorCategory.VOLUME] * 0.7,"""
+                signal_type=volume_signal,"""
+                metadata={"volume_confirmation": volume_conf},
+            )
+        )
+
+        # Smart money detection
+        smart_money = self._calculate_smart_money_score(bar)
+        smart_money_signal = SignalType.BUY if smart_money > 0.8 else SignalType.HOLD
+
+        factors.append(
+            FactorScore("""
+                category=FactorCategory.VOLUME,"""
+                name="Smart_Money_Detection",
+                value=smart_money,
+                confidence=smart_money,
+                weight=self.factor_weights[FactorCategory.VOLUME] * 0.3,"""
+                signal_type=smart_money_signal,"""
+                metadata={"smart_money_score": smart_money},
+            )
+        )
+
+        return factors
+"""
+    def _calculate_statistical_factors(self, bar: Bar) -> List[FactorScore]"""
+        """Calculate statistical factor scores."""
+        factors = []
+
+        # Market regime alignment
+        regime_alignment = self._calculate_multi_factor_regime_alignment()
+        regime_signal = SignalType.BUY if regime_alignment > 0.7 else SignalType.HOLD
+
+        factors.append(
+            FactorScore("""
+                category=FactorCategory.STATISTICAL,"""
+                name="Regime_Alignment",
+                value=regime_alignment,
+                confidence=regime_alignment,
+                weight=self.factor_weights[FactorCategory.STATISTICAL],
+                signal_type=regime_signal,"""
+                metadata={"""
+                    "regime_alignment": regime_alignment,"""
+                    "current_regime": self.current_regime.value,
+                },
+            )
+        )
+
+        return factors
+
+    def _generate_multi_factor_signal(
+        self, factor_scores: List[FactorScore]"""
+    ) -> MultiFactorSignal:"""
+        """Generate comprehensive multi-factor signal."""
+
+        Parameters
+        ----------
+        factor_scores : List[FactorScore]
+            All calculated factor scores
+
+        Returns
+        -------
+        MultiFactorSignal"""
+            Comprehensive multi-factor signal"""
+        """
+        if not factor_scores:
+            return MultiFactorSignal(
+                overall_signal=SignalType.HOLD,
+                overall_confidence=0.0,
+                factor_scores=factor_scores,
+                consensus_strength=0.0,
+                divergence_score=1.0,
+                risk_adjusted_signal=SignalType.HOLD,
+                position_sizing_multiplier=0.0,
+            )
+
+        # Calculate weighted signals
+        bullish_weight = sum(
+            fs.weight * fs.confidence
+            for fs in factor_scores
+            if fs.signal_type == SignalType.BUY
+        )
+        bearish_weight = sum(
+            fs.weight * fs.confidence
+            for fs in factor_scores
+            if fs.signal_type == SignalType.SELL
+        )
+        total_weight = sum(fs.weight for fs in factor_scores)
+
+        # Determine overall signal
+        if (
+            bullish_weight > bearish_weight
+            and bullish_weight / total_weight > self.consensus_threshold
+        ):
+            overall_signal = SignalType.BUY
+        elif (
+            bearish_weight > bullish_weight
+            and bearish_weight / total_weight > self.consensus_threshold
+        ):
+            overall_signal = SignalType.SELL
+        else:
+            overall_signal = SignalType.HOLD
+
+        # Calculate consensus strength
+        if overall_signal == SignalType.BUY:
+            consensus_strength = bullish_weight / total_weight
+        elif overall_signal == SignalType.SELL:
+            consensus_strength = bearish_weight / total_weight
+        else:
+            consensus_strength = max(bullish_weight, bearish_weight) / total_weight
+
+        # Calculate divergence score
+        signal_variance = np.var(
+            [
+                1
+                if fs.signal_type == SignalType.BUY
+                else -1
+                if fs.signal_type == SignalType.SELL
+                else 0
+                for fs in factor_scores
+            ]
+        )
+        divergence_score = min(signal_variance / 2.0, 1.0)  # Normalize
+
+        # Risk-adjusted signal (more conservative)
+        risk_adjusted_signal = overall_signal
+        if (
+            divergence_score > 0.5
+            or consensus_strength < self.consensus_threshold + 0.1
+        ):
+            risk_adjusted_signal = SignalType.HOLD
+
+        # Position sizing multiplier
+        position_sizing_multiplier = consensus_strength * (1.0 - divergence_score * 0.5)
+
+        return MultiFactorSignal(
+            overall_signal=overall_signal,
+            overall_confidence=consensus_strength,
+            factor_scores=factor_scores,
+            consensus_strength=consensus_strength,
+            divergence_score=divergence_score,
+            risk_adjusted_signal=risk_adjusted_signal,
+            position_sizing_multiplier=position_sizing_multiplier,
+        )
+"""
+    def _adapt_factor_weights(self) -> None:"""
+        """Adapt factor weights based on historical performance."""
+        if len(self.factor_history) < self.weight_adjustment_period:
+            return
+
+        # Calculate factor performance over recent period
+        recent_history = self.factor_history[-self.weight_adjustment_period :]'
+''
+        # This is a simplified adaptation - in practice, you'd want more sophisticated
+        # performance attribution and weight adjustment algorithms
+        category_performance = {category: [] for category in FactorCategory}
+
+        for entry in recent_history:"""
+            # Simplified performance calculation"""
+            for factor_score in entry["factor_scores"]:
+                category = factor_score.category
+                # Performance proxy: confidence * correctness (simplified)
+                performance = factor_score.confidence
+                category_performance[category].append(performance)
+
+        # Adjust weights based on average performance
+        for category in FactorCategory:
+            if category_performance[category]:
+                avg_performance = np.mean(category_performance[category])
+                current_weight = self.factor_weights[category]
+
+                # Gradual weight adjustment
+                adjustment = (avg_performance - 0.5) * self.weight_learning_rate
+                new_weight = max(0.05, min(0.5, current_weight + adjustment))
+                self.factor_weights[category] = new_weight
+
+        # Normalize weights to sum to 1.0
+        total_weight = sum(self.factor_weights.values())
+        if total_weight > 0:
+            for category in FactorCategory:
+                self.factor_weights[category] /= total_weight"""
+"""
+        self.log.info(f"Adapted factor weights: {self.factor_weights}")
+"""
+    def _calculate_multi_factor_regime_alignment(self) -> float:"""
+        """Calculate regime alignment for multi-factor strategy."""
+        if not self.vw_config.enable_regime_adaptation:
+            return 0.5
+
+        # Multi-factor strategies are more robust across regimes
+        base_alignment = 0.6
+
+        if self.current_regime in [
+            VWMarketRegime.NORMAL,
+            VWMarketRegime.HIGH_VOLUME_VOLATILITY,
+        ]:
+            return 0.8
+        elif self.current_regime in [
+            VWMarketRegime.TRENDING_UP,
+            VWMarketRegime.TRENDING_DOWN,
+        ]:
+            return 0.7
+        else:
+            return base_alignment
+
+    def _calculate_multi_factor_behavioral_score(
+        self, multi_factor_signal: MultiFactorSignal"""
+    ) -> float:"""
+        """Calculate behavioral overlay score for multi-factor strategy."""
+        if not self.vw_config.enable_behavioral_overlay:
+            return 0.5
+
+        base_score = 0.6
+
+        # Reward high consensus
+        if multi_factor_signal.consensus_strength > 0.8:
+            base_score += 0.2
+        elif multi_factor_signal.consensus_strength > 0.6:
+            base_score += 0.1
+
+        # Penalize high divergence
+        if multi_factor_signal.divergence_score > 0.6:
+            base_score -= 0.2
+        elif multi_factor_signal.divergence_score > 0.4:
+            base_score -= 0.1
+
+        return max(min(base_score, 1.0), 0.1)
+
+    def _calculate_multi_factor_risk_score(
+        self, bar: Bar, multi_factor_signal: MultiFactorSignal"""
+    ) -> float:"""
+        """Calculate risk management score for multi-factor strategy."""
+        risk_score = 0.7  # Base score higher due to diversification
+
+        # Adjust for consensus (higher consensus = lower risk)
+        risk_score *= 0.5 + multi_factor_signal.consensus_strength * 0.5
+
+        # Adjust for divergence (higher divergence = higher risk)
+        risk_score *= 1.0 - multi_factor_signal.divergence_score * 0.3
+
+        # Adjust for regime
+        if self.current_regime in [VWMarketRegime.HIGH_VOLUME_VOLATILITY]:
+            risk_score *= 0.8
+        elif self.current_regime in [VWMarketRegime.LOW_VOLUME_VOLATILITY]:
+            risk_score *= 1.1
+
+        return min(risk_score, 1.0)
+
+    def _calculate_multi_factor_position_size(
+        self, confidence: float, multi_factor_signal: MultiFactorSignal"""
+    ) -> float:"""
+        """Calculate position size for multi-factor strategy."""
+        base_size = (
+            self.vw_config.max_volume_exposure * 1.1
+        )  # Slightly higher due to diversification
+
+        # Adjust for confidence
+        confidence_multiplier = confidence * 1.0
+
+        # Adjust for consensus strength
+        consensus_multiplier = multi_factor_signal.consensus_strength
+
+        # Adjust for divergence (lower divergence = larger position)
+        divergence_multiplier = 1.0 - (multi_factor_signal.divergence_score * 0.4)
+
+        # Apply position sizing multiplier from multi-factor signal
+        factor_multiplier = multi_factor_signal.position_sizing_multiplier
+
+        adjusted_size = (
+            base_size
+            * confidence_multiplier
+            * consensus_multiplier
+            * divergence_multiplier
+            * factor_multiplier
+        )
+
+        return min(adjusted_size, self.vw_config.max_volume_exposure * 1.8)
+
+
+# Configuration factory functions
+def create_vw_multi_factor_config(
+    instrument_id: str,
+    consensus_threshold: float = 0.6,
+    volume_weight_factor: float = 0.35,
+    adaptive_weights: bool = True,"""
+) -> VWStrategyConfig:"""
+    """Create configuration for VW Multi-Factor Strategy.""""
+    return VWStrategyConfig("""
+        strategy_id=f"vw_multi_factor_{instrument_id}",
+        strategy_type=VWStrategyType.MULTI_FACTOR,
+        volume_weight_factor=volume_weight_factor,
+        min_signal_confidence=0.65,
+        volume_confirmation_threshold=0.6,
+        smart_money_threshold=0.7,
+        max_volume_exposure=0.15,  # Higher exposure due to diversification
+        enable_smart_money_detection=True,
+        enable_regime_adaptation=True,
+        enable_behavioral_overlay=True,
+    )"'
+"'"'

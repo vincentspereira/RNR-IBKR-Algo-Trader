@@ -1,0 +1,496 @@
+# Multi-Source Data Feeds Configuration with Fallback Mechanism
+# Institutional-Grade Data Feed Management for Algorithmic Trading System
+
+version: "1.0"
+metadata:
+  name: "Multi-Source Data Feeds Configuration"
+  description: "Complete fallback mechanism for all asset classes"
+  created: "2024-01-15"
+  updated: "2024-01-15"
+  compliance:
+    - "SOX"
+    - "MiFID II"
+    - "GDPR"
+
+# Global Configuration
+global_settings:
+  timeout_seconds: 30
+  retry_attempts: 3
+  retry_delay_seconds: 2
+  circuit_breaker:
+    failure_threshold: 5
+    recovery_timeout: 300
+  rate_limiting:
+    requests_per_minute: 1000
+    burst_limit: 100
+  caching:
+    enabled: true
+    ttl_seconds: 60
+  monitoring:
+    health_check_interval: 30
+    alert_threshold: 0.95
+
+# Asset Class Configurations
+asset_classes:
+  stocks_etfs:
+    name: "Stocks & ETFs"
+    description: "Global equities and exchange-traded funds"
+    primary_source: "yahoo_finance"
+    fallback_chain:
+      - "interactive_brokers"
+      - "alpha_vantage"
+      - "finnhub"
+      - "twelve_data"
+      - "polygon"
+    data_types:
+      - "real_time_quotes"
+      - "historical_data"
+      - "fundamentals"
+      - "dividends"
+      - "splits"
+    update_frequency: "1s"
+
+  stock_futures:
+    name: "Stock Futures & Index Futures"
+    description: "E-mini S&P 500, Nasdaq-100, etc."
+    primary_source: "yahoo_finance"
+    fallback_chain:
+      - "interactive_brokers"
+      - "investing_com"
+      - "cme_group"
+      - "barchart"
+    data_types:
+      - "real_time_quotes"
+      - "historical_data"
+      - "open_interest"
+      - "volume"
+    update_frequency: "1s"
+
+  stock_options:
+    name: "Stock Options & Index Options"
+    description: "Calls, puts on equities and indices"
+    primary_source: "interactive_brokers"
+    fallback_chain:
+      - "yahoo_finance"
+      - "cboe"
+      - "spiderrock"
+    data_types:
+      - "options_chain"
+      - "implied_volatility"
+      - "greeks"
+      - "open_interest"
+      - "volume"
+    update_frequency: "5s"
+    special_requirements:
+      - "historical_options_chain_5_years"
+      - "real_time_iv_surfaces"
+      - "dividend_forecast_integration"
+
+  forex:
+    name: "Forex, Forex Futures & Forex Options"
+    description: "EUR/USD, G10 currencies, etc."
+    primary_source: "oanda"
+    fallback_chain:
+      - "interactive_brokers"
+      - "yahoo_finance"
+      - "cme_group"
+      - "dxfeed"
+    data_types:
+      - "real_time_quotes"
+      - "historical_data"
+      - "forward_rates"
+      - "cross_rates"
+    update_frequency: "1s"
+
+  commodities:
+    name: "Commodities, Commodity Futures & Options"
+    description: "Crude oil, gold, corn, etc."
+    primary_source: "yahoo_finance"
+    fallback_chain:
+      - "interactive_brokers"
+      - "tradingcharts"
+      - "cme_group"
+      - "barchart"
+    data_types:
+      - "real_time_quotes"
+      - "historical_data"
+      - "open_interest"
+      - "volume"
+      - "warehouse_stocks"
+    update_frequency: "5s"
+
+  cryptocurrency:
+    name: "Cryptocurrency, Crypto Futures & Options"
+    description: "Bitcoin, Ethereum, etc."
+    primary_source: "coinbase"
+    fallback_chain:
+      - "interactive_brokers"
+      - "binance_india"
+      - "alpha_vantage"
+    data_types:
+      - "real_time_quotes"
+      - "historical_data"
+      - "order_book"
+      - "trades"
+    update_frequency: "1s"
+
+# Data Source Configurations
+data_sources:
+  yahoo_finance:
+    name: "Yahoo Finance"
+    type: "free"
+    api_endpoint: "https://query1.finance.yahoo.com/v8/finance/chart/"
+    rate_limit: 2000  # requests per hour
+    supported_assets:
+      - "stocks_etfs"
+      - "stock_futures"
+      - "commodities"
+      - "forex"
+    authentication:
+      type: "none"
+    features:
+      - "historical_data"
+      - "delayed_quotes"
+      - "fundamentals"
+
+  interactive_brokers:
+    name: "Interactive Brokers"
+    type: "premium"
+    api_endpoint: "tws_api"
+    supported_assets:
+      - "stocks_etfs"
+      - "stock_futures"
+      - "stock_options"
+      - "forex"
+      - "commodities"
+      - "cryptocurrency"
+    authentication:
+      type: "tws_connection"
+      paper_trading: true
+      live_trading: false  # Will be enabled after paper trading validation
+    features:
+      - "real_time_data"
+      - "historical_data"
+      - "options_chain"
+      - "level_2_data"
+
+  alpha_vantage:
+    name: "Alpha Vantage"
+    type: "freemium"
+    api_endpoint: "https://www.alphavantage.co/query"
+    rate_limit: 5  # requests per minute (free tier)
+    supported_assets:
+      - "stocks_etfs"
+      - "cryptocurrency"
+    authentication:
+      type: "api_key"
+      key_env: "ALPHA_VANTAGE_API_KEY"
+    features:
+      - "real_time_data"
+      - "historical_data"
+      - "fundamentals"
+      - "technical_indicators"
+
+  finnhub:
+    name: "Finnhub"
+    type: "freemium"
+    api_endpoint: "https://finnhub.io/api/v1/"
+    rate_limit: 60  # requests per minute (free tier)
+    supported_assets:
+      - "stocks_etfs"
+    authentication:
+      type: "api_key"
+      key_env: "FINNHUB_API_KEY"
+    features:
+      - "real_time_quotes"
+      - "company_fundamentals"
+      - "news"
+
+  twelve_data:
+    name: "Twelve Data"
+    type: "freemium"
+    api_endpoint: "https://api.twelvedata.com/"
+    rate_limit: 800  # requests per day (free tier)
+    supported_assets:
+      - "stocks_etfs"
+    authentication:
+      type: "api_key"
+      key_env: "TWELVE_DATA_API_KEY"
+    features:
+      - "real_time_data"
+      - "historical_data"
+      - "technical_indicators"
+
+  polygon:
+    name: "Polygon.io"
+    type: "freemium"
+    api_endpoint: "https://api.polygon.io/"
+    rate_limit: 5  # requests per minute (free tier)
+    supported_assets:
+      - "stocks_etfs"
+    authentication:
+      type: "api_key"
+      key_env: "POLYGON_API_KEY"
+    features:
+      - "real_time_data"
+      - "historical_data"
+      - "market_data"
+
+  investing_com:
+    name: "Investing.com"
+    type: "free"
+    api_endpoint: "web_scraping"
+    rate_limit: 100  # requests per hour
+    supported_assets:
+      - "stock_futures"
+    authentication:
+      type: "none"
+    features:
+      - "delayed_quotes"
+      - "historical_data"
+
+  cme_group:
+    name: "CME Group"
+    type: "free"
+    api_endpoint: "https://www.cmegroup.com/"
+    rate_limit: 1000  # requests per hour
+    supported_assets:
+      - "stock_futures"
+      - "forex"
+      - "commodities"
+    authentication:
+      type: "none"
+    features:
+      - "delayed_data"
+      - "settlement_prices"
+      - "volume_open_interest"
+
+  barchart:
+    name: "Barchart"
+    type: "freemium"
+    api_endpoint: "https://marketdata.websol.barchart.com/"
+    rate_limit: 400  # requests per day (free tier)
+    supported_assets:
+      - "stock_futures"
+      - "commodities"
+    authentication:
+      type: "api_key"
+      key_env: "BARCHART_API_KEY"
+    features:
+      - "delayed_quotes"
+      - "historical_data"
+
+  cboe:
+    name: "Cboe Global Markets"
+    type: "free"
+    api_endpoint: "https://www.cboe.com/"
+    rate_limit: 1000  # requests per hour
+    supported_assets:
+      - "stock_options"
+    authentication:
+      type: "none"
+    features:
+      - "delayed_options_data"
+      - "volatility_indices"
+
+  spiderrock:
+    name: "SpiderRock"
+    type: "freemium"
+    api_endpoint: "https://api.spiderrock.com/"
+    rate_limit: 100  # requests per hour (free tier)
+    supported_assets:
+      - "stock_options"
+    authentication:
+      type: "api_key"
+      key_env: "SPIDERROCK_API_KEY"
+    features:
+      - "delayed_options_data"
+      - "implied_volatility"
+
+  oanda:
+    name: "Oanda"
+    type: "freemium"
+    api_endpoint: "https://api-fxtrade.oanda.com/"
+    rate_limit: 100  # requests per second
+    supported_assets:
+      - "forex"
+    authentication:
+      type: "api_key"
+      key_env: "OANDA_API_KEY"
+    features:
+      - "real_time_quotes"
+      - "historical_data"
+      - "order_book"
+
+  dxfeed:
+    name: "dxFeed"
+    type: "premium"
+    api_endpoint: "https://tools.dxfeed.com/"
+    rate_limit: 1000  # requests per minute
+    supported_assets:
+      - "forex"
+    authentication:
+      type: "api_key"
+      key_env: "DXFEED_API_KEY"
+    features:
+      - "real_time_data"
+      - "historical_data"
+
+  tradingcharts:
+    name: "TradingCharts"
+    type: "free"
+    api_endpoint: "web_scraping"
+    rate_limit: 100  # requests per hour
+    supported_assets:
+      - "commodities"
+    authentication:
+      type: "none"
+    features:
+      - "delayed_quotes"
+      - "charts"
+
+  coinbase:
+    name: "Coinbase"
+    type: "free"
+    api_endpoint: "https://api.coinbase.com/v2/"
+    rate_limit: 10000  # requests per hour
+    supported_assets:
+      - "cryptocurrency"
+    authentication:
+      type: "api_key"
+      key_env: "COINBASE_API_KEY"
+    features:
+      - "real_time_quotes"
+      - "historical_data"
+      - "order_book"
+
+  binance_india:
+    name: "Binance India (WazirX)"
+    type: "free"
+    api_endpoint: "https://api.wazirx.com/"
+    rate_limit: 1200  # requests per minute
+    supported_assets:
+      - "cryptocurrency"
+    authentication:
+      type: "api_key"
+      key_env: "WAZIRX_API_KEY"
+    features:
+      - "real_time_quotes"
+      - "historical_data"
+      - "order_book"
+
+# Fallback Logic Configuration
+fallback_logic:
+  trigger_conditions:
+    - "connection_timeout"
+    - "rate_limit_exceeded"
+    - "authentication_failure"
+    - "data_quality_issues"
+    - "service_unavailable"
+
+  switching_criteria:
+    latency_threshold_ms: 5000
+    error_rate_threshold: 0.1
+    data_staleness_threshold_seconds: 300
+
+  recovery_logic:
+    health_check_interval: 60
+    recovery_attempts: 3
+    backoff_strategy: "exponential"
+    max_backoff_seconds: 300
+
+# Data Quality Monitoring
+data_quality:
+  validation_rules:
+    price_range_check: true
+    timestamp_validation: true
+    duplicate_detection: true
+    completeness_check: true
+
+  anomaly_detection:
+    enabled: true
+    price_spike_threshold: 0.1  # 10% price movement
+    volume_spike_threshold: 5.0  # 5x average volume
+
+  alerts:
+    quality_threshold: 0.95
+    notification_channels:
+      - "teams"
+      - "discord"
+      - "email"
+
+# Kafka Integration
+kafka_integration:
+  bootstrap_servers:
+    - "localhost:9092"
+  topics:
+    raw_data: "market-data-raw"
+    processed_data: "market-data-processed"
+    alerts: "data-feed-alerts"
+
+  producer_config:
+    acks: "all"
+    retries: 3
+    batch_size: 16384
+    linger_ms: 5
+
+  consumer_config:
+    group_id: "data-feed-consumer"
+    auto_offset_reset: "latest"
+    enable_auto_commit: false
+
+# Monitoring and Alerting
+monitoring:
+  metrics:
+    - "data_feed_latency"
+    - "data_feed_availability"
+    - "error_rate"
+    - "throughput"
+    - "data_quality_score"
+
+  dashboards:
+    grafana_dashboard: "data-feeds-monitoring"
+    prometheus_metrics: true
+
+  alerts:
+    critical_latency_ms: 10000
+    critical_error_rate: 0.2
+    availability_threshold: 0.99
+
+# Compliance and Audit
+compliance:
+  data_retention:
+    raw_data_days: 90
+    processed_data_days: 2555  # 7 years
+    audit_logs_days: 2555
+
+  audit_trail:
+    enabled: true
+    log_level: "INFO"
+    include_data_samples: false
+
+  regulatory_requirements:
+    sox_compliance: true
+    mifid_ii_compliance: true
+    gdpr_compliance: true
+
+# Performance Optimization
+performance:
+  connection_pooling:
+    enabled: true
+    max_connections: 100
+    idle_timeout: 300
+
+  caching_strategy:
+    redis_enabled: true
+    cache_ttl: 60
+    cache_size_mb: 1024
+
+  compression:
+    enabled: true
+    algorithm: "gzip"
+
+  parallel_processing:
+    enabled: true
+    worker_threads: 8
+    queue_size: 10000

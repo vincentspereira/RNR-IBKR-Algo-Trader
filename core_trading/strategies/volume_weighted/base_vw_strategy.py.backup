@@ -1,0 +1,566 @@
+"""Base Volume-Weighted Strategy Implementation.
+
+This module provides the foundational class for all volume-weighted trading strategies,
+implementing the 5-pillar institutional-grade architecture with enhanced volume integration.
+"""
+
+from abc import ABC, abstractmethod
+from dataclasses import dataclass
+from decimal import Decimal
+from enum import Enum
+from typing import Any, Dict, List, Optional, Union
+
+import numpy as np
+import pandas as pd
+from nautilus_trader.core.data import Data
+from nautilus_trader.model.data.bar import Bar
+from nautilus_trader.model.data.tick import QuoteTick, TradeTick
+from nautilus_trader.model.enums import OrderSide, PositionSide
+from nautilus_trader.model.identifiers import InstrumentId
+from nautilus_trader.model.instruments import Instrument
+from nautilus_trader.model.orders import Order
+from nautilus_trader.model.position import Position
+
+from ...analysis.indicators.custom_volume_weighted import (
+    BaseCustomVWIndicator,
+    VWIndicatorType,
+    VWMarketRegime,
+    VWSignalStrength,
+)
+from ...core.augmented_base_institutional_strategy import (
+    AugmentedBaseInstitutionalStrategy,
+    AugmentedPillar,
+    AugmentedSignalData,
+    AugmentedStrategyConfig,
+    MarketRegime,
+    SignalType,
+)
+
+
+class VWStrategyType(Enum):
+    """Volume-weighted strategy types."""
+
+    TREND_FOLLOWING = "trend_following"
+    MEAN_REVERSION = "mean_reversion"
+    MOMENTUM = "momentum"
+    BREAKOUT = "breakout"
+    MULTI_FACTOR = "multi_factor"
+    REGIME_ADAPTIVE = "regime_adaptive"
+
+
+class VWSignalConfidence(Enum):
+    """Volume-weighted signal confidence levels."""
+
+    VERY_LOW = "very_low"
+    LOW = "low"
+    MEDIUM = "medium"
+    HIGH = "high"
+    VERY_HIGH = "very_high"
+
+
+@dataclass
+class VWStrategySignalData:
+    """Volume-weighted strategy signal data with institutional-grade metadata."""
+
+    signal_type: SignalType
+    confidence: float
+    strength: VWSignalStrength
+    volume_confirmation: float
+    smart_money_score: float
+    regime_alignment: float
+    risk_adjusted_size: float
+    execution_priority: int
+
+    # Pillar-specific scores
+    volume_integration_score: float
+    regime_adaptation_score: float
+    smart_money_detection_score: float
+    behavioral_overlay_score: float
+    risk_management_score: float
+
+    # Additional metadata
+    indicators_used: List[str]
+    market_regime: VWMarketRegime
+    timestamp: pd.Timestamp
+    metadata: Dict[str, Any]
+
+
+@dataclass
+class VWStrategyConfig(AugmentedStrategyConfig):
+    """Configuration for volume-weighted strategies."""
+
+    # Strategy-specific parameters
+    strategy_type: VWStrategyType = VWStrategyType.TREND_FOLLOWING
+    min_volume_threshold: float = 1000.0
+    volume_lookback_period: int = 20
+
+    # Volume integration parameters
+    volume_weight_factor: float = 0.3
+    volume_confirmation_threshold: float = 0.6
+    smart_money_threshold: float = 0.7
+
+    # Market regime parameters
+    regime_detection_period: int = 50
+    volatility_threshold: float = 0.02
+    trend_strength_threshold: float = 0.5
+
+    # Risk management parameters
+    max_volume_exposure: float = 0.1
+    volume_risk_multiplier: float = 1.5
+    regime_risk_adjustment: float = 0.8
+
+    # Signal generation parameters
+    signal_aggregation_method: str = "weighted_average"
+    min_signal_confidence: float = 0.5
+    signal_decay_factor: float = 0.95
+
+    # Performance optimization
+    enable_smart_money_detection: bool = True
+    enable_regime_adaptation: bool = True
+    enable_behavioral_overlay: bool = True
+
+
+class BaseVWStrategy(AugmentedBaseInstitutionalStrategy, ABC):
+    """Base class for all volume-weighted trading strategies.
+
+    This class implements the 5-pillar institutional-grade architecture:
+    1. Volume Integration & Confirmation
+    2. Market Regime Adaptation
+    3. Smart Money Detection
+    4. Behavioral Overlay
+    5. Risk Management Integration
+    """
+
+    def __init__(
+        self,
+        config: VWStrategyConfig,
+        instrument_id: InstrumentId,
+    ):
+        """Initialize the volume-weighted strategy.
+
+        Parameters
+        ----------
+        config : VWStrategyConfig
+            Strategy configuration
+        instrument_id : InstrumentId
+            The instrument ID for the strategy
+        """
+        super().__init__(config, instrument_id)
+
+        self.vw_config = config
+        self.strategy_type = config.strategy_type
+
+        # Volume-weighted indicators
+        self.vw_indicators: Dict[str, BaseCustomVWIndicator] = {}
+
+        # Volume analysis data
+        self.volume_data: List[float] = []
+        self.price_volume_data: List[tuple] = []
+        self.smart_money_signals: List[float] = []
+
+        # Market regime tracking
+        self.current_regime = VWMarketRegime.NORMAL
+        self.regime_history: List[VWMarketRegime] = []
+        self.regime_confidence = 0.0
+
+        # Signal aggregation
+        self.signal_history: List[VWStrategySignalData] = []
+        self.composite_signal_strength = 0.0
+
+        # Performance tracking
+        self.volume_performance_metrics: Dict[str, float] = {}
+
+    def on_start(self) -> None:
+        """Actions to be performed when the strategy is started."""
+        super().on_start()
+        self._initialize_vw_indicators()
+        self.log.info(f"Volume-weighted strategy started: {self.strategy_type.value}")
+
+    def on_stop(self) -> None:
+        """Actions to be performed when the strategy is stopped."""
+        super().on_stop()
+        self._cleanup_vw_resources()
+        self.log.info("Volume-weighted strategy stopped")
+
+    def on_reset(self) -> None:
+        """Reset the strategy state."""
+        super().on_reset()
+        self._reset_vw_state()
+
+    def on_bar(self, bar: Bar) -> None:
+        """Handle bar data updates.
+
+        Parameters
+        ----------
+        bar : Bar
+            The bar data
+        """
+        super().on_bar(bar)
+
+        # Update volume data
+        self._update_volume_data(bar)
+
+        # Update volume-weighted indicators
+        self._update_vw_indicators(bar)
+
+        # Detect market regime
+        self._update_market_regime(bar)
+
+        # Generate volume-weighted signals
+        signal_data = self._generate_vw_signals(bar)
+
+        if (
+            signal_data
+            and signal_data.confidence >= self.vw_config.min_signal_confidence
+        ):
+            # Execute strategy logic
+            self._execute_vw_strategy(signal_data, bar)
+
+        # Update performance metrics
+        self._update_vw_performance_metrics(bar)
+
+    def on_quote_tick(self, tick: QuoteTick) -> None:
+        """Handle quote tick updates.
+
+        Parameters
+        ----------
+        tick : QuoteTick
+            The quote tick
+        """
+        super().on_quote_tick(tick)
+        # Volume-weighted strategies primarily use bar data
+
+    def on_trade_tick(self, tick: TradeTick) -> None:
+        """Handle trade tick updates.
+
+        Parameters
+        ----------
+        tick : TradeTick
+            The trade tick
+        """
+        super().on_trade_tick(tick)
+
+        # Update real-time volume analysis
+        if hasattr(tick, "size") and tick.size > 0:
+            self._update_tick_volume_analysis(tick)
+
+    @abstractmethod
+    def _initialize_vw_indicators(self) -> None:
+        """Initialize volume-weighted indicators specific to the strategy."""
+        pass
+
+    @abstractmethod
+    def _generate_vw_signals(self, bar: Bar) -> Optional[VWStrategySignalData]:
+        """Generate volume-weighted trading signals.
+
+        Parameters
+        ----------
+        bar : Bar
+            The current bar data
+
+        Returns
+        -------
+        Optional[VWStrategySignalData]
+            The generated signal data or None
+        """
+        pass
+
+    @abstractmethod
+    def _execute_vw_strategy(self, signal_data: VWStrategySignalData, bar: Bar) -> None:
+        """Execute the volume-weighted strategy logic.
+
+        Parameters
+        ----------
+        signal_data : VWStrategySignalData
+            The signal data
+        bar : Bar
+            The current bar data
+        """
+        pass
+
+    def _update_volume_data(self, bar: Bar) -> None:
+        """Update volume data tracking.
+
+        Parameters
+        ----------
+        bar : Bar
+            The bar data
+        """
+        volume = float(bar.volume)
+        price = float(bar.close)
+
+        self.volume_data.append(volume)
+        self.price_volume_data.append((price, volume))
+
+        # Maintain lookback window
+        max_length = self.vw_config.volume_lookback_period * 2
+        if len(self.volume_data) > max_length:
+            self.volume_data = self.volume_data[-max_length:]
+            self.price_volume_data = self.price_volume_data[-max_length:]
+
+    def _update_vw_indicators(self, bar: Bar) -> None:
+        """Update all volume-weighted indicators.
+
+        Parameters
+        ----------
+        bar : Bar
+            The bar data
+        """
+        for indicator_name, indicator in self.vw_indicators.items():
+            try:
+                indicator.handle_bar(bar)
+            except Exception as e:
+                self.log.error(f"Error updating VW indicator {indicator_name}: {e}")
+
+    def _update_market_regime(self, bar: Bar) -> None:
+        """Update market regime detection.
+
+        Parameters
+        ----------
+        bar : Bar
+            The bar data
+        """
+        if len(self.price_volume_data) < self.vw_config.regime_detection_period:
+            return
+
+        # Calculate regime indicators
+        prices = [
+            pv[0]
+            for pv in self.price_volume_data[-self.vw_config.regime_detection_period :]
+        ]
+        volumes = [
+            pv[1]
+            for pv in self.price_volume_data[-self.vw_config.regime_detection_period :]
+        ]
+
+        # Volatility analysis
+        price_returns = np.diff(prices) / prices[:-1]
+        volatility = np.std(price_returns)
+
+        # Volume trend analysis
+        volume_trend = np.polyfit(range(len(volumes)), volumes, 1)[0]
+
+        # Price trend analysis
+        price_trend = np.polyfit(range(len(prices)), prices, 1)[0]
+
+        # Determine regime
+        if volatility > self.vw_config.volatility_threshold:
+            if volume_trend > 0:
+                self.current_regime = VWMarketRegime.HIGH_VOLUME_VOLATILITY
+            else:
+                self.current_regime = VWMarketRegime.LOW_VOLUME_VOLATILITY
+        elif abs(price_trend) > self.vw_config.trend_strength_threshold:
+            if price_trend > 0:
+                self.current_regime = VWMarketRegime.TRENDING_UP
+            else:
+                self.current_regime = VWMarketRegime.TRENDING_DOWN
+        else:
+            self.current_regime = VWMarketRegime.SIDEWAYS
+
+        # Update regime history
+        self.regime_history.append(self.current_regime)
+        if len(self.regime_history) > 100:
+            self.regime_history = self.regime_history[-100:]
+
+    def _calculate_volume_confirmation(self, bar: Bar) -> float:
+        """Calculate volume confirmation score.
+
+        Parameters
+        ----------
+        bar : Bar
+            The bar data
+
+        Returns
+        -------
+        float
+            Volume confirmation score (0.0 to 1.0)
+        """
+        if len(self.volume_data) < 10:
+            return 0.5
+
+        current_volume = float(bar.volume)
+        avg_volume = np.mean(self.volume_data[-10:])
+
+        if avg_volume == 0:
+            return 0.5
+
+        volume_ratio = current_volume / avg_volume
+
+        # Normalize to 0-1 range
+        confirmation = min(volume_ratio / 2.0, 1.0)
+        return confirmation
+
+    def _calculate_smart_money_score(self, bar: Bar) -> float:
+        """Calculate smart money detection score.
+
+        Parameters
+        ----------
+        bar : Bar
+            The bar data
+
+        Returns
+        -------
+        float
+            Smart money score (0.0 to 1.0)
+        """
+        if not self.vw_config.enable_smart_money_detection:
+            return 0.5
+
+        if len(self.price_volume_data) < 20:
+            return 0.5
+
+        # Analyze price-volume relationship
+        recent_data = self.price_volume_data[-20:]
+        prices = [pv[0] for pv in recent_data]
+        volumes = [pv[1] for pv in recent_data]
+
+        # Calculate correlation
+        correlation = np.corrcoef(prices, volumes)[0, 1]
+
+        # Smart money typically shows negative correlation (accumulation on dips)
+        if np.isnan(correlation):
+            return 0.5
+
+        # Convert correlation to smart money score
+        smart_money_score = (1.0 - correlation) / 2.0
+        return np.clip(smart_money_score, 0.0, 1.0)
+
+    def _calculate_regime_alignment(self) -> float:
+        """Calculate regime alignment score.
+
+        Returns
+        -------
+        float
+            Regime alignment score (0.0 to 1.0)
+        """
+        if not self.vw_config.enable_regime_adaptation:
+            return 0.5
+
+        if len(self.regime_history) < 5:
+            return 0.5
+
+        # Calculate regime consistency
+        recent_regimes = self.regime_history[-5:]
+        regime_consistency = len(
+            [r for r in recent_regimes if r == self.current_regime]
+        ) / len(recent_regimes)
+
+        return regime_consistency
+
+    def _aggregate_pillar_scores(self, **pillar_scores) -> float:
+        """Aggregate pillar scores into overall confidence.
+
+        Parameters
+        ----------
+        **pillar_scores : Dict[str, float]
+            Individual pillar scores
+
+        Returns
+        -------
+        float
+            Aggregated confidence score
+        """
+        weights = {
+            "volume_integration": 0.25,
+            "regime_adaptation": 0.20,
+            "smart_money_detection": 0.20,
+            "behavioral_overlay": 0.15,
+            "risk_management": 0.20,
+        }
+
+        weighted_sum = 0.0
+        total_weight = 0.0
+
+        for pillar, score in pillar_scores.items():
+            if pillar in weights:
+                weighted_sum += score * weights[pillar]
+                total_weight += weights[pillar]
+
+        if total_weight == 0:
+            return 0.5
+
+        return weighted_sum / total_weight
+
+    def _update_vw_performance_metrics(self, bar: Bar) -> None:
+        """Update volume-weighted performance metrics.
+
+        Parameters
+        ----------
+        bar : Bar
+            The bar data
+        """
+        # Update volume-based performance metrics
+        current_volume = float(bar.volume)
+
+        if len(self.volume_data) >= 2:
+            volume_change = (current_volume - self.volume_data[-2]) / self.volume_data[
+                -2
+            ]
+            self.volume_performance_metrics["volume_change"] = volume_change
+
+        self.volume_performance_metrics["current_volume"] = current_volume
+        self.volume_performance_metrics["avg_volume"] = (
+            np.mean(self.volume_data[-20:])
+            if len(self.volume_data) >= 20
+            else current_volume
+        )
+        self.volume_performance_metrics["regime_confidence"] = self.regime_confidence
+
+    def _update_tick_volume_analysis(self, tick: TradeTick) -> None:
+        """Update real-time volume analysis from trade ticks.
+
+        Parameters
+        ----------
+        tick : TradeTick
+            The trade tick
+        """
+        # Real-time volume analysis for high-frequency strategies
+        volume = float(tick.size)
+        price = float(tick.price)
+
+        # Update smart money signals
+        if len(self.smart_money_signals) >= 100:
+            self.smart_money_signals = self.smart_money_signals[-99:]
+
+        # Simple smart money detection based on tick analysis
+        smart_signal = 1.0 if volume > np.mean(self.volume_data[-10:]) else 0.0
+        self.smart_money_signals.append(smart_signal)
+
+    def _reset_vw_state(self) -> None:
+        """Reset volume-weighted strategy state."""
+        self.volume_data.clear()
+        self.price_volume_data.clear()
+        self.smart_money_signals.clear()
+        self.regime_history.clear()
+        self.signal_history.clear()
+
+        self.current_regime = VWMarketRegime.NORMAL
+        self.regime_confidence = 0.0
+        self.composite_signal_strength = 0.0
+        self.volume_performance_metrics.clear()
+
+        # Reset indicators
+        for indicator in self.vw_indicators.values():
+            indicator.reset()
+
+    def _cleanup_vw_resources(self) -> None:
+        """Cleanup volume-weighted strategy resources."""
+        self._reset_vw_state()
+        self.vw_indicators.clear()
+
+    def get_vw_strategy_info(self) -> Dict[str, Any]:
+        """Get volume-weighted strategy information.
+
+        Returns
+        -------
+        Dict[str, Any]
+            Strategy information
+        """
+        return {
+            "strategy_type": self.strategy_type.value,
+            "current_regime": self.current_regime.value,
+            "regime_confidence": self.regime_confidence,
+            "active_indicators": list(self.vw_indicators.keys()),
+            "volume_metrics": self.volume_performance_metrics.copy(),
+            "signal_count": len(self.signal_history),
+        }

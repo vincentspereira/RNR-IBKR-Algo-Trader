@@ -1,0 +1,1302 @@
+"""Enhanced Multi-Timeframe Technical Indicators with Smart Money Integration
+
+Comprehensive technical analysis system featuring:
+- Volume-weighted indicators with proper alpha calculations
+- Multi-timeframe convergence analysis
+- Smart money confirmation signals
+- Institutional-grade pattern recognition
+- Advanced signal aggregation and confidence scoring
+- Real-time indicator streaming via Kafka
+- Cross-timeframe validation
+- Enhanced candlestick pattern recognition
+"""
+
+import asyncio
+import concurrent.futures
+import json
+import logging
+import threading
+import time
+from collections import defaultdict, deque
+from dataclasses import dataclass, field
+from datetime import datetime, timedelta
+from enum import Enum
+from typing import Any, Dict, List, NamedTuple, Optional, Tuple, Union
+
+import numpy as np
+import pandas as pd
+from scipy import stats
+from sklearn.preprocessing import StandardScaler
+
+try:
+    import talib
+
+    TALIB_AVAILABLE = True
+except ImportError:
+    TALIB_AVAILABLE = False
+    logging.warning("TA-Lib not available, using custom implementations")
+
+from database.data_access_layer import DataAccessLayer
+from kafka_service.producer import KafkaEventProducer
+
+from infrastructure.config.master_config import get_config
+from shared.utils.utils.logging_utils import get_logger
+
+from ..multi_timeframe_engine.aggregator import (
+    MultiTimeframeBar,
+    SmartMoneySignal,
+    TimeFrame,
+)
+
+# Configure logging
+logger = get_logger(__name__)
+
+
+class IndicatorType(str, Enum):
+    """Types of technical indicators"""
+
+    TREND = "trend"
+    MOMENTUM = "momentum"
+    VOLATILITY = "volatility"
+    VOLUME = "volume"
+    SUPPORT_RESISTANCE = "support_resistance"
+    PATTERN = "pattern"
+    SMART_MONEY = "smart_money"
+    MULTI_TIMEFRAME = "multi_timeframe"
+
+
+class SignalStrength(str, Enum):
+    """Signal strength levels"""
+
+    VERY_STRONG = "very_strong"
+    STRONG = "strong"
+    MODERATE = "moderate"
+    WEAK = "weak"
+    NEUTRAL = "neutral"
+
+
+class TrendDirection(str, Enum):
+    """Trend direction"""
+
+    BULLISH = "bullish"
+    BEARISH = "bearish"
+    SIDEWAYS = "sideways"
+    UNKNOWN = "unknown"
+
+
+class CandlestickPattern(str, Enum):
+    """Candlestick pattern types"""
+
+    # Reversal patterns
+    HAMMER = "hammer"
+    HANGING_MAN = "hanging_man"
+    SHOOTING_STAR = "shooting_star"
+    INVERTED_HAMMER = "inverted_hammer"
+    ENGULFING_BULLISH = "engulfing_bullish"
+    ENGULFING_BEARISH = "engulfing_bearish"
+    MORNING_STAR = "morning_star"
+    EVENING_STAR = "evening_star"
+    DOJI = "doji"
+    DRAGONFLY_DOJI = "dragonfly_doji"
+    GRAVESTONE_DOJI = "gravestone_doji"
+
+    # Continuation patterns
+    SPINNING_TOP = "spinning_top"
+    MARUBOZU_BULLISH = "marubozu_bullish"
+    MARUBOZU_BEARISH = "marubozu_bearish"
+
+    # Indecision patterns
+    TWEEZER_TOP = "tweezer_top"
+    TWEEZER_BOTTOM = "tweezer_bottom"
+    HARAMI_BULLISH = "harami_bullish"
+    HARAMI_BEARISH = "harami_bearish"
+
+
+@dataclass
+class IndicatorSignal:
+    """Individual indicator signal"""
+
+    indicator_name: str
+    indicator_type: IndicatorType
+    signal_value: float
+    signal_direction: TrendDirection
+    signal_strength: SignalStrength
+    confidence: float  # 0.0 to 1.0
+    timestamp: datetime
+    timeframe: TimeFrame
+    volume_confirmation: bool = False
+    smart_money_confirmation: bool = False
+    metadata: Dict[str, Any] = field(default_factory=dict)
+
+
+@dataclass
+class AggregatedSignal:
+    """Aggregated signal from multiple indicators"""
+
+    symbol: str
+    timestamp: datetime
+    timeframe: TimeFrame
+
+    # Overall signal
+    overall_direction: TrendDirection
+    overall_strength: SignalStrength
+    overall_confidence: float
+
+    # Component signals
+    trend_signals: List[IndicatorSignal]
+    momentum_signals: List[IndicatorSignal]
+    volatility_signals: List[IndicatorSignal]
+    volume_signals: List[IndicatorSignal]
+    pattern_signals: List[IndicatorSignal]
+    smart_money_signals: List[IndicatorSignal]
+
+    # Cross-timeframe analysis
+    higher_tf_alignment: bool = False
+    lower_tf_momentum: bool = False
+    multi_tf_confidence: float = 0.0
+
+
+@dataclass
+class PatternRecognitionResult:
+    """Candlestick pattern recognition result"""
+
+    pattern: CandlestickPattern
+    confidence: float
+    direction: TrendDirection
+    strength: SignalStrength
+    volume_confirmation: bool
+    smart_money_confirmation: bool
+    context_score: float  # Based on trend context
+    timestamp: datetime
+
+
+class VolumeWeightedIndicators:
+    """Volume-weighted technical indicators with proper alpha calculations"""
+
+    @staticmethod
+    def vw_sma(prices: pd.Series, volumes: pd.Series, period: int) -> pd.Series:
+        """Volume-weighted Simple Moving Average"""
+        if len(prices) < period or len(volumes) < period:
+            return pd.Series(index=prices.index, dtype=float)
+
+        vw_prices = (prices * volumes).rolling(window=period).sum()
+        total_volume = volumes.rolling(window=period).sum()
+
+        return vw_prices / total_volume.replace(0, np.nan)
+
+    @staticmethod
+    def vw_ema(prices: pd.Series, volumes: pd.Series, period: int) -> pd.Series:
+        """Volume-weighted Exponential Moving Average with proper alpha"""
+        if len(prices) < 2 or len(volumes) < 2:
+            return pd.Series(index=prices.index, dtype=float)
+
+        alpha = 1.0 / period
+        vw_prices = prices * volumes
+
+        # Calculate volume-weighted EMA
+        vw_ema_values = []
+        vol_ema_values = []
+
+        # Initialize with first value
+        vw_ema_values.append(vw_prices.iloc[0])
+        vol_ema_values.append(volumes.iloc[0])
+
+        for i in range(1, len(vw_prices)):
+            vw_ema = alpha * vw_prices.iloc[i] + (1 - alpha) * vw_ema_values[-1]
+            vol_ema = alpha * volumes.iloc[i] + (1 - alpha) * vol_ema_values[-1]
+
+            vw_ema_values.append(vw_ema)
+            vol_ema_values.append(vol_ema)
+
+        vw_ema_series = pd.Series(vw_ema_values, index=prices.index)
+        vol_ema_series = pd.Series(vol_ema_values, index=volumes.index)
+
+        return vw_ema_series / vol_ema_series.replace(0, np.nan)
+
+    @staticmethod
+    def vw_rsi(prices: pd.Series, volumes: pd.Series, period: int = 14) -> pd.Series:
+        """Volume-weighted Relative Strength Index"""
+        if len(prices) < period + 1:
+            return pd.Series(index=prices.index, dtype=float)
+
+        # Calculate price changes
+        price_changes = prices.diff()
+
+        # Separate gains and losses with volume weighting
+        gains = (
+            (price_changes.where(price_changes > 0, 0) * volumes)
+            .rolling(window=period)
+            .sum()
+        )
+        losses = (
+            (-price_changes.where(price_changes < 0, 0) * volumes)
+            .rolling(window=period)
+            .sum()
+        )
+
+        # Volume sums for normalization
+        volume_sums = volumes.rolling(window=period).sum()
+
+        # Calculate average gains and losses
+        avg_gains = gains / volume_sums
+        avg_losses = losses / volume_sums
+
+        # Calculate RSI
+        rs = avg_gains / avg_losses.replace(0, np.nan)
+        rsi = 100 - (100 / (1 + rs))
+
+        return rsi.fillna(50)
+
+    @staticmethod
+    def vw_macd(
+        prices: pd.Series,
+        volumes: pd.Series,
+        fast_period: int = 12,
+        slow_period: int = 26,
+        signal_period: int = 9,
+    ) -> Tuple[pd.Series, pd.Series, pd.Series]:
+        """Volume-weighted MACD with proper alpha calculations"""
+        if len(prices) < slow_period:
+            empty_series = pd.Series(index=prices.index, dtype=float)
+            return empty_series, empty_series, empty_series
+
+        # Calculate volume-weighted EMAs
+        fast_ema = VolumeWeightedIndicators.vw_ema(prices, volumes, fast_period)
+        slow_ema = VolumeWeightedIndicators.vw_ema(prices, volumes, slow_period)
+
+        # MACD line
+        macd_line = fast_ema - slow_ema
+
+        # Signal line (EMA of MACD)
+        signal_line = macd_line.ewm(span=signal_period, adjust=False).mean()
+
+        # Histogram
+        histogram = macd_line - signal_line
+
+        return macd_line, signal_line, histogram
+
+    @staticmethod
+    def vw_mfi(
+        high: pd.Series,
+        low: pd.Series,
+        close: pd.Series,
+        volumes: pd.Series,
+        period: int = 14,
+    ) -> pd.Series:
+        """Volume-weighted Money Flow Index"""
+        if len(close) < period + 1:
+            return pd.Series(index=close.index, dtype=float)
+
+        # Typical price
+        typical_price = (high + low + close) / 3
+
+        # Money flow
+        money_flow = typical_price * volumes
+
+        # Positive and negative money flow
+        price_change = typical_price.diff()
+        positive_mf = money_flow.where(price_change > 0, 0).rolling(window=period).sum()
+        negative_mf = money_flow.where(price_change < 0, 0).rolling(window=period).sum()
+
+        # Money Flow Index
+        mfi = 100 - (100 / (1 + (positive_mf / negative_mf.replace(0, np.nan))))
+
+        return mfi.fillna(50)
+
+
+class CandlestickPatternRecognizer:
+    """Advanced candlestick pattern recognition with volume confirmation"""
+
+    def __init__(self, volume_threshold_multiplier: float = 1.5):
+        self.volume_threshold_multiplier = volume_threshold_multiplier
+
+    def recognize_patterns(
+        self, ohlcv_data: pd.DataFrame, trend_context: str = "unknown"
+    ) -> List[PatternRecognitionResult]:
+        """Recognize candlestick patterns with volume and trend context"""
+        patterns = []
+
+        if len(ohlcv_data) < 3:
+            return patterns
+
+        # Get recent bars
+        current = ohlcv_data.iloc[-1]
+        prev1 = ohlcv_data.iloc[-2] if len(ohlcv_data) >= 2 else None
+        prev2 = ohlcv_data.iloc[-3] if len(ohlcv_data) >= 3 else None
+
+        # Calculate average volume for confirmation
+        avg_volume = (
+            ohlcv_data["volume"].tail(20).mean()
+            if len(ohlcv_data) >= 20
+            else current["volume"]
+        )
+        volume_confirmation = (
+            current["volume"] > avg_volume * self.volume_threshold_multiplier
+        )
+
+        # Single candle patterns
+        patterns.extend(
+            self._detect_single_candle_patterns(
+                current, trend_context, volume_confirmation
+            )
+        )
+
+        # Two candle patterns
+        if prev1 is not None:
+            patterns.extend(
+                self._detect_two_candle_patterns(
+                    prev1, current, trend_context, volume_confirmation
+                )
+            )
+
+        # Three candle patterns
+        if prev2 is not None and prev1 is not None:
+            patterns.extend(
+                self._detect_three_candle_patterns(
+                    prev2, prev1, current, trend_context, volume_confirmation
+                )
+            )
+
+        return patterns
+
+    def _detect_single_candle_patterns(
+        self, candle: pd.Series, trend_context: str, volume_confirmation: bool
+    ) -> List[PatternRecognitionResult]:
+        """Detect single candlestick patterns"""
+        patterns = []
+        timestamp = candle.name if hasattr(candle, "name") else datetime.now()
+
+        open_price = candle["open"]
+        high_price = candle["high"]
+        low_price = candle["low"]
+        close_price = candle["close"]
+
+        body_size = abs(close_price - open_price)
+        upper_shadow = high_price - max(open_price, close_price)
+        lower_shadow = min(open_price, close_price) - low_price
+        total_range = high_price - low_price
+
+        if total_range == 0:
+            return patterns
+
+        # Doji patterns
+        if body_size <= total_range * 0.1:  # Very small body
+            if upper_shadow <= total_range * 0.1:  # Small upper shadow
+                pattern = CandlestickPattern.DRAGONFLY_DOJI
+                direction = (
+                    TrendDirection.BULLISH
+                    if trend_context == "bearish"
+                    else TrendDirection.NEUTRAL
+                )
+            elif lower_shadow <= total_range * 0.1:  # Small lower shadow
+                pattern = CandlestickPattern.GRAVESTONE_DOJI
+                direction = (
+                    TrendDirection.BEARISH
+                    if trend_context == "bullish"
+                    else TrendDirection.NEUTRAL
+                )
+            else:
+                pattern = CandlestickPattern.DOJI
+                direction = TrendDirection.NEUTRAL
+
+            patterns.append(
+                PatternRecognitionResult(
+                    pattern=pattern,
+                    confidence=0.7 + (0.2 if volume_confirmation else 0),
+                    direction=direction,
+                    strength=SignalStrength.MODERATE,
+                    volume_confirmation=volume_confirmation,
+                    smart_money_confirmation=False,
+                    context_score=self._calculate_context_score(pattern, trend_context),
+                    timestamp=timestamp,
+                )
+            )
+
+        # Hammer and Hanging Man
+        elif lower_shadow >= body_size * 2 and upper_shadow <= body_size * 0.5:
+            if trend_context == "bearish":
+                pattern = CandlestickPattern.HAMMER
+                direction = TrendDirection.BULLISH
+            else:
+                pattern = CandlestickPattern.HANGING_MAN
+                direction = (
+                    TrendDirection.BEARISH
+                    if trend_context == "bullish"
+                    else TrendDirection.NEUTRAL
+                )
+
+            patterns.append(
+                PatternRecognitionResult(
+                    pattern=pattern,
+                    confidence=0.6 + (0.3 if volume_confirmation else 0),
+                    direction=direction,
+                    strength=SignalStrength.STRONG
+                    if volume_confirmation
+                    else SignalStrength.MODERATE,
+                    volume_confirmation=volume_confirmation,
+                    smart_money_confirmation=False,
+                    context_score=self._calculate_context_score(pattern, trend_context),
+                    timestamp=timestamp,
+                )
+            )
+
+        # Shooting Star and Inverted Hammer
+        elif upper_shadow >= body_size * 2 and lower_shadow <= body_size * 0.5:
+            if trend_context == "bullish":
+                pattern = CandlestickPattern.SHOOTING_STAR
+                direction = TrendDirection.BEARISH
+            else:
+                pattern = CandlestickPattern.INVERTED_HAMMER
+                direction = (
+                    TrendDirection.BULLISH
+                    if trend_context == "bearish"
+                    else TrendDirection.NEUTRAL
+                )
+
+            patterns.append(
+                PatternRecognitionResult(
+                    pattern=pattern,
+                    confidence=0.6 + (0.3 if volume_confirmation else 0),
+                    direction=direction,
+                    strength=SignalStrength.STRONG
+                    if volume_confirmation
+                    else SignalStrength.MODERATE,
+                    volume_confirmation=volume_confirmation,
+                    smart_money_confirmation=False,
+                    context_score=self._calculate_context_score(pattern, trend_context),
+                    timestamp=timestamp,
+                )
+            )
+
+        # Marubozu patterns
+        elif upper_shadow <= total_range * 0.05 and lower_shadow <= total_range * 0.05:
+            if close_price > open_price:
+                pattern = CandlestickPattern.MARUBOZU_BULLISH
+                direction = TrendDirection.BULLISH
+            else:
+                pattern = CandlestickPattern.MARUBOZU_BEARISH
+                direction = TrendDirection.BEARISH
+
+            patterns.append(
+                PatternRecognitionResult(
+                    pattern=pattern,
+                    confidence=0.8 + (0.2 if volume_confirmation else 0),
+                    direction=direction,
+                    strength=SignalStrength.STRONG,
+                    volume_confirmation=volume_confirmation,
+                    smart_money_confirmation=False,
+                    context_score=self._calculate_context_score(pattern, trend_context),
+                    timestamp=timestamp,
+                )
+            )
+
+        return patterns
+
+    def _detect_two_candle_patterns(
+        self,
+        prev_candle: pd.Series,
+        current_candle: pd.Series,
+        trend_context: str,
+        volume_confirmation: bool,
+    ) -> List[PatternRecognitionResult]:
+        """Detect two-candlestick patterns"""
+        patterns = []
+        timestamp = (
+            current_candle.name if hasattr(current_candle, "name") else datetime.now()
+        )
+
+        # Engulfing patterns
+        prev_body_size = abs(prev_candle["close"] - prev_candle["open"])
+        curr_body_size = abs(current_candle["close"] - current_candle["open"])
+
+        # Bullish Engulfing
+        if (
+            prev_candle["close"] < prev_candle["open"]
+            and current_candle["close"] > current_candle["open"]  # Previous bearish
+            and current_candle["open"] < prev_candle["close"]  # Current bullish
+            and current_candle["close"]  # Opens below previous close
+            > prev_candle["open"]
+            and curr_body_size > prev_body_size  # Closes above previous open
+        ):  # Larger body
+            patterns.append(
+                PatternRecognitionResult(
+                    pattern=CandlestickPattern.ENGULFING_BULLISH,
+                    confidence=0.7 + (0.2 if volume_confirmation else 0),
+                    direction=TrendDirection.BULLISH,
+                    strength=SignalStrength.STRONG
+                    if volume_confirmation
+                    else SignalStrength.MODERATE,
+                    volume_confirmation=volume_confirmation,
+                    smart_money_confirmation=False,
+                    context_score=self._calculate_context_score(
+                        CandlestickPattern.ENGULFING_BULLISH, trend_context
+                    ),
+                    timestamp=timestamp,
+                )
+            )
+
+        # Bearish Engulfing
+        elif (
+            prev_candle["close"] > prev_candle["open"]
+            and current_candle["close"] < current_candle["open"]  # Previous bullish
+            and current_candle["open"] > prev_candle["close"]  # Current bearish
+            and current_candle["close"]  # Opens above previous close
+            < prev_candle["open"]
+            and curr_body_size > prev_body_size  # Closes below previous open
+        ):  # Larger body
+            patterns.append(
+                PatternRecognitionResult(
+                    pattern=CandlestickPattern.ENGULFING_BEARISH,
+                    confidence=0.7 + (0.2 if volume_confirmation else 0),
+                    direction=TrendDirection.BEARISH,
+                    strength=SignalStrength.STRONG
+                    if volume_confirmation
+                    else SignalStrength.MODERATE,
+                    volume_confirmation=volume_confirmation,
+                    smart_money_confirmation=False,
+                    context_score=self._calculate_context_score(
+                        CandlestickPattern.ENGULFING_BEARISH, trend_context
+                    ),
+                    timestamp=timestamp,
+                )
+            )
+
+        return patterns
+
+    def _detect_three_candle_patterns(
+        self,
+        candle1: pd.Series,
+        candle2: pd.Series,
+        candle3: pd.Series,
+        trend_context: str,
+        volume_confirmation: bool,
+    ) -> List[PatternRecognitionResult]:
+        """Detect three-candlestick patterns"""
+        patterns = []
+        timestamp = candle3.name if hasattr(candle3, "name") else datetime.now()
+
+        # Morning Star
+        if (
+            candle1["close"] < candle1["open"]
+            and abs(candle2["close"] - candle2["open"])  # First candle bearish
+            < abs(candle1["close"] - candle1["open"]) * 0.3
+            and candle3["close"] > candle3["open"]  # Small body
+            and candle3["close"]  # Third candle bullish
+            > (candle1["open"] + candle1["close"]) / 2
+        ):  # Closes above midpoint
+            patterns.append(
+                PatternRecognitionResult(
+                    pattern=CandlestickPattern.MORNING_STAR,
+                    confidence=0.8 + (0.2 if volume_confirmation else 0),
+                    direction=TrendDirection.BULLISH,
+                    strength=SignalStrength.STRONG,
+                    volume_confirmation=volume_confirmation,
+                    smart_money_confirmation=False,
+                    context_score=self._calculate_context_score(
+                        CandlestickPattern.MORNING_STAR, trend_context
+                    ),
+                    timestamp=timestamp,
+                )
+            )
+
+        # Evening Star
+        elif (
+            candle1["close"] > candle1["open"]
+            and abs(candle2["close"] - candle2["open"])  # First candle bullish
+            < abs(candle1["close"] - candle1["open"]) * 0.3
+            and candle3["close"] < candle3["open"]  # Small body
+            and candle3["close"]  # Third candle bearish
+            < (candle1["open"] + candle1["close"]) / 2
+        ):  # Closes below midpoint
+            patterns.append(
+                PatternRecognitionResult(
+                    pattern=CandlestickPattern.EVENING_STAR,
+                    confidence=0.8 + (0.2 if volume_confirmation else 0),
+                    direction=TrendDirection.BEARISH,
+                    strength=SignalStrength.STRONG,
+                    volume_confirmation=volume_confirmation,
+                    smart_money_confirmation=False,
+                    context_score=self._calculate_context_score(
+                        CandlestickPattern.EVENING_STAR, trend_context
+                    ),
+                    timestamp=timestamp,
+                )
+            )
+
+        return patterns
+
+    def _calculate_context_score(
+        self, pattern: CandlestickPattern, trend_context: str
+    ) -> float:
+        """Calculate context score based on trend and pattern type"""
+        reversal_patterns = {
+            CandlestickPattern.HAMMER,
+            CandlestickPattern.SHOOTING_STAR,
+            CandlestickPattern.ENGULFING_BULLISH,
+            CandlestickPattern.ENGULFING_BEARISH,
+            CandlestickPattern.MORNING_STAR,
+            CandlestickPattern.EVENING_STAR,
+        }
+
+        if pattern in reversal_patterns:
+            if (
+                pattern
+                in [
+                    CandlestickPattern.HAMMER,
+                    CandlestickPattern.ENGULFING_BULLISH,
+                    CandlestickPattern.MORNING_STAR,
+                ]
+                and trend_context == "bearish"
+            ) or (
+                pattern
+                in [
+                    CandlestickPattern.SHOOTING_STAR,
+                    CandlestickPattern.ENGULFING_BEARISH,
+                    CandlestickPattern.EVENING_STAR,
+                ]
+                and trend_context == "bullish"
+            ):
+                return 1.0  # Perfect context
+            elif trend_context == "sideways":
+                return 0.5  # Neutral context
+            else:
+                return 0.2  # Poor context
+
+        return 0.6  # Default for continuation patterns
+
+
+class EnhancedMultiTimeframeIndicators:
+    """Enhanced multi-timeframe technical indicators with smart money integration"""
+
+    def __init__(self, kafka_producer: Optional[KafkaEventProducer] = None):
+        self.kafka_producer = kafka_producer
+        self.logger = get_logger(self.__class__.__name__)
+        self.volume_indicators = VolumeWeightedIndicators()
+        self.pattern_recognizer = CandlestickPatternRecognizer()
+        self.executor = concurrent.futures.ThreadPoolExecutor(max_workers=4)
+        self.lock = threading.Lock()
+
+        # Indicator cache for performance
+        self.indicator_cache = {}
+        self.cache_ttl = 300  # 5 minutes
+
+    async def calculate_all_indicators(
+        self, bars: List[MultiTimeframeBar], symbol: str, timeframe: TimeFrame
+    ) -> AggregatedSignal:
+        """Calculate all indicators for given bars and aggregate signals"""
+        if not bars or len(bars) < 2:
+            return self._create_empty_signal(symbol, timeframe)
+
+        # Convert to DataFrame
+        df = self._bars_to_dataframe(bars)
+
+        # Calculate indicators concurrently
+        tasks = [
+            self._calculate_trend_indicators(df),
+            self._calculate_momentum_indicators(df),
+            self._calculate_volatility_indicators(df),
+            self._calculate_volume_indicators(df),
+            self._recognize_patterns(df),
+        ]
+
+        results = await asyncio.gather(*tasks)
+        (
+            trend_signals,
+            momentum_signals,
+            volatility_signals,
+            volume_signals,
+            pattern_signals,
+        ) = results
+
+        # Generate smart money signals
+        smart_money_signals = self._generate_smart_money_signals(bars, df)
+
+        # Aggregate all signals
+        aggregated = self._aggregate_signals(
+            symbol,
+            timeframe,
+            trend_signals,
+            momentum_signals,
+            volatility_signals,
+            volume_signals,
+            pattern_signals,
+            smart_money_signals,
+        )
+
+        # Publish to Kafka if configured
+        if self.kafka_producer:
+            await self._publish_signals(aggregated)
+
+        return aggregated
+
+    def _bars_to_dataframe(self, bars: List[MultiTimeframeBar]) -> pd.DataFrame:
+        """Convert MultiTimeframeBar list to pandas DataFrame"""
+        data = []
+        for bar in bars:
+            data.append(
+                {
+                    "timestamp": bar.timestamp,
+                    "open": bar.open,
+                    "high": bar.high,
+                    "low": bar.low,
+                    "close": bar.close,
+                    "volume": bar.volume,
+                }
+            )
+
+        df = pd.DataFrame(data)
+        df.set_index("timestamp", inplace=True)
+        return df
+
+    async def _calculate_trend_indicators(
+        self, df: pd.DataFrame
+    ) -> List[IndicatorSignal]:
+        """Calculate trend indicators"""
+        signals = []
+
+        if len(df) < 20:
+            return signals
+
+        try:
+            # Volume-weighted SMA
+            vw_sma_20 = self.volume_indicators.vw_sma(df["close"], df["volume"], 20)
+            if not vw_sma_20.empty:
+                current_price = df["close"].iloc[-1]
+                sma_value = vw_sma_20.iloc[-1]
+
+                direction = (
+                    TrendDirection.BULLISH
+                    if current_price > sma_value
+                    else TrendDirection.BEARISH
+                )
+                strength = self._calculate_signal_strength(
+                    abs(current_price - sma_value) / sma_value
+                )
+
+                signals.append(
+                    IndicatorSignal(
+                        indicator_name="VW_SMA_20",
+                        indicator_type=IndicatorType.TREND,
+                        signal_value=sma_value,
+                        signal_direction=direction,
+                        signal_strength=strength,
+                        confidence=0.7,
+                        timestamp=df.index[-1],
+                        timeframe=TimeFrame.MINUTE_1,  # Default, should be passed
+                        volume_confirmation=True,
+                    )
+                )
+
+            # Volume-weighted EMA
+            vw_ema_20 = self.volume_indicators.vw_ema(df["close"], df["volume"], 20)
+            if not vw_ema_20.empty:
+                current_price = df["close"].iloc[-1]
+                ema_value = vw_ema_20.iloc[-1]
+
+                direction = (
+                    TrendDirection.BULLISH
+                    if current_price > ema_value
+                    else TrendDirection.BEARISH
+                )
+                strength = self._calculate_signal_strength(
+                    abs(current_price - ema_value) / ema_value
+                )
+
+                signals.append(
+                    IndicatorSignal(
+                        indicator_name="VW_EMA_20",
+                        indicator_type=IndicatorType.TREND,
+                        signal_value=ema_value,
+                        signal_direction=direction,
+                        signal_strength=strength,
+                        confidence=0.75,
+                        timestamp=df.index[-1],
+                        timeframe=TimeFrame.MINUTE_1,
+                        volume_confirmation=True,
+                    )
+                )
+
+        except Exception as e:
+            self.logger.error(f"Error calculating trend indicators: {e}")
+
+        return signals
+
+    async def _calculate_momentum_indicators(
+        self, df: pd.DataFrame
+    ) -> List[IndicatorSignal]:
+        """Calculate momentum indicators"""
+        signals = []
+
+        if len(df) < 14:
+            return signals
+
+        try:
+            # Volume-weighted RSI
+            vw_rsi = self.volume_indicators.vw_rsi(df["close"], df["volume"], 14)
+            if not vw_rsi.empty:
+                rsi_value = vw_rsi.iloc[-1]
+
+                if rsi_value > 70:
+                    direction = TrendDirection.BEARISH
+                    strength = (
+                        SignalStrength.STRONG
+                        if rsi_value > 80
+                        else SignalStrength.MODERATE
+                    )
+                elif rsi_value < 30:
+                    direction = TrendDirection.BULLISH
+                    strength = (
+                        SignalStrength.STRONG
+                        if rsi_value < 20
+                        else SignalStrength.MODERATE
+                    )
+                else:
+                    direction = TrendDirection.NEUTRAL
+                    strength = SignalStrength.WEAK
+
+                signals.append(
+                    IndicatorSignal(
+                        indicator_name="VW_RSI_14",
+                        indicator_type=IndicatorType.MOMENTUM,
+                        signal_value=rsi_value,
+                        signal_direction=direction,
+                        signal_strength=strength,
+                        confidence=0.8,
+                        timestamp=df.index[-1],
+                        timeframe=TimeFrame.MINUTE_1,
+                        volume_confirmation=True,
+                    )
+                )
+
+            # Volume-weighted MACD
+            if len(df) >= 26:
+                macd_line, signal_line, histogram = self.volume_indicators.vw_macd(
+                    df["close"], df["volume"], 12, 26, 9
+                )
+
+                if not macd_line.empty and not signal_line.empty:
+                    macd_value = macd_line.iloc[-1]
+                    signal_value = signal_line.iloc[-1]
+
+                    direction = (
+                        TrendDirection.BULLISH
+                        if macd_value > signal_value
+                        else TrendDirection.BEARISH
+                    )
+                    strength = self._calculate_signal_strength(
+                        abs(macd_value - signal_value)
+                    )
+
+                    signals.append(
+                        IndicatorSignal(
+                            indicator_name="VW_MACD",
+                            indicator_type=IndicatorType.MOMENTUM,
+                            signal_value=macd_value,
+                            signal_direction=direction,
+                            signal_strength=strength,
+                            confidence=0.75,
+                            timestamp=df.index[-1],
+                            timeframe=TimeFrame.MINUTE_1,
+                            volume_confirmation=True,
+                        )
+                    )
+
+        except Exception as e:
+            self.logger.error(f"Error calculating momentum indicators: {e}")
+
+        return signals
+
+    async def _calculate_volatility_indicators(
+        self, df: pd.DataFrame
+    ) -> List[IndicatorSignal]:
+        """Calculate volatility indicators"""
+        signals = []
+
+        if len(df) < 20:
+            return signals
+
+        try:
+            # Bollinger Bands with volume weighting
+            vw_sma = self.volume_indicators.vw_sma(df["close"], df["volume"], 20)
+            if not vw_sma.empty:
+                std_dev = df["close"].rolling(window=20).std()
+                upper_band = vw_sma + (2 * std_dev)
+                lower_band = vw_sma - (2 * std_dev)
+
+                current_price = df["close"].iloc[-1]
+                upper_value = upper_band.iloc[-1]
+                lower_value = lower_band.iloc[-1]
+
+                if current_price > upper_value:
+                    direction = TrendDirection.BEARISH  # Overbought
+                    strength = SignalStrength.STRONG
+                elif current_price < lower_value:
+                    direction = TrendDirection.BULLISH  # Oversold
+                    strength = SignalStrength.STRONG
+                else:
+                    direction = TrendDirection.NEUTRAL
+                    strength = SignalStrength.WEAK
+
+                signals.append(
+                    IndicatorSignal(
+                        indicator_name="VW_BOLLINGER_BANDS",
+                        indicator_type=IndicatorType.VOLATILITY,
+                        signal_value=current_price,
+                        signal_direction=direction,
+                        signal_strength=strength,
+                        confidence=0.7,
+                        timestamp=df.index[-1],
+                        timeframe=TimeFrame.MINUTE_1,
+                        volume_confirmation=True,
+                        metadata={
+                            "upper_band": upper_value,
+                            "lower_band": lower_value,
+                            "middle_band": vw_sma.iloc[-1],
+                        },
+                    )
+                )
+
+        except Exception as e:
+            self.logger.error(f"Error calculating volatility indicators: {e}")
+
+        return signals
+
+    async def _calculate_volume_indicators(
+        self, df: pd.DataFrame
+    ) -> List[IndicatorSignal]:
+        """Calculate volume indicators"""
+        signals = []
+
+        if len(df) < 14:
+            return signals
+
+        try:
+            # Volume-weighted MFI
+            vw_mfi = self.volume_indicators.vw_mfi(
+                df["high"], df["low"], df["close"], df["volume"], 14
+            )
+
+            if not vw_mfi.empty:
+                mfi_value = vw_mfi.iloc[-1]
+
+                if mfi_value > 80:
+                    direction = TrendDirection.BEARISH  # Overbought
+                    strength = SignalStrength.STRONG
+                elif mfi_value < 20:
+                    direction = TrendDirection.BULLISH  # Oversold
+                    strength = SignalStrength.STRONG
+                else:
+                    direction = TrendDirection.NEUTRAL
+                    strength = SignalStrength.WEAK
+
+                signals.append(
+                    IndicatorSignal(
+                        indicator_name="VW_MFI_14",
+                        indicator_type=IndicatorType.VOLUME,
+                        signal_value=mfi_value,
+                        signal_direction=direction,
+                        signal_strength=strength,
+                        confidence=0.75,
+                        timestamp=df.index[-1],
+                        timeframe=TimeFrame.MINUTE_1,
+                        volume_confirmation=True,
+                    )
+                )
+
+        except Exception as e:
+            self.logger.error(f"Error calculating volume indicators: {e}")
+
+        return signals
+
+    async def _recognize_patterns(self, df: pd.DataFrame) -> List[IndicatorSignal]:
+        """Recognize candlestick patterns"""
+        signals = []
+
+        if len(df) < 3:
+            return signals
+
+        try:
+            # Determine trend context
+            if len(df) >= 20:
+                sma_20 = df["close"].rolling(window=20).mean()
+                current_price = df["close"].iloc[-1]
+                sma_value = sma_20.iloc[-1]
+
+                if current_price > sma_value * 1.02:
+                    trend_context = "bullish"
+                elif current_price < sma_value * 0.98:
+                    trend_context = "bearish"
+                else:
+                    trend_context = "sideways"
+            else:
+                trend_context = "unknown"
+
+            # Recognize patterns
+            patterns = self.pattern_recognizer.recognize_patterns(df, trend_context)
+
+            for pattern_result in patterns:
+                signals.append(
+                    IndicatorSignal(
+                        indicator_name=f"PATTERN_{pattern_result.pattern.value.upper()}",
+                        indicator_type=IndicatorType.PATTERN,
+                        signal_value=pattern_result.confidence,
+                        signal_direction=pattern_result.direction,
+                        signal_strength=pattern_result.strength,
+                        confidence=pattern_result.confidence,
+                        timestamp=pattern_result.timestamp,
+                        timeframe=TimeFrame.MINUTE_1,
+                        volume_confirmation=pattern_result.volume_confirmation,
+                        smart_money_confirmation=pattern_result.smart_money_confirmation,
+                        metadata={
+                            "pattern": pattern_result.pattern.value,
+                            "context_score": pattern_result.context_score,
+                        },
+                    )
+                )
+
+        except Exception as e:
+            self.logger.error(f"Error recognizing patterns: {e}")
+
+        return signals
+
+    def _generate_smart_money_signals(
+        self, bars: List[MultiTimeframeBar], df: pd.DataFrame
+    ) -> List[IndicatorSignal]:
+        """Generate smart money confirmation signals"""
+        signals = []
+
+        if not bars or len(bars) < 2:
+            return signals
+
+        try:
+            latest_bar = bars[-1]
+
+            # Smart money flow analysis
+            if latest_bar.smart_money_metrics.institutional_flow_ratio != 0:
+                flow_ratio = latest_bar.smart_money_metrics.institutional_flow_ratio
+
+                if flow_ratio > 0.3:
+                    direction = TrendDirection.BULLISH
+                    strength = (
+                        SignalStrength.STRONG
+                        if flow_ratio > 0.6
+                        else SignalStrength.MODERATE
+                    )
+                elif flow_ratio < -0.3:
+                    direction = TrendDirection.BEARISH
+                    strength = (
+                        SignalStrength.STRONG
+                        if flow_ratio < -0.6
+                        else SignalStrength.MODERATE
+                    )
+                else:
+                    direction = TrendDirection.NEUTRAL
+                    strength = SignalStrength.WEAK
+
+                signals.append(
+                    IndicatorSignal(
+                        indicator_name="SMART_MONEY_FLOW",
+                        indicator_type=IndicatorType.SMART_MONEY,
+                        signal_value=flow_ratio,
+                        signal_direction=direction,
+                        signal_strength=strength,
+                        confidence=0.85,
+                        timestamp=latest_bar.timestamp,
+                        timeframe=latest_bar.timeframe,
+                        smart_money_confirmation=True,
+                    )
+                )
+
+            # Large order imbalance
+            if latest_bar.smart_money_metrics.large_order_imbalance != 0:
+                imbalance = latest_bar.smart_money_metrics.large_order_imbalance
+
+                direction = (
+                    TrendDirection.BULLISH if imbalance > 0 else TrendDirection.BEARISH
+                )
+                strength = self._calculate_signal_strength(abs(imbalance))
+
+                signals.append(
+                    IndicatorSignal(
+                        indicator_name="LARGE_ORDER_IMBALANCE",
+                        indicator_type=IndicatorType.SMART_MONEY,
+                        signal_value=imbalance,
+                        signal_direction=direction,
+                        signal_strength=strength,
+                        confidence=0.8,
+                        timestamp=latest_bar.timestamp,
+                        timeframe=latest_bar.timeframe,
+                        smart_money_confirmation=True,
+                    )
+                )
+
+        except Exception as e:
+            self.logger.error(f"Error generating smart money signals: {e}")
+
+        return signals
+
+    def _aggregate_signals(
+        self,
+        symbol: str,
+        timeframe: TimeFrame,
+        trend_signals: List[IndicatorSignal],
+        momentum_signals: List[IndicatorSignal],
+        volatility_signals: List[IndicatorSignal],
+        volume_signals: List[IndicatorSignal],
+        pattern_signals: List[IndicatorSignal],
+        smart_money_signals: List[IndicatorSignal],
+    ) -> AggregatedSignal:
+        """Aggregate all signals into a comprehensive signal"""
+
+        all_signals = (
+            trend_signals
+            + momentum_signals
+            + volatility_signals
+            + volume_signals
+            + pattern_signals
+            + smart_money_signals
+        )
+
+        if not all_signals:
+            return self._create_empty_signal(symbol, timeframe)
+
+        # Calculate weighted consensus
+        bullish_weight = 0
+        bearish_weight = 0
+        total_confidence = 0
+
+        for signal in all_signals:
+            weight = signal.confidence * self._get_signal_weight(signal.indicator_type)
+
+            if signal.signal_direction == TrendDirection.BULLISH:
+                bullish_weight += weight
+            elif signal.signal_direction == TrendDirection.BEARISH:
+                bearish_weight += weight
+
+            total_confidence += signal.confidence
+
+        # Determine overall direction and strength
+        if bullish_weight > bearish_weight * 1.2:
+            overall_direction = TrendDirection.BULLISH
+            strength_ratio = bullish_weight / (bullish_weight + bearish_weight)
+        elif bearish_weight > bullish_weight * 1.2:
+            overall_direction = TrendDirection.BEARISH
+            strength_ratio = bearish_weight / (bullish_weight + bearish_weight)
+        else:
+            overall_direction = TrendDirection.SIDEWAYS
+            strength_ratio = 0.5
+
+        overall_strength = self._calculate_signal_strength(strength_ratio)
+        overall_confidence = total_confidence / len(all_signals) if all_signals else 0
+
+        # Check for cross-timeframe alignment (placeholder)
+        higher_tf_alignment = len(smart_money_signals) > 0
+        lower_tf_momentum = len(momentum_signals) > 0 and any(
+            s.signal_direction != TrendDirection.NEUTRAL for s in momentum_signals
+        )
+
+        return AggregatedSignal(
+            symbol=symbol,
+            timestamp=datetime.now(),
+            timeframe=timeframe,
+            overall_direction=overall_direction,
+            overall_strength=overall_strength,
+            overall_confidence=overall_confidence,
+            trend_signals=trend_signals,
+            momentum_signals=momentum_signals,
+            volatility_signals=volatility_signals,
+            volume_signals=volume_signals,
+            pattern_signals=pattern_signals,
+            smart_money_signals=smart_money_signals,
+            higher_tf_alignment=higher_tf_alignment,
+            lower_tf_momentum=lower_tf_momentum,
+            multi_tf_confidence=overall_confidence
+            * (0.8 if higher_tf_alignment else 0.6),
+        )
+
+    def _calculate_signal_strength(self, value: float) -> SignalStrength:
+        """Calculate signal strength based on value"""
+        if value > 0.8:
+            return SignalStrength.VERY_STRONG
+        elif value > 0.6:
+            return SignalStrength.STRONG
+        elif value > 0.4:
+            return SignalStrength.MODERATE
+        elif value > 0.2:
+            return SignalStrength.WEAK
+        else:
+            return SignalStrength.NEUTRAL
+
+    def _get_signal_weight(self, indicator_type: IndicatorType) -> float:
+        """Get weight for different indicator types"""
+        weights = {
+            IndicatorType.SMART_MONEY: 1.5,
+            IndicatorType.VOLUME: 1.3,
+            IndicatorType.TREND: 1.2,
+            IndicatorType.MOMENTUM: 1.1,
+            IndicatorType.PATTERN: 1.0,
+            IndicatorType.VOLATILITY: 0.9,
+            IndicatorType.SUPPORT_RESISTANCE: 0.8,
+            IndicatorType.MULTI_TIMEFRAME: 1.4,
+        }
+        return weights.get(indicator_type, 1.0)
+
+    def _create_empty_signal(
+        self, symbol: str, timeframe: TimeFrame
+    ) -> AggregatedSignal:
+        """Create empty aggregated signal"""
+        return AggregatedSignal(
+            symbol=symbol,
+            timestamp=datetime.now(),
+            timeframe=timeframe,
+            overall_direction=TrendDirection.NEUTRAL,
+            overall_strength=SignalStrength.NEUTRAL,
+            overall_confidence=0.0,
+            trend_signals=[],
+            momentum_signals=[],
+            volatility_signals=[],
+            volume_signals=[],
+            pattern_signals=[],
+            smart_money_signals=[],
+            higher_tf_alignment=False,
+            lower_tf_momentum=False,
+            multi_tf_confidence=0.0,
+        )
+
+    async def _publish_signals(self, aggregated_signal: AggregatedSignal):
+        """Publish signals to Kafka"""
+        if not self.kafka_producer:
+            return
+
+        try:
+            signal_data = {
+                "symbol": aggregated_signal.symbol,
+                "timestamp": aggregated_signal.timestamp.isoformat(),
+                "timeframe": aggregated_signal.timeframe.value,
+                "overall_direction": aggregated_signal.overall_direction.value,
+                "overall_strength": aggregated_signal.overall_strength.value,
+                "overall_confidence": aggregated_signal.overall_confidence,
+                "signal_count": {
+                    "trend": len(aggregated_signal.trend_signals),
+                    "momentum": len(aggregated_signal.momentum_signals),
+                    "volatility": len(aggregated_signal.volatility_signals),
+                    "volume": len(aggregated_signal.volume_signals),
+                    "pattern": len(aggregated_signal.pattern_signals),
+                    "smart_money": len(aggregated_signal.smart_money_signals),
+                },
+                "multi_tf_confidence": aggregated_signal.multi_tf_confidence,
+            }
+
+            await self.kafka_producer.send_event(
+                topic="technical_indicators",
+                event_type="aggregated_signal",
+                data=signal_data,
+            )
+
+        except Exception as e:
+            self.logger.error(f"Error publishing signals to Kafka: {e}")
+
+    def cleanup(self):
+        """Cleanup resources"""
+        if hasattr(self, "executor"):
+            self.executor.shutdown(wait=True)

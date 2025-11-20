@@ -1,0 +1,1145 @@
+"""
+Mean Reversion Strategy Templates
+
+This module implements comprehensive mean reversion trading strategies
+for the NautilusTrader engine with 5-pillar architecture compliance.
+
+Strategy Types:
+- MeanReversionStrategy: Base mean reversion framework
+- RSIMeanReversionStrategy: RSI-based mean reversion
+- BollingerBandStrategy: Bollinger Band mean reversion
+- PairsTradingStrategy: Statistical arbitrage pairs trading
+
+Key Features:
+- Statistical analysis
+- Overbought/oversold detection
+- Pairs correlation analysis
+- Dynamic threshold adjustment
+- Risk management integration
+"""
+
+import asyncio
+from dataclasses import dataclass
+from datetime import datetime, timezone
+from typing import Any, Dict, List, Optional, Tuple
+
+import numpy as np
+import pandas as pd
+from nautilus_trader.model.data.bar import Bar
+from nautilus_trader.model.data.tick import QuoteTick, TradeTick
+from nautilus_trader.model.identifiers import InstrumentId
+from nautilus_trader.model.orders.limit import LimitOrder
+from nautilus_trader.model.orders.market import MarketOrder
+from scipy import stats
+from sklearn.linear_model import LinearRegression
+
+from .base import (
+    BaseStrategy,
+    MarketRegime,
+    PositionSizing,
+    RiskParameters,
+    SignalStrength,
+    StrategyConfig,
+    StrategyType,
+)
+
+
+@dataclass
+class MeanReversionConfig(StrategyConfig):
+    """Mean reversion strategy configuration"""
+
+    # Mean reversion parameters
+    lookback_period: int = 20
+    reversion_threshold: float = 2.0
+    mean_calculation_method: str = "sma"  # sma, ema, median
+
+    # RSI parameters
+    rsi_period: int = 14
+    rsi_overbought: float = 70.0
+    rsi_oversold: float = 30.0
+    rsi_extreme_overbought: float = 80.0
+    rsi_extreme_oversold: float = 20.0
+
+    # Bollinger Band parameters
+    bb_period: int = 20
+    bb_std_dev: float = 2.0
+    bb_squeeze_threshold: float = 0.1
+
+    # Pairs trading parameters
+    correlation_period: int = 60
+    min_correlation: float = 0.7
+    cointegration_threshold: float = 0.05
+    zscore_entry: float = 2.0
+    zscore_exit: float = 0.5
+
+    # Risk management
+    max_holding_period: int = 10  # bars
+    stop_loss_multiplier: float = 3.0
+    take_profit_multiplier: float = 1.5
+
+    def __post_init__(self):
+        super().__post_init__()
+        self.strategy_type = StrategyType.MEAN_REVERSION
+
+
+class MeanReversionStrategy(BaseStrategy):
+    """
+    Base mean reversion strategy implementation
+
+    Provides framework for mean reversion trading with:
+    - Statistical mean calculation
+    - Deviation measurement
+    - Reversion signal detection
+    - Dynamic threshold adjustment
+    """
+
+    def __init__(self, config: MeanReversionConfig):
+        super().__init__(config)
+        self.mean_reversion_config: MeanReversionConfig = config
+
+        # Mean reversion indicators
+        self._price_means = {}
+        self._price_deviations = {}
+        self._reversion_signals = {}
+        self._holding_periods = {}
+
+        # Statistical measures
+        self._z_scores = {}
+        self._percentiles = {}
+
+        self.logger.info(
+            f"Initialized MeanReversionStrategy with config: {config.strategy_name}"
+        )
+
+    async def on_start(self):
+        """Initialize mean reversion strategy"""
+        self.logger.info("Starting mean reversion strategy")
+
+        # Initialize indicators for each instrument
+        for instrument in self.config.instruments:
+            self._price_means[instrument] = []
+            self._price_deviations[instrument] = []
+            self._reversion_signals[instrument] = None
+            self._holding_periods[instrument] = 0
+            self._z_scores[instrument] = 0.0
+            self._percentiles[instrument] = 50.0
+
+    async def on_stop(self):
+        """Clean up mean reversion strategy"""
+        self.logger.info("Stopping mean reversion strategy")
+
+        # Clear indicators
+        self._price_means.clear()
+        self._price_deviations.clear()
+        self._reversion_signals.clear()
+        self._holding_periods.clear()
+
+    async def on_bar(self, bar: Bar):
+        """Process new bar data"""
+        instrument_id = bar.bar_type.instrument_id
+
+        # Update indicators
+        await self._update_mean_reversion_indicators(instrument_id, bar)
+
+        # Generate signals
+        signals = await self.generate_signals(instrument_id)
+
+        # Process signals
+        for signal in signals:
+            await self._process_signal(signal)
+
+        # Update holding periods
+        await self._update_holding_periods(instrument_id)
+
+    async def on_quote_tick(self, tick: QuoteTick):
+        """Process quote tick (optional for mean reversion strategies)"""
+        try:
+            # Update bid-ask spread for mean reversion analysis
+            instrument_id = tick.instrument_id
+
+            if instrument_id not in self._quote_data:
+                self._quote_data[instrument_id] = []
+
+            # Calculate mid price for mean reversion analysis
+            mid_price = (tick.bid_price + tick.ask_price) / 2
+            spread = tick.ask_price - tick.bid_price
+
+            quote_info = {
+                "timestamp": tick.ts_event,
+                "bid": tick.bid_price,
+                "ask": tick.ask_price,
+                "mid_price": mid_price,
+                "spread": spread,
+                "bid_size": tick.bid_size,
+                "ask_size": tick.ask_size,
+            }
+
+            self._quote_data[instrument_id].append(quote_info)
+
+            # Keep only recent quotes (last 200 for mean reversion analysis)
+            if len(self._quote_data[instrument_id]) > 200:
+                self._quote_data[instrument_id] = self._quote_data[instrument_id][-200:]
+
+            # Update mean reversion indicators with quote data
+            await self._update_quote_mean_reversion_indicators(
+                instrument_id, quote_info
+            )
+
+            # Check for mean reversion opportunities based on spread
+            if len(self._quote_data[instrument_id]) >= 20:
+                await self._check_spread_mean_reversion(instrument_id)
+
+        except Exception as e:
+            self.logger.error(f"Error processing quote tick: {e}")
+
+    async def on_trade_tick(self, tick: TradeTick):
+        """Process trade tick (optional for mean reversion strategies)"""
+        try:
+            # Process trade ticks for volume-based mean reversion analysis
+            instrument_id = tick.instrument_id
+
+            if instrument_id not in self._trade_data:
+                self._trade_data[instrument_id] = []
+
+            # Store trade data for volume analysis
+            trade_info = {
+                "timestamp": tick.ts_event,
+                "price": tick.price,
+                "size": tick.size,
+                "aggressor_side": getattr(tick, "aggressor_side", None),
+            }
+
+            self._trade_data[instrument_id].append(trade_info)
+
+            # Keep only recent trades (last 500 for mean reversion)
+            if len(self._trade_data[instrument_id]) > 500:
+                self._trade_data[instrument_id] = self._trade_data[instrument_id][-500:]
+
+            # Update volume-based mean reversion indicators
+            await self._update_trade_mean_reversion_indicators(
+                instrument_id, trade_info
+            )
+
+            # Check for volume exhaustion signals (key for mean reversion)
+            if len(self._trade_data[instrument_id]) >= 50:
+                await self._check_volume_exhaustion_signals(instrument_id)
+
+        except Exception as e:
+            self.logger.error(f"Error processing trade tick: {e}")
+
+    async def generate_signals(
+        self, instrument_id: InstrumentId
+    ) -> List[Dict[str, Any]]:
+        """Generate mean reversion signals"""
+        signals = []
+
+        try:
+            # Get current statistical measures
+            z_score = self._get_current_z_score(instrument_id)
+            percentile = self._get_current_percentile(instrument_id)
+
+            # Check for mean reversion signal
+            if abs(z_score) > self.mean_reversion_config.reversion_threshold:
+                signal_direction = -1 if z_score > 0 else 1  # Revert to mean
+
+                # Calculate signal strength
+                signal_strength = self._calculate_reversion_strength(
+                    z_score, percentile
+                )
+
+                # Check holding period constraint
+                holding_period = self._holding_periods.get(str(instrument_id), 0)
+                if holding_period < self.mean_reversion_config.max_holding_period:
+                    signal = {
+                        "instrument_id": instrument_id,
+                        "signal_type": "mean_reversion",
+                        "direction": signal_direction,
+                        "strength": signal_strength,
+                        "z_score": z_score,
+                        "percentile": percentile,
+                        "holding_period": holding_period,
+                        "timestamp": datetime.now(timezone.utc),
+                        "confidence": self._calculate_confidence(
+                            signal_strength, abs(z_score)
+                        ),
+                    }
+
+                    signals.append(signal)
+
+                    # Store current signal
+                    self._reversion_signals[str(instrument_id)] = signal
+
+            return signals
+
+        except Exception as e:
+            self.logger.error(f"Error generating mean reversion signals: {e}")
+            return []
+
+    async def calculate_position_size(self, signal: Dict[str, Any]) -> float:
+        """Calculate position size based on reversion strength"""
+        try:
+            # Base position size
+            base_size = self.mean_reversion_config.max_risk_per_trade
+
+            # Adjust for signal strength
+            strength_multiplier = signal["strength"].value / 3.0
+
+            # Adjust for z-score magnitude (higher deviation = larger position)
+            z_score_multiplier = min(abs(signal["z_score"]) / 3.0, 2.0)
+
+            # Calculate final size
+            position_size = base_size * strength_multiplier * z_score_multiplier
+
+            # Apply direction
+            position_size *= signal["direction"]
+
+            return position_size
+
+        except Exception as e:
+            self.logger.error(f"Error calculating position size: {e}")
+            return 0.0
+
+    async def _update_mean_reversion_indicators(
+        self, instrument_id: InstrumentId, bar: Bar
+    ):
+        """Update mean reversion indicators"""
+        try:
+            instrument_str = str(instrument_id)
+
+            # Store bar data
+            if instrument_str not in self._bars:
+                self._bars[instrument_str] = pd.DataFrame()
+
+            # Add new bar
+            bar_data = {
+                "timestamp": bar.ts_init,
+                "open": float(bar.open),
+                "high": float(bar.high),
+                "low": float(bar.low),
+                "close": float(bar.close),
+                "volume": float(bar.volume),
+            }
+
+            self._bars[instrument_str] = pd.concat(
+                [self._bars[instrument_str], pd.DataFrame([bar_data])]
+            ).tail(self.mean_reversion_config.lookback_periods)
+
+            # Calculate mean reversion indicators
+            await self._calculate_price_mean(instrument_str)
+            await self._calculate_price_deviation(instrument_str)
+            await self._calculate_z_score(instrument_str)
+            await self._calculate_percentile(instrument_str)
+
+        except Exception as e:
+            self.logger.error(f"Error updating mean reversion indicators: {e}")
+
+    async def _calculate_price_mean(self, instrument_id: str):
+        """Calculate price mean using specified method"""
+        try:
+            df = self._bars[instrument_id]
+            if len(df) < self.mean_reversion_config.lookback_period:
+                return
+
+            period = self.mean_reversion_config.lookback_period
+            method = self.mean_reversion_config.mean_calculation_method
+
+            if method == "sma":
+                mean_price = df["close"].tail(period).mean()
+            elif method == "ema":
+                mean_price = df["close"].tail(period).ewm(span=period).mean().iloc[-1]
+            elif method == "median":
+                mean_price = df["close"].tail(period).median()
+            else:
+                mean_price = df["close"].tail(period).mean()  # Default to SMA
+
+            self._price_means[instrument_id] = mean_price
+
+        except Exception as e:
+            self.logger.error(f"Error calculating price mean: {e}")
+
+    async def _calculate_price_deviation(self, instrument_id: str):
+        """Calculate price standard deviation"""
+        try:
+            df = self._bars[instrument_id]
+            if len(df) < self.mean_reversion_config.lookback_period:
+                return
+
+            period = self.mean_reversion_config.lookback_period
+            std_dev = df["close"].tail(period).std()
+
+            self._price_deviations[instrument_id] = std_dev
+
+        except Exception as e:
+            self.logger.error(f"Error calculating price deviation: {e}")
+
+    async def _calculate_z_score(self, instrument_id: str):
+        """Calculate Z-score for current price"""
+        try:
+            df = self._bars[instrument_id]
+            mean_price = self._price_means.get(instrument_id)
+            std_dev = self._price_deviations.get(instrument_id)
+
+            if (
+                df is None
+                or len(df) == 0
+                or mean_price is None
+                or std_dev is None
+                or std_dev == 0
+            ):
+                return
+
+            current_price = df["close"].iloc[-1]
+            z_score = (current_price - mean_price) / std_dev
+
+            self._z_scores[instrument_id] = z_score
+
+        except Exception as e:
+            self.logger.error(f"Error calculating Z-score: {e}")
+
+    async def _calculate_percentile(self, instrument_id: str):
+        """Calculate current price percentile"""
+        try:
+            df = self._bars[instrument_id]
+            if len(df) < self.mean_reversion_config.lookback_period:
+                return
+
+            period = self.mean_reversion_config.lookback_period
+            current_price = df["close"].iloc[-1]
+            historical_prices = df["close"].tail(period)
+
+            percentile = stats.percentileofscore(historical_prices, current_price)
+
+            self._percentiles[instrument_id] = percentile
+
+        except Exception as e:
+            self.logger.error(f"Error calculating percentile: {e}")
+
+    def _calculate_reversion_strength(
+        self, z_score: float, percentile: float
+    ) -> SignalStrength:
+        """Calculate signal strength based on statistical measures"""
+        try:
+            # Z-score strength
+            z_abs = abs(z_score)
+            if z_abs >= 3.0:
+                z_strength = 5
+            elif z_abs >= 2.5:
+                z_strength = 4
+            elif z_abs >= 2.0:
+                z_strength = 3
+            elif z_abs >= 1.5:
+                z_strength = 2
+            else:
+                z_strength = 1
+
+            # Percentile strength (extreme values)
+            if percentile <= 5 or percentile >= 95:
+                p_strength = 5
+            elif percentile <= 10 or percentile >= 90:
+                p_strength = 4
+            elif percentile <= 20 or percentile >= 80:
+                p_strength = 3
+            elif percentile <= 30 or percentile >= 70:
+                p_strength = 2
+            else:
+                p_strength = 1
+
+            # Combined strength
+            combined_strength = (z_strength + p_strength) / 2
+
+            # Map to signal strength
+            if combined_strength >= 4.5:
+                return SignalStrength.VERY_STRONG
+            elif combined_strength >= 3.5:
+                return SignalStrength.STRONG
+            elif combined_strength >= 2.5:
+                return SignalStrength.MODERATE
+            elif combined_strength >= 1.5:
+                return SignalStrength.WEAK
+            else:
+                return SignalStrength.VERY_WEAK
+
+        except Exception as e:
+            self.logger.error(f"Error calculating reversion strength: {e}")
+            return SignalStrength.MODERATE
+
+    def _calculate_confidence(
+        self, signal_strength: SignalStrength, z_score_abs: float
+    ) -> float:
+        """Calculate signal confidence"""
+        try:
+            base_confidence = {
+                SignalStrength.VERY_STRONG: 0.9,
+                SignalStrength.STRONG: 0.75,
+                SignalStrength.MODERATE: 0.6,
+                SignalStrength.WEAK: 0.4,
+                SignalStrength.VERY_WEAK: 0.2,
+            }.get(signal_strength, 0.5)
+
+            # Adjust for extreme z-scores
+            z_adjustment = min(z_score_abs / 4.0, 0.2)
+
+            return min(base_confidence + z_adjustment, 0.95)
+
+        except Exception as e:
+            self.logger.error(f"Error calculating confidence: {e}")
+            return 0.5
+
+    def _get_current_z_score(self, instrument_id: InstrumentId) -> float:
+        """Get current Z-score"""
+        return self._z_scores.get(str(instrument_id), 0.0)
+
+    def _get_current_percentile(self, instrument_id: InstrumentId) -> float:
+        """Get current percentile"""
+        return self._percentiles.get(str(instrument_id), 50.0)
+
+    async def _update_holding_periods(self, instrument_id: InstrumentId):
+        """Update holding periods for positions"""
+        try:
+            instrument_str = str(instrument_id)
+
+            # Check if we have an active position
+            if self._reversion_signals.get(instrument_str):
+                self._holding_periods[instrument_str] = (
+                    self._holding_periods.get(instrument_str, 0) + 1
+                )
+            else:
+                self._holding_periods[instrument_str] = 0
+
+        except Exception as e:
+            self.logger.error(f"Error updating holding periods: {e}")
+
+
+class RSIMeanReversionStrategy(MeanReversionStrategy):
+    """
+    RSI-based mean reversion strategy
+
+    Features:
+    - RSI overbought/oversold detection
+    - Multiple RSI timeframes
+    - Divergence analysis
+    - Dynamic threshold adjustment
+    """
+
+    def __init__(self, config: MeanReversionConfig):
+        super().__init__(config)
+
+        # RSI specific indicators
+        self._rsi_values = {}
+        self._rsi_signals = {}
+
+        self.logger.info("Initialized RSIMeanReversionStrategy")
+
+    async def generate_signals(
+        self, instrument_id: InstrumentId
+    ) -> List[Dict[str, Any]]:
+        """Generate RSI mean reversion signals"""
+        signals = []
+
+        try:
+            # Calculate RSI
+            await self._calculate_rsi(instrument_id)
+
+            # Get RSI signal
+            rsi_signal = await self._detect_rsi_signal(instrument_id)
+
+            if rsi_signal:
+                # Get base mean reversion confirmation
+                base_signals = await super().generate_signals(instrument_id)
+
+                # Create RSI signal
+                signal = {
+                    "instrument_id": instrument_id,
+                    "signal_type": "rsi_mean_reversion",
+                    "direction": rsi_signal["direction"],
+                    "strength": rsi_signal["strength"],
+                    "rsi_value": rsi_signal["rsi_value"],
+                    "rsi_level": rsi_signal["level"],
+                    "timestamp": datetime.now(timezone.utc),
+                    "confidence": rsi_signal["confidence"],
+                }
+
+                # Add mean reversion confirmation if available
+                if base_signals:
+                    mean_reversion_signal = base_signals[0]
+                    if mean_reversion_signal["direction"] == rsi_signal["direction"]:
+                        signal["mean_reversion_confirmed"] = True
+                        signal["z_score"] = mean_reversion_signal["z_score"]
+                        signal["strength"] = max(
+                            signal["strength"], mean_reversion_signal["strength"]
+                        )
+
+                signals.append(signal)
+
+            return signals
+
+        except Exception as e:
+            self.logger.error(f"Error generating RSI mean reversion signals: {e}")
+            return []
+
+    async def _calculate_rsi(self, instrument_id: InstrumentId):
+        """Calculate RSI indicator"""
+        try:
+            instrument_str = str(instrument_id)
+            df = self._bars.get(instrument_str)
+
+            if df is None or len(df) < self.mean_reversion_config.rsi_period + 1:
+                return
+
+            # Calculate price changes
+            df_calc = df.copy()
+            df_calc["price_change"] = df_calc["close"].diff()
+            df_calc["gain"] = df_calc["price_change"].where(
+                df_calc["price_change"] > 0, 0
+            )
+            df_calc["loss"] = -df_calc["price_change"].where(
+                df_calc["price_change"] < 0, 0
+            )
+
+            # Calculate average gains and losses
+            period = self.mean_reversion_config.rsi_period
+            avg_gain = df_calc["gain"].tail(period).mean()
+            avg_loss = df_calc["loss"].tail(period).mean()
+
+            # Calculate RSI
+            if avg_loss == 0:
+                rsi = 100
+            else:
+                rs = avg_gain / avg_loss
+                rsi = 100 - (100 / (1 + rs))
+
+            self._rsi_values[instrument_str] = rsi
+
+        except Exception as e:
+            self.logger.error(f"Error calculating RSI: {e}")
+
+    async def _detect_rsi_signal(
+        self, instrument_id: InstrumentId
+    ) -> Optional[Dict[str, Any]]:
+        """Detect RSI mean reversion signals"""
+        try:
+            instrument_str = str(instrument_id)
+            rsi = self._rsi_values.get(instrument_str)
+
+            if rsi is None:
+                return None
+
+            config = self.mean_reversion_config
+
+            # Extreme oversold (strong buy signal)
+            if rsi <= config.rsi_extreme_oversold:
+                return {
+                    "direction": 1,
+                    "level": "extreme_oversold",
+                    "rsi_value": rsi,
+                    "strength": SignalStrength.VERY_STRONG,
+                    "confidence": 0.9,
+                }
+
+            # Oversold (buy signal)
+            elif rsi <= config.rsi_oversold:
+                return {
+                    "direction": 1,
+                    "level": "oversold",
+                    "rsi_value": rsi,
+                    "strength": SignalStrength.STRONG,
+                    "confidence": 0.75,
+                }
+
+            # Extreme overbought (strong sell signal)
+            elif rsi >= config.rsi_extreme_overbought:
+                return {
+                    "direction": -1,
+                    "level": "extreme_overbought",
+                    "rsi_value": rsi,
+                    "strength": SignalStrength.VERY_STRONG,
+                    "confidence": 0.9,
+                }
+
+            # Overbought (sell signal)
+            elif rsi >= config.rsi_overbought:
+                return {
+                    "direction": -1,
+                    "level": "overbought",
+                    "rsi_value": rsi,
+                    "strength": SignalStrength.STRONG,
+                    "confidence": 0.75,
+                }
+
+            return None
+
+        except Exception as e:
+            self.logger.error(f"Error detecting RSI signal: {e}")
+            return None
+
+
+class BollingerBandStrategy(MeanReversionStrategy):
+    """
+    Bollinger Band mean reversion strategy
+
+    Features:
+    - Bollinger Band squeeze detection
+    - Band width analysis
+    - Multiple standard deviation levels
+    - Volume confirmation
+    """
+
+    def __init__(self, config: MeanReversionConfig):
+        super().__init__(config)
+
+        # Bollinger Band indicators
+        self._bb_upper = {}
+        self._bb_lower = {}
+        self._bb_middle = {}
+        self._bb_width = {}
+
+        self.logger.info("Initialized BollingerBandStrategy")
+
+    async def generate_signals(
+        self, instrument_id: InstrumentId
+    ) -> List[Dict[str, Any]]:
+        """Generate Bollinger Band mean reversion signals"""
+        signals = []
+
+        try:
+            # Calculate Bollinger Bands
+            await self._calculate_bollinger_bands(instrument_id)
+
+            # Detect band signals
+            bb_signal = await self._detect_bollinger_signal(instrument_id)
+
+            if bb_signal:
+                # Get base mean reversion confirmation
+                base_signals = await super().generate_signals(instrument_id)
+
+                # Create Bollinger Band signal
+                signal = {
+                    "instrument_id": instrument_id,
+                    "signal_type": "bollinger_mean_reversion",
+                    "direction": bb_signal["direction"],
+                    "strength": bb_signal["strength"],
+                    "bb_position": bb_signal["position"],
+                    "bb_width": bb_signal["width"],
+                    "price_vs_band": bb_signal["price_vs_band"],
+                    "timestamp": datetime.now(timezone.utc),
+                    "confidence": bb_signal["confidence"],
+                }
+
+                # Add mean reversion confirmation if available
+                if base_signals:
+                    mean_reversion_signal = base_signals[0]
+                    if mean_reversion_signal["direction"] == bb_signal["direction"]:
+                        signal["mean_reversion_confirmed"] = True
+                        signal["z_score"] = mean_reversion_signal["z_score"]
+
+                signals.append(signal)
+
+            return signals
+
+        except Exception as e:
+            self.logger.error(f"Error generating Bollinger Band signals: {e}")
+            return []
+
+    async def _calculate_bollinger_bands(self, instrument_id: InstrumentId):
+        """Calculate Bollinger Bands"""
+        try:
+            instrument_str = str(instrument_id)
+            df = self._bars.get(instrument_str)
+
+            if df is None or len(df) < self.mean_reversion_config.bb_period:
+                return
+
+            period = self.mean_reversion_config.bb_period
+            std_dev = self.mean_reversion_config.bb_std_dev
+
+            # Calculate middle band (SMA)
+            middle = df["close"].tail(period).mean()
+
+            # Calculate standard deviation
+            std = df["close"].tail(period).std()
+
+            # Calculate upper and lower bands
+            upper = middle + (std_dev * std)
+            lower = middle - (std_dev * std)
+
+            # Calculate band width
+            width = (upper - lower) / middle if middle > 0 else 0
+
+            self._bb_upper[instrument_str] = upper
+            self._bb_lower[instrument_str] = lower
+            self._bb_middle[instrument_str] = middle
+            self._bb_width[instrument_str] = width
+
+        except Exception as e:
+            self.logger.error(f"Error calculating Bollinger Bands: {e}")
+
+    async def _detect_bollinger_signal(
+        self, instrument_id: InstrumentId
+    ) -> Optional[Dict[str, Any]]:
+        """Detect Bollinger Band signals"""
+        try:
+            instrument_str = str(instrument_id)
+            df = self._bars.get(instrument_str)
+
+            upper = self._bb_upper.get(instrument_str)
+            lower = self._bb_lower.get(instrument_str)
+            middle = self._bb_middle.get(instrument_str)
+            width = self._bb_width.get(instrument_str)
+
+            if (
+                df is None
+                or len(df) == 0
+                or any(x is None for x in [upper, lower, middle, width])
+            ):
+                return None
+
+            current_price = df["close"].iloc[-1]
+
+            # Check for squeeze (low volatility)
+            is_squeeze = width < self.mean_reversion_config.bb_squeeze_threshold
+
+            # Price below lower band (buy signal)
+            if current_price < lower:
+                distance_from_band = (lower - current_price) / lower
+                strength = self._calculate_bb_strength(distance_from_band, is_squeeze)
+
+                return {
+                    "direction": 1,
+                    "position": "below_lower_band",
+                    "price_vs_band": distance_from_band,
+                    "width": width,
+                    "is_squeeze": is_squeeze,
+                    "strength": strength,
+                    "confidence": min(0.9, 0.5 + distance_from_band * 5),
+                }
+
+            # Price above upper band (sell signal)
+            elif current_price > upper:
+                distance_from_band = (current_price - upper) / upper
+                strength = self._calculate_bb_strength(distance_from_band, is_squeeze)
+
+                return {
+                    "direction": -1,
+                    "position": "above_upper_band",
+                    "price_vs_band": distance_from_band,
+                    "width": width,
+                    "is_squeeze": is_squeeze,
+                    "strength": strength,
+                    "confidence": min(0.9, 0.5 + distance_from_band * 5),
+                }
+
+            return None
+
+        except Exception as e:
+            self.logger.error(f"Error detecting Bollinger signal: {e}")
+            return None
+
+    def _calculate_bb_strength(
+        self, distance: float, is_squeeze: bool
+    ) -> SignalStrength:
+        """Calculate Bollinger Band signal strength"""
+        try:
+            # Base strength from distance
+            if distance >= 0.05:  # 5% beyond band
+                base_strength = SignalStrength.VERY_STRONG
+            elif distance >= 0.03:  # 3% beyond band
+                base_strength = SignalStrength.STRONG
+            elif distance >= 0.02:  # 2% beyond band
+                base_strength = SignalStrength.MODERATE
+            elif distance >= 0.01:  # 1% beyond band
+                base_strength = SignalStrength.WEAK
+            else:
+                base_strength = SignalStrength.VERY_WEAK
+
+            # Enhance strength during squeeze
+            if is_squeeze and base_strength.value < 4:
+                return SignalStrength(base_strength.value + 1)
+
+            return base_strength
+
+        except Exception as e:
+            self.logger.error(f"Error calculating BB strength: {e}")
+            return SignalStrength.MODERATE
+
+
+class PairsTradingStrategy(MeanReversionStrategy):
+    """
+    Statistical arbitrage pairs trading strategy
+
+    Features:
+    - Correlation analysis
+    - Cointegration testing
+    - Z-score based entry/exit
+    - Dynamic hedge ratios
+    """
+
+    def __init__(self, config: MeanReversionConfig):
+        super().__init__(config)
+
+        # Pairs trading specific parameters
+        self._correlations = {}
+        self._cointegration_stats = {}
+        self._hedge_ratios = {}
+        self._spread_z_scores = {}
+
+        # Require at least 2 instruments for pairs trading
+        if len(config.instruments) < 2:
+            raise ValueError("Pairs trading requires at least 2 instruments")
+
+        self.logger.info("Initialized PairsTradingStrategy")
+
+    async def generate_signals(
+        self, instrument_id: InstrumentId
+    ) -> List[Dict[str, Any]]:
+        """Generate pairs trading signals"""
+        signals = []
+
+        try:
+            # Find pairs for this instrument
+            pairs = await self._find_valid_pairs(instrument_id)
+
+            for pair_instrument in pairs:
+                # Calculate pair statistics
+                await self._calculate_pair_statistics(instrument_id, pair_instrument)
+
+                # Detect pair signals
+                pair_signal = await self._detect_pair_signal(
+                    instrument_id, pair_instrument
+                )
+
+                if pair_signal:
+                    signals.append(pair_signal)
+
+            return signals
+
+        except Exception as e:
+            self.logger.error(f"Error generating pairs trading signals: {e}")
+            return []
+
+    async def _find_valid_pairs(
+        self, instrument_id: InstrumentId
+    ) -> List[InstrumentId]:
+        """Find valid trading pairs based on correlation and cointegration"""
+        valid_pairs = []
+
+        try:
+            for other_instrument in self.config.instruments:
+                if other_instrument == str(instrument_id):
+                    continue
+
+                # Check correlation
+                correlation = await self._calculate_correlation(
+                    instrument_id, other_instrument
+                )
+
+                if abs(correlation) >= self.mean_reversion_config.min_correlation:
+                    # Check cointegration
+                    is_cointegrated = await self._test_cointegration(
+                        instrument_id, other_instrument
+                    )
+
+                    if is_cointegrated:
+                        valid_pairs.append(other_instrument)
+
+            return valid_pairs
+
+        except Exception as e:
+            self.logger.error(f"Error finding valid pairs: {e}")
+            return []
+
+    async def _calculate_correlation(
+        self, instrument1: InstrumentId, instrument2: str
+    ) -> float:
+        """Calculate correlation between two instruments"""
+        try:
+            df1 = self._bars.get(str(instrument1))
+            df2 = self._bars.get(instrument2)
+
+            if df1 is None or df2 is None:
+                return 0.0
+
+            period = self.mean_reversion_config.correlation_period
+
+            if len(df1) < period or len(df2) < period:
+                return 0.0
+
+            # Get price series
+            prices1 = df1["close"].tail(period)
+            prices2 = df2["close"].tail(period)
+
+            # Calculate correlation
+            correlation = prices1.corr(prices2)
+
+            return correlation if not np.isnan(correlation) else 0.0
+
+        except Exception as e:
+            self.logger.error(f"Error calculating correlation: {e}")
+            return 0.0
+
+    async def _test_cointegration(
+        self, instrument1: InstrumentId, instrument2: str
+    ) -> bool:
+        """Test cointegration between two instruments"""
+        try:
+            df1 = self._bars.get(str(instrument1))
+            df2 = self._bars.get(instrument2)
+
+            if df1 is None or df2 is None:
+                return False
+
+            period = self.mean_reversion_config.correlation_period
+
+            if len(df1) < period or len(df2) < period:
+                return False
+
+            # Get price series
+            prices1 = df1["close"].tail(period).values
+            prices2 = df2["close"].tail(period).values
+
+            # Perform linear regression
+            X = prices1.reshape(-1, 1)
+            y = prices2
+
+            model = LinearRegression()
+            model.fit(X, y)
+
+            # Calculate residuals
+            residuals = y - model.predict(X)
+
+            # Simple stationarity test (more sophisticated tests like ADF could be used)
+            residual_std = np.std(residuals)
+            residual_mean = np.mean(residuals)
+
+            # Check if residuals are stationary (simplified test)
+            stationarity_score = (
+                abs(residual_mean) / residual_std if residual_std > 0 else 1.0
+            )
+
+            return (
+                stationarity_score < self.mean_reversion_config.cointegration_threshold
+            )
+
+        except Exception as e:
+            self.logger.error(f"Error testing cointegration: {e}")
+            return False
+
+    async def _calculate_pair_statistics(
+        self, instrument1: InstrumentId, instrument2: str
+    ):
+        """Calculate pair trading statistics"""
+        try:
+            df1 = self._bars.get(str(instrument1))
+            df2 = self._bars.get(instrument2)
+
+            if df1 is None or df2 is None:
+                return
+
+            period = self.mean_reversion_config.correlation_period
+
+            if len(df1) < period or len(df2) < period:
+                return
+
+            # Get price series
+            prices1 = df1["close"].tail(period)
+            prices2 = df2["close"].tail(period)
+
+            # Calculate hedge ratio using linear regression
+            X = prices1.values.reshape(-1, 1)
+            y = prices2.values
+
+            model = LinearRegression()
+            model.fit(X, y)
+            hedge_ratio = model.coef_[0]
+
+            # Calculate spread
+            current_price1 = df1["close"].iloc[-1]
+            current_price2 = df2["close"].iloc[-1]
+            spread = current_price2 - (hedge_ratio * current_price1)
+
+            # Calculate spread statistics
+            historical_spreads = prices2 - (hedge_ratio * prices1)
+            spread_mean = historical_spreads.mean()
+            spread_std = historical_spreads.std()
+
+            # Calculate Z-score
+            spread_z_score = (
+                (spread - spread_mean) / spread_std if spread_std > 0 else 0
+            )
+
+            # Store statistics
+            pair_key = f"{instrument1}_{instrument2}"
+            self._hedge_ratios[pair_key] = hedge_ratio
+            self._spread_z_scores[pair_key] = spread_z_score
+
+        except Exception as e:
+            self.logger.error(f"Error calculating pair statistics: {e}")
+
+    async def _detect_pair_signal(
+        self, instrument1: InstrumentId, instrument2: str
+    ) -> Optional[Dict[str, Any]]:
+        """Detect pairs trading signals"""
+        try:
+            pair_key = f"{instrument1}_{instrument2}"
+            z_score = self._spread_z_scores.get(pair_key, 0)
+            hedge_ratio = self._hedge_ratios.get(pair_key, 1)
+
+            config = self.mean_reversion_config
+
+            # Entry signals
+            if abs(z_score) >= config.zscore_entry:
+                direction = -1 if z_score > 0 else 1  # Mean reversion
+
+                # Calculate signal strength
+                strength = self._calculate_pairs_strength(abs(z_score))
+
+                return {
+                    "instrument_id": instrument1,
+                    "pair_instrument": instrument2,
+                    "signal_type": "pairs_trading",
+                    "direction": direction,
+                    "strength": strength,
+                    "z_score": z_score,
+                    "hedge_ratio": hedge_ratio,
+                    "entry_type": "divergence",
+                    "timestamp": datetime.now(timezone.utc),
+                    "confidence": min(0.9, abs(z_score) / 4.0),
+                }
+
+            # Exit signals (if we have positions)
+            elif abs(z_score) <= config.zscore_exit:
+                return {
+                    "instrument_id": instrument1,
+                    "pair_instrument": instrument2,
+                    "signal_type": "pairs_trading_exit",
+                    "direction": 0,  # Close position
+                    "strength": SignalStrength.MODERATE,
+                    "z_score": z_score,
+                    "hedge_ratio": hedge_ratio,
+                    "entry_type": "convergence",
+                    "timestamp": datetime.now(timezone.utc),
+                    "confidence": 0.8,
+                }
+
+            return None
+
+        except Exception as e:
+            self.logger.error(f"Error detecting pair signal: {e}")
+            return None
+
+    def _calculate_pairs_strength(self, z_score_abs: float) -> SignalStrength:
+        """Calculate pairs trading signal strength"""
+        try:
+            if z_score_abs >= 3.0:
+                return SignalStrength.VERY_STRONG
+            elif z_score_abs >= 2.5:
+                return SignalStrength.STRONG
+            elif z_score_abs >= 2.0:
+                return SignalStrength.MODERATE
+            elif z_score_abs >= 1.5:
+                return SignalStrength.WEAK
+            else:
+                return SignalStrength.VERY_WEAK
+
+        except Exception as e:
+            self.logger.error(f"Error calculating pairs strength: {e}")
+            return SignalStrength.MODERATE

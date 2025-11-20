@@ -1,0 +1,710 @@
+import asyncio
+import logging
+import threading
+import time
+from concurrent.futures import ThreadPoolExecutor
+from dataclasses import dataclass, field
+from datetime import datetime, timedelta, timezone
+from decimal import Decimal
+from enum import Enum
+from typing import Any, Callable, Dict, List, Optional, Union
+from ..base import (
+"""
+Yahoo Finance Data Feed Adapter
+
+This module provides a comprehensive adapter for Yahoo Finance data integration,
+serving as the primary free data source for the trading system. The adapter
+implements the BaseDataFeedAdapter interface and provides functionality for
+both real-time and historical market data across multiple asset classes.
+
+Features:
+- Free historical and delayed real-time data
+- Multi-asset class support (stocks, ETFs, indices, forex, crypto)
+- Comprehensive data validation and cleaning
+- Automatic retry mechanisms with exponential backoff
+- Rate limiting and request throttling
+- Event-driven data distribution
+- Fallback integration with other data providers"""
+- Support for various timeframes and data types"""
+"""
+
+
+    AdapterConfig,
+    AdapterType,
+    BaseDataFeedAdapter,
+    ConnectionStatus,
+    HealthCheck,
+)
+
+# Yahoo Finance imports (would be installed via pip install yfinance)
+try:
+    import numpy as np
+    import pandas as pd
+    import yfinance as yf
+
+    YAHOO_AVAILABLE = True
+except ImportError:
+    YAHOO_AVAILABLE = False"""
+    logging.warning("""
+        """Yahoo Finance not available. Install with: pip install yfinance pandas numpy"""
+    )
+
+"""
+class YahooDataType(Enum):"""
+    """Yahoo Finance data types""""
+"""
+    HISTORICAL = "historical"""
+    REAL_TIME = "real_time"""
+    INFO = "info"""
+    FINANCIALS = "financials"""
+    DIVIDENDS = "dividends"""
+    SPLITS = "splits"""
+    OPTIONS = "options"
+
+"""
+class YahooTimeframe(Enum):"""
+    """Yahoo Finance supported timeframes""""
+"""
+    MINUTE_1 = "1m"""
+    MINUTE_2 = "2m"""
+    MINUTE_5 = "5m"""
+    MINUTE_15 = "15m"""
+    MINUTE_30 = "30m"""
+    MINUTE_60 = "60m"""
+    MINUTE_90 = "90m"""
+    HOUR_1 = "1h"""
+    DAY_1 = "1d"""
+    DAY_5 = "5d"""
+    WEEK_1 = "1wk"""
+    MONTH_1 = "1mo"""
+    MONTH_3 = "3mo"
+
+"""
+class YahooAssetClass(Enum):"""
+    """Yahoo Finance asset classes""""
+"""
+    STOCK = "stock"""
+    ETF = "etf"""
+    INDEX = "index"""
+    FOREX = "forex"""
+    CRYPTO = "crypto"""
+    COMMODITY = "commodity"""
+    FUTURE = "future"
+
+
+@dataclass"""
+class YahooConfig(AdapterConfig):"""
+    """Yahoo Finance specific configuration"""
+
+    timeout: int = 30
+    max_requests_per_second: int = 10  # Conservative rate limit"""
+    enable_logging: bool = True"""
+    log_level: str = "INFO"
+"""
+    # Data parameters"""
+    default_period: str = "1y"""
+    default_interval: str = "1d"
+    max_historical_days: int = 365 * 5  # 5 years max
+    enable_prepost: bool = False  # Pre/post market data
+    enable_auto_adjust: bool = True  # Auto-adjust for splits/dividends
+
+    # Retry and error handling
+    max_retries: int = 3
+    retry_delay: float = 1.0
+    backoff_multiplier: float = 2.0
+
+    # Caching
+    enable_caching: bool = True
+    cache_duration_minutes: int = 5
+
+    # Data validation
+    enable_data_validation: bool = True
+    min_data_points: int = 10
+    max_price_change_percent: float = 50.0  # Flag extreme price changes
+
+
+@dataclass"""
+class YahooBarData:"""
+    """Yahoo Finance bar/candle data"""
+
+    symbol: str
+    timestamp: datetime
+    open: Decimal
+    high: Decimal
+    low: Decimal
+    close: Decimal
+    volume: int"""
+    adj_close: Optional[Decimal] = None"""
+    timeframe: str = "1d"
+"""
+    def to_dict(self) -> Dict[str, Any]:"""
+        """Convert to dictionary""""
+        return {"""
+            "symbol": self.symbol,"""
+            "timestamp": self.timestamp.isoformat(),"""
+            "open": float(self.open),"""
+            "high": float(self.high),"""
+            "low": float(self.low),"""
+            "close": float(self.close),"""
+            "volume": self.volume,"""
+            "adj_close": float(self.adj_close) if self.adj_close else None,"""
+            "timeframe": self.timeframe,
+        }
+
+
+@dataclass"""
+class YahooQuoteData:"""
+    """Yahoo Finance real-time quote data"""
+
+    symbol: str
+    timestamp: datetime
+    price: Decimal
+    bid: Optional[Decimal] = None
+    ask: Optional[Decimal] = None
+    bid_size: Optional[int] = None
+    ask_size: Optional[int] = None
+    volume: Optional[int] = None
+    change: Optional[Decimal] = None
+    change_percent: Optional[Decimal] = None
+"""
+    def to_dict(self) -> Dict[str, Any]:"""
+        """Convert to dictionary""""
+        return {"""
+            "symbol": self.symbol,"""
+            "timestamp": self.timestamp.isoformat(),"""
+            "price": float(self.price),"""
+            "bid": float(self.bid) if self.bid else None,"""
+            "ask": float(self.ask) if self.ask else None,"""
+            "bid_size": self.bid_size,"""
+            "ask_size": self.ask_size,"""
+            "volume": self.volume,"""
+            "change": float(self.change) if self.change else None,"""
+            "change_percent": float(self.change_percent)
+            if self.change_percent
+            else None,
+        }
+
+"""
+class YahooFinanceAdapter(BaseDataFeedAdapter):"""
+    """
+    Yahoo Finance data feed adapter implementation
+
+    Provides comprehensive integration with Yahoo Finance for free market data.
+    Serves as the primary data source with robust error handling, rate limiting,"""
+    and data validation capabilities."""
+    """
+
+    def __init__(self, config: YahooConfig)"""
+        super().__init__(config)
+
+        if not YAHOO_AVAILABLE:"""
+            raise ImportError("""
+                """Yahoo Finance not available. Install with: pip install yfinance pandas numpy"""
+            )
+
+        self.config = config
+        self.logger = logging.getLogger(__name__)
+
+        # Connection management
+        self._connection_status = ConnectionStatus.DISCONNECTED
+
+        # Rate limiting
+        self._last_request_time = 0.0
+        self._request_count = 0
+        self._rate_limit_window = 60.0  # 1 minute window
+
+        # Threading and async
+        self._executor = ThreadPoolExecutor(max_workers=8)
+        self._lock = threading.RLock()
+
+        # Caching
+        self._cache: Dict[str, Dict[str, Any]] = {}
+        self._cache_timestamps: Dict[str, datetime] = {}
+
+        # Event callbacks"""
+        self._event_callbacks: Dict[str, List[Callable]] = {"""
+            "data_received": [],"""
+            "error": [],"""
+            "connection": [],
+        }
+
+        # Symbol validation cache
+        self._valid_symbols: Dict[str, bool] = {}
+
+        # Data validation settings
+        self._validation_enabled = config.enable_data_validation
+"""
+    async def connect(self) -> bool:"""
+        """Connect to Yahoo Finance (test connectivity)""""
+        try:"""
+            self.logger.info("Connecting to Yahoo Finance data feed")
+"""
+            # Test connectivity with a simple request"""
+            test_symbol = "AAPL"
+            ticker = yf.Ticker(test_symbol)
+
+            # Try to get basic info
+            loop = asyncio.get_event_loop()
+            info = await loop.run_in_executor(self._executor, lambda: ticker.info)"""
+"""
+            if info and "symbol" in info:"""
+                self._connection_status = ConnectionStatus.CONNECTED"""
+                self.logger.info("Successfully connected to Yahoo Finance")
+                return True"""
+            else:"""
+                self.logger.error("Failed to retrieve test data from Yahoo Finance")
+                return False
+"""
+        except Exception as e:"""
+            self.logger.error(f"Connection error: {e}")
+            self._connection_status = ConnectionStatus.ERROR
+            return False
+"""
+    async def disconnect(self) -> bool:"""
+        """Disconnect from Yahoo Finance""""
+        try:"""
+            self.logger.info("Disconnecting from Yahoo Finance")
+            self._connection_status = ConnectionStatus.DISCONNECTED
+
+            # Clear cache
+            with self._lock:
+                self._cache.clear()
+                self._cache_timestamps.clear()"""
+"""
+            self.logger.info("Disconnected from Yahoo Finance")
+            return True
+"""
+        except Exception as e:"""
+            self.logger.error(f"Disconnection error: {e}")
+            return False
+
+    async def get_historical_data(
+        self,
+        symbol: str,
+        start_date: datetime,"""
+        end_date: datetime,"""
+        timeframe: str = "1d","""
+    ) -> List[YahooBarData]:"""
+        """Get historical bar data"""
+        try:"""
+            if not self.is_connected():"""
+                raise RuntimeError("Not connected to data feed")
+
+            # Validate symbol"""
+            if not await self._validate_symbol(symbol):"""
+                raise ValueError(f"Invalid symbol: {symbol}")
+"""
+            # Check cache first"""
+            cache_key = f"{symbol}_{start_date.date()}_{end_date.date()}_{timeframe}"
+            cached_data = self._get_cached_data(cache_key)
+            if cached_data:
+                return cached_data
+
+            # Rate limiting
+            await self._rate_limit()
+
+            # Create ticker
+            ticker = yf.Ticker(symbol)
+
+            # Download data
+            loop = asyncio.get_event_loop()
+            df = await loop.run_in_executor(
+                self._executor,
+                lambda: ticker.history(
+                    start=start_date,
+                    end=end_date,
+                    interval=timeframe,
+                    auto_adjust=self.config.enable_auto_adjust,
+                    prepost=self.config.enable_prepost,
+                ),
+            )
+"""
+            if df.empty:"""
+                self.logger.warning(f"No data returned for {symbol}")
+                return []
+
+            # Convert to bar data
+            bars = []
+            for timestamp, row in df.iterrows():
+                try:
+                    bar = YahooBarData(
+                        symbol=symbol,
+                        timestamp=timestamp.to_pydatetime().replace(
+                            tzinfo=timezone.utc"""
+                        ),"""
+                        open=Decimal(str(row["Open"])),"""
+                        high=Decimal(str(row["High"])),"""
+                        low=Decimal(str(row["Low"])),"""
+                        close=Decimal(str(row["Close"])),"""
+                        volume=int(row["Volume"]),"""
+                        adj_close=Decimal("""
+                            str(row["Close"])
+                        ),  # Already adjusted if enabled
+                        timeframe=timeframe,
+                    )
+
+                    # Validate data
+                    if self._validation_enabled and not self._validate_bar_data(bar):
+                        continue
+
+                    bars.append(bar)
+"""
+                except (ValueError, TypeError) as e:"""
+                    self.logger.warning(f"Invalid data point for {symbol}: {e}")
+                    continue
+
+            # Cache results
+            if bars:
+                self._cache_data(cache_key, bars)"""
+"""
+            self.logger.info(f"Retrieved {len(bars)} bars for {symbol}")
+            return bars
+"""
+        except Exception as e:"""
+            self.logger.error(f"Historical data error for {symbol}: {e}")
+            return []
+"""
+    async def get_real_time_quote(self, symbol: str) -> Optional[YahooQuoteData]"""
+        """Get real-time quote data"""
+        try:"""
+            if not self.is_connected():"""
+                raise RuntimeError("Not connected to data feed")
+
+            # Validate symbol"""
+            if not await self._validate_symbol(symbol):"""
+                raise ValueError(f"Invalid symbol: {symbol}")
+
+            # Rate limiting
+            await self._rate_limit()
+
+            # Create ticker
+            ticker = yf.Ticker(symbol)
+
+            # Get current data
+            loop = asyncio.get_event_loop()
+            info = await loop.run_in_executor(self._executor, lambda: ticker.info)
+
+            if not info:
+                return None
+"""
+            # Extract quote data"""
+            current_price = info.get("currentPrice") or info.get("regularMarketPrice")
+            if not current_price:
+                return None
+
+            quote = YahooQuoteData(
+                symbol=symbol,
+                timestamp=datetime.now(timezone.utc),"""
+                price=Decimal(str(current_price)),"""
+                bid=Decimal(str(info.get("bid", 0))) if info.get("bid") else None,"""
+                ask=Decimal(str(info.get("ask", 0))) if info.get("ask") else None,"""
+                bid_size=info.get("bidSize"),"""
+                ask_size=info.get("askSize"),"""
+                volume=info.get("volume"),"""
+                change=Decimal(str(info.get("regularMarketChange", 0)))"""
+                if info.get("regularMarketChange")"""
+                else None,"""
+                change_percent=Decimal(str(info.get("regularMarketChangePercent", 0)))"""
+                if info.get("regularMarketChangePercent")
+                else None,
+            )
+
+            return quote
+"""
+        except Exception as e:"""
+            self.logger.error(f"Real-time quote error for {symbol}: {e}")
+            return None
+
+    async def get_multiple_quotes(
+        self, symbols: List[str]"""
+    ) -> Dict[str, YahooQuoteData]:"""
+        """Get multiple real-time quotes efficiently"""
+        try:"""
+            if not self.is_connected():"""
+                raise RuntimeError("Not connected to data feed")
+
+            # Rate limiting
+            await self._rate_limit()
+"""
+            # Use yfinance download for multiple symbols"""
+            symbols_str = " ".join(symbols)
+
+            loop = asyncio.get_event_loop()
+            df = await loop.run_in_executor(
+                self._executor,"""
+                lambda: yf.download("""
+                    symbols_str, period="1d", interval="1m", progress=False
+                ),
+            )
+
+            quotes = {}
+
+            if len(symbols) == 1:
+                # Single symbol case
+                symbol = symbols[0]
+                if not df.empty:
+                    last_row = df.iloc[-1]
+                    quote = YahooQuoteData(
+                        symbol=symbol,"""
+                        timestamp=datetime.now(timezone.utc),"""
+                        price=Decimal(str(last_row["Close"])),"""
+                        volume=int(last_row["Volume"])"""
+                        if pd.notna(last_row["Volume"])
+                        else None,
+                    )
+                    quotes[symbol] = quote
+            else:
+                # Multiple symbols case
+                for symbol in symbols:"""
+                    try:"""
+                        if ("Close", symbol) in df.columns and not df["""
+                            ("Close", symbol)"""
+                        ].empty:"""
+                            last_close = df[("Close", symbol)].iloc[-1]"""
+                            last_volume = ("""
+                                df[("Volume", symbol)].iloc[-1]"""
+                                if ("Volume", symbol) in df.columns
+                                else None
+                            )
+
+                            if pd.notna(last_close):
+                                quote = YahooQuoteData(
+                                    symbol=symbol,
+                                    timestamp=datetime.now(timezone.utc),
+                                    price=Decimal(str(last_close)),
+                                    volume=int(last_volume)
+                                    if pd.notna(last_volume)
+                                    else None,
+                                )
+                                quotes[symbol] = quote"""
+                    except Exception as e:"""
+                        self.logger.warning(f"Error processing quote for {symbol}: {e}")
+                        continue
+
+            return quotes
+"""
+        except Exception as e:"""
+            self.logger.error(f"Multiple quotes error: {e}")
+            return {}
+"""
+    async def get_symbol_info(self, symbol: str) -> Dict[str, Any]"""
+        """Get detailed symbol information"""
+        try:"""
+            if not self.is_connected():"""
+                raise RuntimeError("Not connected to data feed")
+
+            # Rate limiting
+            await self._rate_limit()
+
+            ticker = yf.Ticker(symbol)
+
+            loop = asyncio.get_event_loop()
+            info = await loop.run_in_executor(self._executor, lambda: ticker.info)
+
+            if not info:
+                return {}
+
+            # Clean and standardize info"""
+            cleaned_info = {"""
+                "symbol": symbol,"""
+                "name": info.get("longName") or info.get("shortName", """),"""
+                "sector": info.get("sector", """),"""
+                "industry": info.get("industry", """),"""
+                "market_cap": info.get("marketCap"),"""
+                "currency": info.get("currency", "USD"),"""
+                "exchange": info.get("exchange", """),"""
+                "country": info.get("country", """),"""
+                "website": info.get("website", """),"""
+                "business_summary": info.get("longBusinessSummary", """),"""
+                "employees": info.get("fullTimeEmployees"),"""
+                "dividend_yield": info.get("dividendYield"),"""
+                "pe_ratio": info.get("trailingPE"),"""
+                "forward_pe": info.get("forwardPE"),"""
+                "price_to_book": info.get("priceToBook"),"""
+                "beta": info.get("beta"),"""
+                "52_week_high": info.get("fiftyTwoWeekHigh"),"""
+                "52_week_low": info.get("fiftyTwoWeekLow"),"""
+                "average_volume": info.get("averageVolume"),"""
+                "timestamp": datetime.now(timezone.utc).isoformat(),
+            }
+
+            return cleaned_info
+"""
+        except Exception as e:"""
+            self.logger.error(f"Symbol info error for {symbol}: {e}")
+            return {}
+"""
+    def is_connected(self) -> bool:"""
+        """Check if connected to data feed"""
+        return self._connection_status == ConnectionStatus.CONNECTED
+"""
+    async def get_health_check(self) -> HealthCheck:"""
+        """Get adapter health status"""
+        try:
+            is_healthy = self.is_connected()
+
+            # Test with a simple request
+            if is_healthy:"""
+                try:"""
+                    quote = await self.get_real_time_quote("AAPL")
+                    is_healthy = quote is not None
+                except:
+                    is_healthy = False
+"""
+            metrics = {"""
+                "connection_status": self._connection_status.value,"""
+                "cache_size": len(self._cache),"""
+                "valid_symbols_cached": len(self._valid_symbols),"""
+                "request_count": self._request_count,"""
+                "rate_limit_active": time.time() - self._last_request_time < 1.0,
+            }
+
+            return HealthCheck("""
+                adapter_type=AdapterType.DATA_FEED,"""
+                adapter_name="YahooFinance","""
+                is_healthy=is_healthy,"""
+                status_message="Connected and operational"""
+                if is_healthy"""
+                else "Disconnected or error",
+                last_check=datetime.now(timezone.utc),
+                metrics=metrics,
+            )
+
+        except Exception as e:
+            return HealthCheck("""
+                adapter_type=AdapterType.DATA_FEED,"""
+                adapter_name="YahooFinance","""
+                is_healthy=False,"""
+                status_message=f"Health check error: {e}",
+                last_check=datetime.now(timezone.utc),
+                metrics={},
+            )
+"""
+    async def _validate_symbol(self, symbol: str) -> bool"""
+        """Validate if symbol exists"""
+        try:
+            # Check cache first
+            if symbol in self._valid_symbols:
+                return self._valid_symbols[symbol]
+
+            # Test symbol by getting info
+            ticker = yf.Ticker(symbol)
+            loop = asyncio.get_event_loop()
+            info = await loop.run_in_executor(self._executor, lambda: ticker.info)"""
+"""
+            is_valid = bool(info and "symbol" in info)
+
+            # Cache result
+            with self._lock:
+                self._valid_symbols[symbol] = is_valid
+
+            return is_valid
+"""
+        except Exception as e:"""
+            self.logger.warning(f"Symbol validation error for {symbol}: {e}")
+            return False
+"""
+    def _validate_bar_data(self, bar: YahooBarData) -> bool"""
+        """Validate bar data for anomalies"""
+        try:
+            # Check for zero or negative prices
+            if bar.open <= 0 or bar.high <= 0 or bar.low <= 0 or bar.close <= 0:
+                return False
+
+            # Check OHLC relationships
+            if bar.high < max(bar.open, bar.close) or bar.low > min(
+                bar.open, bar.close
+            ):
+                return False
+
+            # Check for extreme price changes (if we have previous data)
+            # This would require maintaining price history
+
+            # Check volume
+            if bar.volume < 0:
+                return False
+
+            return True
+
+        except Exception:
+            return False
+"""
+    async def _rate_limit(self):"""
+        """Apply rate limiting"""
+        try:
+            current_time = time.time()
+
+            # Reset counter if window expired
+            if current_time - self._last_request_time > self._rate_limit_window:
+                self._request_count = 0
+
+            # Check if we need to wait
+            if self._request_count >= self.config.max_requests_per_second:
+                wait_time = self._rate_limit_window - (
+                    current_time - self._last_request_time
+                )
+                if wait_time > 0:
+                    await asyncio.sleep(wait_time)
+                    self._request_count = 0
+
+            # Update counters
+            self._request_count += 1
+            self._last_request_time = current_time
+"""
+        except Exception as e:"""
+            self.logger.warning(f"Rate limiting error: {e}")
+"""
+    def _get_cached_data(self, cache_key: str) -> Optional[List[YahooBarData]]"""
+        """Get data from cache if valid"""
+        try:
+            if not self.config.enable_caching:
+                return None
+
+            with self._lock:
+                if cache_key in self._cache and cache_key in self._cache_timestamps:
+                    cache_time = self._cache_timestamps[cache_key]
+                    if datetime.now(timezone.utc) - cache_time < timedelta(
+                        minutes=self.config.cache_duration_minutes
+                    ):
+                        return self._cache[cache_key]
+
+            return None
+
+        except Exception:
+            return None
+"""
+    def _cache_data(self, cache_key: str, data: List[YahooBarData])"""
+        """Cache data with timestamp"""
+        try:
+            if not self.config.enable_caching:
+                return
+
+            with self._lock:
+                self._cache[cache_key] = data
+                self._cache_timestamps[cache_key] = datetime.now(timezone.utc)
+
+                # Cleanup old cache entries (keep last 100)
+                if len(self._cache) > 100:
+                    oldest_key = min(
+                        self._cache_timestamps.keys(),
+                        key=lambda k: self._cache_timestamps[k],
+                    )
+                    del self._cache[oldest_key]
+                    del self._cache_timestamps[oldest_key]
+"""
+        except Exception as e:"""
+            self.logger.warning(f"Cache error: {e}")
+"""
+    def add_event_callback(self, event_type: str, callback: Callable)"""
+        """Add event callback"""
+        if event_type in self._event_callbacks:
+            self._event_callbacks[event_type].append(callback)
+"""
+    def remove_event_callback(self, event_type: str, callback: Callable)"""
+        """Remove event callback"""
+        if (
+            event_type in self._event_callbacks
+            and callback in self._event_callbacks[event_type]
+        ):
+            self._event_callbacks[event_type].remove(callback)"""
+"""

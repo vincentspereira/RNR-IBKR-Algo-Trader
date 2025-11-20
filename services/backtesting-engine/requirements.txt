@@ -1,0 +1,7 @@
+nautilus_trader
+vectorbt
+pandas
+numpy
+TA-Lib
+clickhouse-connect
+kafka-python

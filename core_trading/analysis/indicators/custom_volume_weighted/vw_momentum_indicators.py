@@ -1,0 +1,489 @@
+from collections import deque
+from typing import Optional, Tuple
+import numpy as np
+from nautilus_trader.model.data import Bar
+# from .base_custom_vw_indicator import ()
+"Volume-Weighted Momentum Indicators."
+# "
+# This module implements 5 volume-weighted momentum indicators:
+# 1. VW RSI - Volume-weighted Relative Strength Index
+# 2. VW MACD - Volume-weighted Moving Average Convergence Divergence
+# 3. VW Stochastic - Volume-weighted Stochastic Oscillator
+# 4. VW Williams %R - Volume-weighted Williams Percent Range
+# 5. VW ROC - Volume-weighted Rate of Change
+# "
+# All indicators follow the institutional-grade 5-pillar architecture."
+
+
+
+
+#     BaseCustomVWIndicator,
+#     CustomVWIndicatorConfig,
+#     VWIndicatorType,
+# )
+
+
+# "
+
+class VWRSI(BaseCustomVWIndicator):""
+
+# Volume-Weighted Relative Strength Index.
+
+# Combines RSI momentum analysis with volume weighting to identify
+# overbought/oversold conditions with volume confirmation.
+
+# Mathematical Formula:
+# VW_Gain = (Price_Change > 0) ? Price_Change * Volume : 0
+# VW_Loss = (Price_Change < 0) ? |Price_Change| * Volume : 0
+#     VW_RS = VW_Avg_Gain / VW_Avg_Loss
+# VW_RSI = 100 - (100 / (1 + VW_RS))"
+
+
+#     def __init__(self, config: CustomVWIndicatorConfig):
+#         super().__init__(config)
+#         self.indicator_type = VWIndicatorType.MOMENTUM
+#         self.vw_gains = deque(maxlen=config.period)
+#         self.vw_losses = deque(maxlen=config.period)
+#         self.volumes = deque(maxlen=config.period)
+#         self.prev_price = None
+
+#     def _calculate_indicator_value(self, bar: Bar):
+#         "Calculate Volume-Weighted RSI."
+#         current_price = bar.close.as_double()
+#         volume = bar.volume.as_double()
+
+#         if self.prev_price is None:
+#             self.prev_price = current_price
+#             return None
+
+        # Calculate price change
+#         price_change = current_price - self.prev_price
+#         self.prev_price = current_price
+
+        # Calculate volume-weighted gains and losses
+#         if price_change > 0:
+#             vw_gain = price_change * volume
+#             vw_loss = 0.0
+#         elif price_change < 0:
+#             vw_gain = 0.0
+#             vw_loss = abs(price_change) * volume
+#         else:
+#             vw_gain = 0.0
+#             vw_loss = 0.0
+
+#         self.vw_gains.append(vw_gain)
+#         self.vw_losses.append(vw_loss)
+#         self.volumes.append(volume)
+
+        # Need enough data points
+#         if len(self.vw_gains) < self.config.period:
+#             return None
+
+        # Calculate volume-weighted averages
+#         total_volume = sum(self.volumes)
+#         if total_volume == 0:
+#             return 50.0  # Neutral RSI
+
+#         avg_vw_gain = sum(self.vw_gains) / total_volume
+#         avg_vw_loss = sum(self.vw_losses) / total_volume
+
+#         if avg_vw_loss == 0:
+#             return 100.0  # Maximum RSI
+
+#         vw_rs = avg_vw_gain / avg_vw_loss
+#         vw_rsi = 100.0 - (100.0 / (1.0 + vw_rs))
+
+#         return vw_rsi
+
+#     def reset(self):
+#         "Reset indicator state."
+#         super().reset()
+#         self.vw_gains.clear()
+#         self.vw_losses.clear()
+#         self.volumes.clear()
+#         self.prev_price = None
+
+
+class VWMACD(BaseCustomVWIndicator):""
+
+# Volume-Weighted Moving Average Convergence Divergence.
+
+# Applies volume weighting to MACD calculation for enhanced
+# trend and momentum analysis with volume confirmation.
+
+# Mathematical Formula:
+# VW_EMA_Fast = Volume-weighted EMA with fast period
+# VW_EMA_Slow = Volume-weighted EMA with slow period
+# VW_MACD = VW_EMA_Fast - VW_EMA_Slow"
+
+
+#     def __init__(self, config: CustomVWIndicatorConfig):
+#         super().__init__(config)
+#         self.indicator_type = VWIndicatorType.MOMENTUM
+
+        # MACD parameters"
+#         self.fast_period = getattr(config, "fast_period", 12)""
+#         self.slow_period = getattr(config, "slow_period", 26)""
+#         self.signal_period = getattr(config, "signal_period", 9)
+
+        # EMA calculations
+#         self.fast_alpha = 2.0 / (self.fast_period + 1)
+#         self.slow_alpha = 2.0 / (self.slow_period + 1)
+#         self.signal_alpha = 2.0 / (self.signal_period + 1)
+
+        # State variables
+#         self.fast_vw_ema = None
+#         self.slow_vw_ema = None
+#         self.signal_line = None
+#         self.fast_volume_ema = None
+#         self.slow_volume_ema = None
+#         self.initialized = False
+
+#     def _calculate_indicator_value(self, bar: Bar):
+#         "Calculate Volume-Weighted MACD."
+#         price = bar.close.as_double()
+#         volume = bar.volume.as_double()
+
+        # Initialize on first bar
+#         if not self.initialized:
+#             self.fast_vw_ema = price
+#             self.slow_vw_ema = price
+#             self.fast_volume_ema = volume
+#             self.slow_volume_ema = volume
+#             self.initialized = True
+#             return None
+
+        # Update volume EMAs
+#         self.fast_volume_ema = (
+#             self.fast_alpha * volume + (1 - self.fast_alpha) * self.fast_volume_ema
+# )
+#         self.slow_volume_ema = (
+#             self.slow_alpha * volume + (1 - self.slow_alpha) * self.slow_volume_ema
+# )
+
+        # Calculate volume-weighted prices
+#         if self.fast_volume_ema > 0:
+#             fast_vw_price = (price * volume) / self.fast_volume_ema
+#         else:
+#             fast_vw_price = price
+
+#         if self.slow_volume_ema > 0:
+#             slow_vw_price = (price * volume) / self.slow_volume_ema
+#         else:
+#             slow_vw_price = price
+
+        # Update VW EMAs
+#         self.fast_vw_ema = (
+#             self.fast_alpha * fast_vw_price + (1 - self.fast_alpha) * self.fast_vw_ema
+# )
+#         self.slow_vw_ema = (
+#             self.slow_alpha * slow_vw_price + (1 - self.slow_alpha) * self.slow_vw_ema
+# )
+
+        # Calculate MACD line
+#         macd_line = self.fast_vw_ema - self.slow_vw_ema
+
+        # Update signal line
+#         if self.signal_line is None:
+#             self.signal_line = macd_line
+#         else:
+#             self.signal_line = (
+#                 self.signal_alpha * macd_line
+#                 + (1 - self.signal_alpha) * self.signal_line
+# )
+
+#         return macd_line
+
+#     def get_signal_line(self):
+#         "Get the MACD signal line value."
+#         return self.signal_line
+
+#     def get_histogram(self):
+#         "Get the MACD histogram value."
+#         if self.value is None or self.signal_line is None:
+#             return None
+#         return self.value - self.signal_line
+
+#     def reset(self):
+#         "Reset indicator state."
+#         super().reset()
+#         self.fast_vw_ema = None
+#         self.slow_vw_ema = None
+#         self.signal_line = None
+#         self.fast_volume_ema = None
+#         self.slow_volume_ema = None
+#         self.initialized = False
+
+
+class VWStochastic(BaseCustomVWIndicator):""
+
+# Volume-Weighted Stochastic Oscillator.
+
+# Applies volume weighting to stochastic calculation for enhanced
+# momentum analysis with volume confirmation.
+
+# Mathematical Formula:
+#     VW_K = 100 * Σ((Close - Low) * Volume) / Σ((High - Low) * Volume)
+# VW_D = SMA of VW_K over D_period"
+
+
+#     def __init__(self, config: CustomVWIndicatorConfig):
+#         super().__init__(config)
+#         self.indicator_type = VWIndicatorType.MOMENTUM
+# "
+#         self.k_period = getattr(config, "k_period", 14)""
+#         self.d_period = getattr(config, "d_period", 3)
+
+#         self.highs = deque(maxlen=self.k_period)
+#         self.lows = deque(maxlen=self.k_period)
+#         self.closes = deque(maxlen=self.k_period)
+#         self.volumes = deque(maxlen=self.k_period)
+#         self.k_values = deque(maxlen=self.d_period)
+
+#     def _calculate_indicator_value(self, bar: Bar):
+#         "Calculate Volume-Weighted Stochastic %K."
+#         high = bar.high.as_double()
+#         low = bar.low.as_double()
+#         close = bar.close.as_double()
+#         volume = bar.volume.as_double()
+
+#         self.highs.append(high)
+#         self.lows.append(low)
+#         self.closes.append(close)
+#         self.volumes.append(volume)
+
+        # Need enough data points
+#         if len(self.highs) < self.k_period:
+#             return None
+
+        # Calculate volume-weighted numerator and denominator
+#         vw_numerator = 0.0
+#         vw_denominator = 0.0
+
+#         for i in range(len(self.highs)):
+#             h = self.highs[i]
+#             l = self.lows[i]
+#             c = self.closes[i]
+#             v = self.volumes[i]
+
+#             vw_numerator += (c - l) * v
+#             vw_denominator += (h - l) * v
+
+#         if vw_denominator == 0:
+#             k_value = 50.0  # Neutral
+#         else:
+#             k_value = 100.0 * (vw_numerator / vw_denominator)
+
+#         self.k_values.append(k_value)
+
+#         return k_value
+
+#     def get_d_value(self):
+#         "Get the Stochastic %D value (SMA of %K)."
+#         if len(self.k_values) < self.d_period:
+#             return None
+#         return sum(self.k_values) / len(self.k_values)
+
+#     def reset(self):
+#         "Reset indicator state."
+#         super().reset()
+#         self.highs.clear()
+#         self.lows.clear()
+#         self.closes.clear()
+#         self.volumes.clear()
+#         self.k_values.clear()
+
+
+class VWWilliamsR(BaseCustomVWIndicator):""
+
+# Volume-Weighted Williams %R.
+
+# Applies volume weighting to Williams %R calculation for enhanced
+# momentum analysis with volume confirmation.
+
+# Mathematical Formula:
+# VW_WR = -100 * Σ((High - Close) * Volume) / Σ((High - Low) * Volume)"
+
+
+#     def __init__(self, config: CustomVWIndicatorConfig):
+#         super().__init__(config)
+#         self.indicator_type = VWIndicatorType.MOMENTUM
+
+#         self.highs = deque(maxlen=config.period)
+#         self.lows = deque(maxlen=config.period)
+#         self.closes = deque(maxlen=config.period)
+#         self.volumes = deque(maxlen=config.period)
+
+#     def _calculate_indicator_value(self, bar: Bar):
+#         "Calculate Volume-Weighted Williams %R."
+#         high = bar.high.as_double()
+#         low = bar.low.as_double()
+#         close = bar.close.as_double()
+#         volume = bar.volume.as_double()
+
+#         self.highs.append(high)
+#         self.lows.append(low)
+#         self.closes.append(close)
+#         self.volumes.append(volume)
+
+        # Need enough data points
+#         if len(self.highs) < self.config.period:
+#             return None
+
+        # Calculate volume-weighted numerator and denominator
+#         vw_numerator = 0.0
+#         vw_denominator = 0.0
+
+#         for i in range(len(self.highs)):
+#             h = self.highs[i]
+#             l = self.lows[i]
+#             c = self.closes[i]
+#             v = self.volumes[i]
+
+#             vw_numerator += (h - c) * v
+#             vw_denominator += (h - l) * v
+
+#         if vw_denominator == 0:
+#             return -50.0  # Neutral
+
+#         williams_r = -100.0 * (vw_numerator / vw_denominator)
+
+#         return williams_r
+
+#     def reset(self):
+#         "Reset indicator state."
+#         super().reset()
+#         self.highs.clear()
+#         self.lows.clear()
+#         self.closes.clear()
+#         self.volumes.clear()
+
+
+class VWROC(BaseCustomVWIndicator):""
+
+# Volume-Weighted Rate of Change.
+
+# Applies volume weighting to ROC calculation for enhanced
+# momentum analysis with volume confirmation.
+
+# Mathematical Formula:
+# VW_Price_Current = Σ(Price * Volume) / Σ(Volume) [current period]
+# VW_Price_Past = Σ(Price * Volume) / Σ(Volume) [n periods ago]
+# VW_ROC = ((VW_Price_Current - VW_Price_Past) / VW_Price_Past) * 100"
+
+
+#     def __init__(self, config: CustomVWIndicatorConfig):
+#         super().__init__(config)
+#         self.indicator_type = VWIndicatorType.MOMENTUM
+
+#         self.price_volume_data = deque(maxlen=config.period + 1)
+#         self.volume_data = deque(maxlen=config.period + 1)
+
+#     def _calculate_indicator_value(self, bar: Bar):
+#         "Calculate Volume-Weighted Rate of Change."
+#         price = bar.close.as_double()
+#         volume = bar.volume.as_double()
+
+#         self.price_volume_data.append(price * volume)
+#         self.volume_data.append(volume)
+
+        # Need enough data points
+#         if len(self.price_volume_data) < self.config.period + 1:
+#             return None
+
+        # Calculate current VW price
+#         current_pv_sum = sum(list(self.price_volume_data)[-1:])
+#         current_v_sum = sum(list(self.volume_data)[-1:])
+
+#         if current_v_sum == 0:
+#             return 0.0
+
+#         current_vw_price = current_pv_sum / current_v_sum
+
+        # Calculate past VW price (n periods ago)
+#         past_pv_sum = sum(list(self.price_volume_data)[: -self.config.period])
+#         past_v_sum = sum(list(self.volume_data)[: -self.config.period])
+
+#         if (
+#             past_v_sum == 0
+# or len(list(self.price_volume_data)[: -self.config.period]) == 0
+# ):
+#             return 0.0
+
+#         past_vw_price = past_pv_sum / past_v_sum
+
+#         if past_vw_price == 0:
+#             return 0.0
+
+        # Calculate ROC
+#         vw_roc = ((current_vw_price - past_vw_price) / past_vw_price) * 100.0
+
+#         return vw_roc
+
+#     def reset(self):
+#         "Reset indicator state."
+#         super().reset()
+#         self.price_volume_data.clear()
+#         self.volume_data.clear()
+
+
+# Configuration factory functions
+# def create_vw_rsi_config(
+# period: int = 14, instrument_id=None, bar_type=None, **kwargs
+# ) -> CustomVWIndicatorConfig:"
+#     "Create configuration for VW RSI indicator."
+#     return CustomVWIndicatorConfig(
+# period=period, instrument_id=instrument_id, bar_type=bar_type, **kwargs
+# )
+
+
+# def create_vw_macd_config(
+#     fast_period: int = 12,
+#     slow_period: int = 26,
+#     signal_period: int = 9,
+#     instrument_id=None,
+#     bar_type=None,
+# **kwargs,
+# ) -> CustomVWIndicatorConfig:"
+#     "Create configuration for VW MACD indicator."
+# config = CustomVWIndicatorConfig(
+#         period=slow_period,  # Use slow period as main period
+#         instrument_id=instrument_id,
+#         bar_type=bar_type,
+# **kwargs,
+# )
+#     config.fast_period = fast_period
+#     config.slow_period = slow_period
+#     config.signal_period = signal_period
+#     return config
+
+
+# def create_vw_stochastic_config(
+# k_period: int = 14, d_period: int = 3, instrument_id=None, bar_type=None, **kwargs
+# ) -> CustomVWIndicatorConfig:"
+#     "Create configuration for VW Stochastic indicator."
+# config = CustomVWIndicatorConfig(
+# period=k_period, instrument_id=instrument_id, bar_type=bar_type, **kwargs
+# )
+#     config.k_period = k_period
+#     config.d_period = d_period
+#     return config
+
+
+# def create_vw_williams_r_config(
+# period: int = 14, instrument_id=None, bar_type=None, **kwargs
+# ) -> CustomVWIndicatorConfig:"
+#     "Create configuration for VW Williams %R indicator."
+#     return CustomVWIndicatorConfig(
+# period=period, instrument_id=instrument_id, bar_type=bar_type, **kwargs
+# )
+
+
+# def create_vw_roc_config(
+# period: int = 12, instrument_id=None, bar_type=None, **kwargs
+# ) -> CustomVWIndicatorConfig:"
+#     "Create configuration for VW ROC indicator."
+#     return CustomVWIndicatorConfig(
+# period=period, instrument_id=instrument_id, bar_type=bar_type, **kwargs
+# )
+# "

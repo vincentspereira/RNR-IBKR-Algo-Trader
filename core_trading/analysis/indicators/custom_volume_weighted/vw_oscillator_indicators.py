@@ -1,0 +1,869 @@
+from collections import deque
+from typing import Optional, Tuple
+import numpy as np
+from nautilus_trader.model.data import Bar
+# from .base_custom_vw_indicator import ()
+"Volume-Weighted Oscillator Indicators."
+# "
+# This module implements 5 volume-weighted oscillator indicators:
+# 1. VW Ultimate Oscillator - Volume-weighted Ultimate Oscillator
+# 2. VW Awesome Oscillator - Volume-weighted Awesome Oscillator
+# 3. VW Detrended Price Oscillator - Volume-weighted DPO
+# 4. VW Price Oscillator - Volume-weighted Price Oscillator
+# 5. VW Percentage Price Oscillator - Volume-weighted PPO
+# "
+# All indicators follow the institutional-grade 5-pillar architecture."
+
+
+
+
+#     BaseCustomVWIndicator,
+#     CustomVWIndicatorConfig,
+#     VWIndicatorType,
+# )
+
+
+# "
+
+class VWUltimateOscillator(BaseCustomVWIndicator):""
+
+# Volume-Weighted Ultimate Oscillator.
+
+# Enhanced Ultimate Oscillator with volume weighting for improved
+# momentum analysis across multiple timeframes.
+
+# Mathematical Formula:
+#     BP = Close - min(Low, Prior_Close)
+#     TR = max(High, Prior_Close) - min(Low, Prior_Close)
+# Average7 = (7-period sum of BP * Volume_Weight) / (7-period sum of TR * Volume_Weight)
+# Average14 = (14-period sum of BP * Volume_Weight) / (14-period sum of TR * Volume_Weight)
+# Average28 = (28-period sum of BP * Volume_Weight) / (28-period sum of TR * Volume_Weight)
+# UO = 100 * (4*Average7 + 2*Average14 + Average28) / (4 + 2 + 1)"
+
+
+#     def __init__(self, config: CustomVWIndicatorConfig):
+#         super().__init__(config)
+#         self.indicator_type = VWIndicatorType.OSCILLATOR
+
+        # Ultimate Oscillator periods"
+#         self.period1 = getattr(config, "period1", 7)""
+#         self.period2 = getattr(config, "period2", 14)""
+#         self.period3 = getattr(config, "period3", 28)
+
+        # Use the longest period for deque size
+#         max_period = max(self.period1, self.period2, self.period3)
+
+        # Historical data
+#         self.bp_values = deque(maxlen=max_period)
+#         self.tr_values = deque(maxlen=max_period)
+#         self.volume_weights = deque(maxlen=max_period)
+
+        # Previous close for calculations
+#         self.prev_close = None
+
+        # Volume weighting
+#         self.volume_ema = None
+#         self.volume_alpha = 2.0 / (config.period + 1)
+
+        # Ultimate Oscillator values
+#         self.uo_values = deque(maxlen=config.period)
+
+#     def _calculate_indicator_value(self, bar: Bar):
+#         "Calculate Volume-Weighted Ultimate Oscillator."
+#         high = bar.high.as_double()
+#         low = bar.low.as_double()
+#         close = bar.close.as_double()
+#         volume = bar.volume.as_double()
+
+        # Initialize volume EMA
+#         if self.volume_ema is None:
+#             self.volume_ema = volume
+#         else:
+#             self.volume_ema = (
+#                 self.volume_alpha * volume + (1 - self.volume_alpha) * self.volume_ema
+# )
+
+        # Calculate volume weight
+#         if self.volume_ema > 0:
+#             volume_weight = volume / self.volume_ema
+#         else:
+#             volume_weight = 1.0
+
+        # Need previous close for calculation
+#         if self.prev_close is None:
+#             self.prev_close = close
+#             return None
+
+        # Calculate Buying Pressure (BP) and True Range (TR)
+#         bp = close - min(low, self.prev_close)
+#         tr_high = max(high, self.prev_close)
+#         tr_low = min(low, self.prev_close)
+#         tr = tr_high - tr_low
+
+        # Store values
+#         self.bp_values.append(bp)
+#         self.tr_values.append(tr)
+#         self.volume_weights.append(volume_weight)
+
+        # Update previous close
+#         self.prev_close = close
+
+        # Need enough data for shortest period
+#         if len(self.bp_values) < self.period1:
+#             return None
+
+        # Calculate averages for each period
+#         averages = []
+#         periods = [self.period1, self.period2, self.period3]
+#         weights = [4, 2, 1]
+
+#         for period in periods:
+#             if len(self.bp_values) >= period:
+                # Get last 'period' values
+#                 bp_period = list(self.bp_values)[-period:]
+#                 tr_period = list(self.tr_values)[-period:]
+#                 vw_period = list(self.volume_weights)[-period:]
+
+                # Calculate volume-weighted sums
+#                 bp_sum = sum(bp * vw for bp, vw in zip(bp_period, vw_period))
+#                 tr_sum = sum(tr * vw for tr, vw in zip(tr_period, vw_period))
+
+                # Calculate average
+#                 if tr_sum != 0:
+#                     average = bp_sum / tr_sum
+#                 else:
+#                     average = 0.0
+
+#                 averages.append(average)
+#             else:
+                # Not enough data for this period
+#                 return None
+
+        # Calculate Ultimate Oscillator
+#         if len(averages) == 3:
+#             weighted_sum = sum(avg * weight for avg, weight in zip(averages, weights))
+#             total_weight = sum(weights)
+#             uo = 100.0 * weighted_sum / total_weight
+#         else:
+#             return None
+
+#         self.uo_values.append(uo)
+
+#         return uo
+
+#     def get_signal_level(self):
+#         "Get Ultimate Oscillator signal level."
+#         if self.value is None:
+#             return None
+
+#         if self.value > 70:""
+#             return "OVERBOUGHT"
+#         elif self.value < 30:""
+#             return "OVERSOLD"
+#         elif self.value > 50:""
+#             return "BULLISH"
+#         elif self.value < 50:""
+#             return "BEARISH"
+#         else:""
+#             return "NEUTRAL"
+
+#     def get_divergence_signal(self):
+#         "Detect bullish/bearish divergence."
+#         if len(self.uo_values) < 10:
+#             return None
+
+#         recent_values = list(self.uo_values)[-5:]
+#         prev_values = list(self.uo_values)[-10:-5]
+
+        # Check for bullish divergence (UO making higher lows while oversold)"
+#         if min(recent_values) > min(prev_values) and all(v < 30 for v in recent_values):""
+#             return "BULLISH_DIVERGENCE"
+
+        # Check for bearish divergence (UO making lower highs while overbought)"
+#         if max(recent_values) < max(prev_values) and all(v > 70 for v in recent_values):""
+#             return "BEARISH_DIVERGENCE"
+# "
+#         return "NO_DIVERGENCE"
+
+#     def reset(self):
+#         "Reset indicator state."
+#         super().reset()
+#         self.bp_values.clear()
+#         self.tr_values.clear()
+#         self.volume_weights.clear()
+#         self.prev_close = None
+#         self.volume_ema = None
+#         self.uo_values.clear()
+
+
+class VWAwesomeOscillator(BaseCustomVWIndicator):""
+
+# Volume-Weighted Awesome Oscillator.
+
+# Enhanced Awesome Oscillator with volume weighting for improved
+# momentum detection and market psychology analysis.
+
+# Mathematical Formula:
+#     Midpoint = (High + Low) / 2
+#     VW_SMA5 = SMA5(Midpoint * Volume_Weight)
+#     VW_SMA34 = SMA34(Midpoint * Volume_Weight)
+# VW_AO = VW_SMA5 - VW_SMA34"
+
+
+#     def __init__(self, config: CustomVWIndicatorConfig):
+#         super().__init__(config)
+#         self.indicator_type = VWIndicatorType.OSCILLATOR
+
+        # Awesome Oscillator periods"
+#         self.fast_period = getattr(config, "fast_period", 5)""
+#         self.slow_period = getattr(config, "slow_period", 34)
+
+        # Use the longer period for deque size
+#         max_period = max(self.fast_period, self.slow_period)
+
+        # Historical data
+#         self.midpoints = deque(maxlen=max_period)
+#         self.volume_weights = deque(maxlen=max_period)
+
+        # Volume weighting
+#         self.volume_ema = None
+#         self.volume_alpha = 2.0 / (config.period + 1)
+
+        # Awesome Oscillator values
+#         self.ao_values = deque(maxlen=config.period)
+#         self.sma5_values = deque(maxlen=config.period)
+#         self.sma34_values = deque(maxlen=config.period)
+
+#     def _calculate_indicator_value(self, bar: Bar):
+#         "Calculate Volume-Weighted Awesome Oscillator."
+#         high = bar.high.as_double()
+#         low = bar.low.as_double()
+#         volume = bar.volume.as_double()
+
+        # Calculate midpoint
+#         midpoint = (high + low) / 2.0
+
+        # Initialize volume EMA
+#         if self.volume_ema is None:
+#             self.volume_ema = volume
+#         else:
+#             self.volume_ema = (
+#                 self.volume_alpha * volume + (1 - self.volume_alpha) * self.volume_ema
+# )
+
+        # Calculate volume weight
+#         if self.volume_ema > 0:
+#             volume_weight = volume / self.volume_ema
+#         else:
+#             volume_weight = 1.0
+
+        # Store values
+#         self.midpoints.append(midpoint)
+#         self.volume_weights.append(volume_weight)
+
+        # Need enough data for slow period
+#         if len(self.midpoints) < self.slow_period:
+#             return None
+
+        # Calculate volume-weighted SMAs
+#         def calculate_vw_sma(period):
+#             if len(self.midpoints) >= period:
+#                 midpoints_period = list(self.midpoints)[-period:]
+#                 weights_period = list(self.volume_weights)[-period:]
+
+# weighted_sum = sum(
+# mp * vw for mp, vw in zip(midpoints_period, weights_period)
+# )
+#                 weight_sum = sum(weights_period)
+
+#                 if weight_sum != 0:
+#                     return weighted_sum / weight_sum
+#                 else:
+#                     return sum(midpoints_period) / len(midpoints_period)
+#             return None
+
+        # Calculate both SMAs
+#         vw_sma5 = calculate_vw_sma(self.fast_period)
+#         vw_sma34 = calculate_vw_sma(self.slow_period)
+
+#         if vw_sma5 is None or vw_sma34 is None:
+#             return None
+
+        # Calculate Awesome Oscillator
+#         ao = vw_sma5 - vw_sma34
+
+        # Store values
+#         self.ao_values.append(ao)
+#         self.sma5_values.append(vw_sma5)
+#         self.sma34_values.append(vw_sma34)
+
+#         return ao
+
+#     def get_momentum_signal(self):
+#         "Get momentum signal based on AO."
+#         if len(self.ao_values) < 5:
+#             return None
+
+#         recent_values = list(self.ao_values)[-5:]
+#         current_ao = recent_values[-1]
+
+        # Check for saucer pattern (bullish)
+#         if (
+#             len(recent_values) >= 3
+# and recent_values[-3] < 0
+# and recent_values[-2] < recent_values[-3]
+# and recent_values[-1] > recent_values[-2]
+# ):"
+#             return "SAUCER_BULLISH"
+
+        # Check for twin peaks (bearish)
+#         if (
+#             len(recent_values) >= 5
+# and current_ao < 0
+# and any(v > 0 for v in recent_values[-5:-1])
+# ):"
+#             return "TWIN_PEAKS_BEARISH"
+
+        # Basic momentum signals"
+#         if current_ao > 0:""
+#             return "BULLISH_MOMENTUM"
+#         elif current_ao < 0:""
+#             return "BEARISH_MOMENTUM"
+#         else:""
+#             return "NEUTRAL"
+
+#     def get_color_change_signal(self):
+#         "Get color change signal (green/red bars)."
+#         if len(self.ao_values) < 2:
+#             return None
+
+#         current_ao = self.ao_values[-1]
+#         prev_ao = self.ao_values[-2]
+
+#         if current_ao > prev_ao:""
+#             return "GREEN_BAR"  # Bullish
+#         elif current_ao < prev_ao:""
+#             return "RED_BAR"  # Bearish
+#         else:""
+#             return "NEUTRAL_BAR"
+
+#     def reset(self):
+#         "Reset indicator state."
+#         super().reset()
+#         self.midpoints.clear()
+#         self.volume_weights.clear()
+#         self.volume_ema = None
+#         self.ao_values.clear()
+#         self.sma5_values.clear()
+#         self.sma34_values.clear()
+
+
+class VWDetrendedPriceOscillator(BaseCustomVWIndicator):""
+
+# Volume-Weighted Detrended Price Oscillator.
+
+# Enhanced DPO with volume weighting for improved cycle
+# identification and trend removal.
+
+# Mathematical Formula:
+#     VW_SMA = SMA(Close * Volume_Weight, period)
+# VW_DPO = Close[period/2 + 1 periods ago] - VW_SMA"
+
+
+#     def __init__(self, config: CustomVWIndicatorConfig):
+#         super().__init__(config)
+#         self.indicator_type = VWIndicatorType.OSCILLATOR
+
+        # DPO parameters
+#         self.lookback_period = (config.period // 2) + 1
+
+        # Historical data
+#         self.closes = deque(maxlen=config.period + self.lookback_period)
+#         self.volume_weights = deque(maxlen=config.period)
+
+        # Volume weighting
+#         self.volume_ema = None
+#         self.volume_alpha = 2.0 / (config.period + 1)
+
+        # DPO values
+#         self.dpo_values = deque(maxlen=config.period)
+#         self.sma_values = deque(maxlen=config.period)
+
+#     def _calculate_indicator_value(self, bar: Bar):
+#         "Calculate Volume-Weighted Detrended Price Oscillator."
+#         close = bar.close.as_double()
+#         volume = bar.volume.as_double()
+
+        # Store close price
+#         self.closes.append(close)
+
+        # Initialize volume EMA
+#         if self.volume_ema is None:
+#             self.volume_ema = volume
+#         else:
+#             self.volume_ema = (
+#                 self.volume_alpha * volume + (1 - self.volume_alpha) * self.volume_ema
+# )
+
+        # Calculate volume weight
+#         if self.volume_ema > 0:
+#             volume_weight = volume / self.volume_ema
+#         else:
+#             volume_weight = 1.0
+
+#         self.volume_weights.append(volume_weight)
+
+        # Need enough data for calculation
+#         if len(self.closes) < self.config.period + self.lookback_period:
+#             return None
+
+        # Calculate volume-weighted SMA for current period
+#         recent_closes = list(self.closes)[-self.config.period :]
+#         recent_weights = list(self.volume_weights)[-self.config.period :]
+
+#         weighted_sum = sum(c * vw for c, vw in zip(recent_closes, recent_weights))
+#         weight_sum = sum(recent_weights)
+
+#         if weight_sum != 0:
+#             vw_sma = weighted_sum / weight_sum
+#         else:
+#             vw_sma = sum(recent_closes) / len(recent_closes)
+
+        # Get close price from lookback period ago
+#         lookback_close = list(self.closes)[-(self.lookback_period + 1)]
+
+        # Calculate DPO
+#         dpo = lookback_close - vw_sma
+
+        # Store values
+#         self.dpo_values.append(dpo)
+#         self.sma_values.append(vw_sma)
+
+#         return dpo
+
+#     def get_cycle_signal(self):
+#         "Get cycle signal based on DPO."
+#         if len(self.dpo_values) < 10:
+#             return None
+
+#         recent_values = list(self.dpo_values)[-10:]
+
+        # Look for cycle peaks and troughs
+#         peaks = 0
+#         troughs = 0
+
+#         for i in range(1, len(recent_values) - 1):
+#             if (
+#                 recent_values[i] > recent_values[i - 1]
+# and recent_values[i] > recent_values[i + 1]
+# and recent_values[i] > 0
+# ):
+#                 peaks += 1
+#             elif (
+#                 recent_values[i] < recent_values[i - 1]
+# and recent_values[i] < recent_values[i + 1]
+# and recent_values[i] < 0
+# ):
+#                 troughs += 1
+
+#         if peaks > troughs:""
+#             return "CYCLE_PEAK"
+#         elif troughs > peaks:""
+#             return "CYCLE_TROUGH"
+#         else:""
+#             return "CYCLE_NEUTRAL"
+
+#     def get_trend_signal(self):
+#         "Get detrended signal."
+#         if self.value is None:
+#             return None
+
+#         if self.value > 0:""
+#             return "ABOVE_TREND"
+#         elif self.value < 0:""
+#             return "BELOW_TREND"
+#         else:""
+#             return "ON_TREND"
+
+#     def reset(self):
+#         "Reset indicator state."
+#         super().reset()
+#         self.closes.clear()
+#         self.volume_weights.clear()
+#         self.volume_ema = None
+#         self.dpo_values.clear()
+#         self.sma_values.clear()
+
+
+class VWPriceOscillator(BaseCustomVWIndicator):""
+
+# Volume-Weighted Price Oscillator.
+
+# Enhanced Price Oscillator with volume weighting for improved
+# momentum analysis using two moving averages.
+
+# Mathematical Formula:
+#     VW_EMA_Fast = EMA(Close * Volume_Weight, fast_period)
+#     VW_EMA_Slow = EMA(Close * Volume_Weight, slow_period)
+# VW_PO = VW_EMA_Fast - VW_EMA_Slow"
+
+
+#     def __init__(self, config: CustomVWIndicatorConfig):
+#         super().__init__(config)
+#         self.indicator_type = VWIndicatorType.OSCILLATOR
+
+        # Price Oscillator periods"
+#         self.fast_period = getattr(config, "fast_period", 12)""
+#         self.slow_period = getattr(config, "slow_period", 26)
+
+        # EMA alphas
+#         self.fast_alpha = 2.0 / (self.fast_period + 1)
+#         self.slow_alpha = 2.0 / (self.slow_period + 1)
+#         self.volume_alpha = 2.0 / (config.period + 1)
+
+        # Volume weighting
+#         self.volume_ema = None
+
+        # EMAs
+#         self.fast_ema = None
+#         self.slow_ema = None
+
+        # Price Oscillator values
+#         self.po_values = deque(maxlen=config.period)
+
+#         self.initialized = False
+
+#     def _calculate_indicator_value(self, bar: Bar):
+#         "Calculate Volume-Weighted Price Oscillator."
+#         close = bar.close.as_double()
+#         volume = bar.volume.as_double()
+
+        # Initialize volume EMA
+#         if self.volume_ema is None:
+#             self.volume_ema = volume
+#         else:
+#             self.volume_ema = (
+#                 self.volume_alpha * volume + (1 - self.volume_alpha) * self.volume_ema
+# )
+
+        # Calculate volume weight
+#         if self.volume_ema > 0:
+#             volume_weight = volume / self.volume_ema
+#         else:
+#             volume_weight = 1.0
+
+        # Volume-weighted close
+#         vw_close = close * volume_weight
+
+        # Initialize EMAs
+#         if not self.initialized:
+#             self.fast_ema = vw_close
+#             self.slow_ema = vw_close
+#             self.initialized = True
+#             return None
+
+        # Update EMAs
+#         self.fast_ema = (
+#             self.fast_alpha * vw_close + (1 - self.fast_alpha) * self.fast_ema
+# )
+#         self.slow_ema = (
+#             self.slow_alpha * vw_close + (1 - self.slow_alpha) * self.slow_ema
+# )
+
+        # Calculate Price Oscillator
+#         po = self.fast_ema - self.slow_ema
+
+#         self.po_values.append(po)
+
+#         return po
+
+#     def get_momentum_signal(self):
+#         "Get momentum signal based on Price Oscillator."
+#         if len(self.po_values) < 5:
+#             return None
+
+#         recent_values = list(self.po_values)[-5:]
+#         current_po = recent_values[-1]
+
+        # Check momentum direction"
+#         if current_po > 0 and recent_values[-1] > recent_values[0]:""
+#             return "STRONG_BULLISH"
+#         elif current_po > 0:""
+#             return "BULLISH"
+#         elif current_po < 0 and recent_values[-1] < recent_values[0]:""
+#             return "STRONG_BEARISH"
+#         elif current_po < 0:""
+#             return "BEARISH"
+#         else:""
+#             return "NEUTRAL"
+
+#     def get_crossover_signal(self):
+#         "Get crossover signal."
+#         if len(self.po_values) < 2:
+#             return None
+
+#         current_po = self.po_values[-1]
+#         prev_po = self.po_values[-2]
+
+#         if prev_po <= 0 and current_po > 0:""
+#             return "BULLISH_CROSSOVER"
+#         elif prev_po >= 0 and current_po < 0:""
+#             return "BEARISH_CROSSOVER"
+#         else:""
+#             return "NO_CROSSOVER"
+
+#     def reset(self):
+#         "Reset indicator state."
+#         super().reset()
+#         self.volume_ema = None
+#         self.fast_ema = None
+#         self.slow_ema = None
+#         self.po_values.clear()
+#         self.initialized = False
+
+
+class VWPercentagePriceOscillator(BaseCustomVWIndicator):""
+
+# Volume-Weighted Percentage Price Oscillator.
+
+# Enhanced PPO with volume weighting for improved
+# momentum analysis as a percentage.
+
+# Mathematical Formula:
+#     VW_EMA_Fast = EMA(Close * Volume_Weight, fast_period)
+#     VW_EMA_Slow = EMA(Close * Volume_Weight, slow_period)
+#     VW_PPO = ((VW_EMA_Fast - VW_EMA_Slow) / VW_EMA_Slow) * 100
+#     VW_Signal = EMA(VW_PPO, signal_period)
+# VW_Histogram = VW_PPO - VW_Signal"
+
+
+#     def __init__(self, config: CustomVWIndicatorConfig):
+#         super().__init__(config)
+#         self.indicator_type = VWIndicatorType.OSCILLATOR
+
+        # PPO periods"
+#         self.fast_period = getattr(config, "fast_period", 12)""
+#         self.slow_period = getattr(config, "slow_period", 26)""
+#         self.signal_period = getattr(config, "signal_period", 9)
+
+        # EMA alphas
+#         self.fast_alpha = 2.0 / (self.fast_period + 1)
+#         self.slow_alpha = 2.0 / (self.slow_period + 1)
+#         self.signal_alpha = 2.0 / (self.signal_period + 1)
+#         self.volume_alpha = 2.0 / (config.period + 1)
+
+        # Volume weighting
+#         self.volume_ema = None
+
+        # EMAs
+#         self.fast_ema = None
+#         self.slow_ema = None
+#         self.signal_ema = None
+
+        # PPO values
+#         self.ppo_values = deque(maxlen=config.period)
+#         self.histogram_values = deque(maxlen=config.period)
+
+#         self.initialized = False
+
+#     def _calculate_indicator_value(self, bar: Bar):
+#         "Calculate Volume-Weighted Percentage Price Oscillator."
+#         close = bar.close.as_double()
+#         volume = bar.volume.as_double()
+
+        # Initialize volume EMA
+#         if self.volume_ema is None:
+#             self.volume_ema = volume
+#         else:
+#             self.volume_ema = (
+#                 self.volume_alpha * volume + (1 - self.volume_alpha) * self.volume_ema
+# )
+
+        # Calculate volume weight
+#         if self.volume_ema > 0:
+#             volume_weight = volume / self.volume_ema
+#         else:
+#             volume_weight = 1.0
+
+        # Volume-weighted close
+#         vw_close = close * volume_weight
+
+        # Initialize EMAs
+#         if not self.initialized:
+#             self.fast_ema = vw_close
+#             self.slow_ema = vw_close
+#             self.initialized = True
+#             return None
+
+        # Update EMAs
+#         self.fast_ema = (
+#             self.fast_alpha * vw_close + (1 - self.fast_alpha) * self.fast_ema
+# )
+#         self.slow_ema = (
+#             self.slow_alpha * vw_close + (1 - self.slow_alpha) * self.slow_ema
+# )
+
+        # Calculate PPO
+#         if self.slow_ema != 0:
+#             ppo = ((self.fast_ema - self.slow_ema) / self.slow_ema) * 100.0
+#         else:
+#             ppo = 0.0
+
+#         self.ppo_values.append(ppo)
+
+        # Calculate Signal line
+#         if self.signal_ema is None:
+#             self.signal_ema = ppo
+#             histogram = 0.0
+#         else:
+#             self.signal_ema = (
+#                 self.signal_alpha * ppo + (1 - self.signal_alpha) * self.signal_ema
+# )
+#             histogram = ppo - self.signal_ema
+
+#         self.histogram_values.append(histogram)
+
+        # Return histogram as the main value
+#         return histogram
+
+#     def get_ppo_components(self):
+#         "Get PPO, Signal, and Histogram values."
+#         if not self.initialized or self.signal_ema is None:
+#             return None
+
+#         ppo = self.ppo_values[-1] if self.ppo_values else 0.0
+#         signal = self.signal_ema
+#         histogram = self.value if self.value is not None else 0.0
+
+#         return ppo, signal, histogram
+
+#     def get_momentum_signal(self):
+#         "Get momentum signal based on PPO."
+#         components = self.get_ppo_components()
+#         if components is None:
+#             return None
+
+#         ppo, signal, histogram = components
+
+#         if ppo > signal and ppo > 0:""
+#             return "STRONG_BULLISH"
+#         elif ppo > signal:""
+#             return "BULLISH"
+#         elif ppo < signal and ppo < 0:""
+#             return "STRONG_BEARISH"
+#         elif ppo < signal:""
+#             return "BEARISH"
+#         else:""
+#             return "NEUTRAL"
+
+#     def get_divergence_signal(self):
+#         "Detect bullish/bearish divergence."
+#         if len(self.histogram_values) < 10:
+#             return None
+
+#         recent_hist = list(self.histogram_values)[-5:]
+#         prev_hist = list(self.histogram_values)[-10:-5]
+
+        # Check for bullish divergence"
+#         if min(recent_hist) > min(prev_hist) and all(h < 0 for h in recent_hist):""
+#             return "BULLISH_DIVERGENCE"
+
+        # Check for bearish divergence"
+#         if max(recent_hist) < max(prev_hist) and all(h > 0 for h in recent_hist):""
+#             return "BEARISH_DIVERGENCE"
+# "
+#         return "NO_DIVERGENCE"
+
+#     def reset(self):
+#         "Reset indicator state."
+#         super().reset()
+#         self.volume_ema = None
+#         self.fast_ema = None
+#         self.slow_ema = None
+#         self.signal_ema = None
+#         self.ppo_values.clear()
+#         self.histogram_values.clear()
+#         self.initialized = False
+
+
+# Configuration factory functions
+# def create_vw_ultimate_oscillator_config(
+#     period: int = 28,
+#     period1: int = 7,
+#     period2: int = 14,
+#     period3: int = 28,
+#     instrument_id=None,
+#     bar_type=None,
+# **kwargs,
+# ) -> CustomVWIndicatorConfig:"
+#     "Create configuration for VW Ultimate Oscillator indicator."
+# config = CustomVWIndicatorConfig(
+# period=period, instrument_id=instrument_id, bar_type=bar_type, **kwargs
+# )
+#     config.period1 = period1
+#     config.period2 = period2
+#     config.period3 = period3
+#     return config
+
+
+# def create_vw_awesome_oscillator_config(
+#     period: int = 34,
+#     fast_period: int = 5,
+#     slow_period: int = 34,
+#     instrument_id=None,
+#     bar_type=None,
+# **kwargs,
+# ) -> CustomVWIndicatorConfig:"
+#     "Create configuration for VW Awesome Oscillator indicator."
+# config = CustomVWIndicatorConfig(
+# period=period, instrument_id=instrument_id, bar_type=bar_type, **kwargs
+# )
+#     config.fast_period = fast_period
+#     config.slow_period = slow_period
+#     return config
+
+
+# def create_vw_detrended_price_oscillator_config(
+# period: int = 20, instrument_id=None, bar_type=None, **kwargs
+# ) -> CustomVWIndicatorConfig:"
+#     "Create configuration for VW Detrended Price Oscillator indicator."
+#     return CustomVWIndicatorConfig(
+# period=period, instrument_id=instrument_id, bar_type=bar_type, **kwargs
+# )
+
+
+# def create_vw_price_oscillator_config(
+#     period: int = 26,
+#     fast_period: int = 12,
+#     slow_period: int = 26,
+#     instrument_id=None,
+#     bar_type=None,
+# **kwargs,
+# ) -> CustomVWIndicatorConfig:"
+#     "Create configuration for VW Price Oscillator indicator."
+# config = CustomVWIndicatorConfig(
+# period=period, instrument_id=instrument_id, bar_type=bar_type, **kwargs
+# )
+#     config.fast_period = fast_period
+#     config.slow_period = slow_period
+#     return config
+
+
+# def create_vw_percentage_price_oscillator_config(
+#     period: int = 26,
+#     fast_period: int = 12,
+#     slow_period: int = 26,
+#     signal_period: int = 9,
+#     instrument_id=None,
+#     bar_type=None,
+# **kwargs,
+# ) -> CustomVWIndicatorConfig:"
+#     "Create configuration for VW Percentage Price Oscillator indicator."
+# config = CustomVWIndicatorConfig(
+# period=period, instrument_id=instrument_id, bar_type=bar_type, **kwargs
+# )
+#     config.fast_period = fast_period
+#     config.slow_period = slow_period
+#     config.signal_period = signal_period
+#     return config
+# "'"'

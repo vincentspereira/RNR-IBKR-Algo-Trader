@@ -1,0 +1,8 @@
+langchain
+langgraph
+qdrant-client
+neo4j
+kafka-python
+pydantic
+transformers
+sentence-transformers

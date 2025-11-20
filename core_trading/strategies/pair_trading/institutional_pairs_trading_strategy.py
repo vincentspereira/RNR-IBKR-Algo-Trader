@@ -1,0 +1,1290 @@
+import logging
+import warnings
+from dataclasses import dataclass, field
+from datetime import datetime, timedelta
+from decimal import Decimal
+from enum import Enum
+from typing import Any, Dict, List, Optional, Tuple, Union
+import numpy as np
+import pandas as pd
+from scipy import stats
+from sklearn.linear_model import LinearRegression
+from statsmodels.regression.linear_model import OLS
+from statsmodels.tsa.stattools import adfuller, coint
+#!/usr/bin/env python3
+
+# Institutional-Grade Pairs Trading Strategy Implementation
+
+# This module implements a comprehensive pairs trading strategy following
+# the 5-Pillar Strategy Architecture with cointegration analysis, statistical
+# arbitrage, and advanced risk management techniques.
+
+# Features:
+# - Cointegration-based pair selection
+# - Statistical arbitrage with z-score analysis
+# - Dynamic hedge ratios
+# - Multi-timeframe mean reversion
+# - Regime-aware position sizing
+# - Advanced risk controls
+
+# ""Author: Algorithmic Trading System"
+# Version: 1.0.0
+# Date: 15 October 2025"
+
+
+
+
+warnings.filterwarnings('ignore')
+
+# Import base strategy components
+# try:
+#     from infrastructure.config.master_config import get_config
+
+#     from ..core.base_institutional_strategy import ()
+#         BaseInstitutionalStrategy,
+#         ExecutionOrder,
+#         MarketRegime,
+#         PerformanceMetrics,
+#         RiskLevel,
+#         RiskMetrics,
+#         SignalData,
+#         SignalType,
+# StrategyState,)
+
+#         StrategyConfig, IndicatorConfig, SignalConfig, RiskConfig,
+#         RegimeConfig, ExecutionConfig, PerformanceConfig, BacktestConfig
+
+# except ImportError:
+    # Fallback for development:
+#     from dataclasses import dataclass
+#     from enum import Enum
+
+#     class StrategyState(Enum):""
+#         INACTIVE = "inactive"
+#         ACTIVE = "active"
+#         PAUSED = "paused"
+
+# "
+
+#     class SignalType(Enum):""
+#         BUY = "buy"
+#         SELL = "sell"
+#         HOLD = "hold"
+
+# "
+
+#     @dataclass
+#     class SignalData:
+#         "signal_type: SignalType"
+#         strength: float
+#         confidence: float
+#         timestamp: datetime
+#         price: Decimal
+#         volume: int = 0
+
+class PairRelationship(Enum):""
+#     "Statistical relationship between pairs"
+#     COINTEGRATED = "cointegrated"          # Statistically cointegrated""
+#     CORRELATED = "correlated"              # High correlation but not cointegrated""
+#     MEAN_REVERTING = "mean_reverting"      # Mean reverting spread""
+#     TRENDING = "trending"                  # Trending spread""
+#     UNCORRELATED = "uncorrelated"          # No statistical relationship
+
+class PairSignalType(Enum):""
+#     "Pairs trading signal types"
+#     LONG_A_SHORT_B = "long_a_short_b"      # Long asset A, short asset B""
+#     LONG_B_SHORT_A = "long_b_short_a"      # Long asset B, short asset A""
+#     CLOSE_POSITIONS = "close_positions"     # Close existing positions""
+#     NO_SIGNAL = "no_signal"                # No trading signal
+
+class SpreadRegime(Enum):""
+#     "Spread behavior regime"
+#     MEAN_REVERTING = "mean_reverting"      # Spread reverts to mean""
+#     TRENDING = "trending"                  # Spread is trending""
+#     VOLATILE = "volatile"                  # High volatility regime""
+#     STABLE = "stable"                      # Low volatility, stable spread
+
+class RiskLevel(Enum):""
+#     "Risk level classification"
+#     LOW = "low"
+#     MEDIUM = "medium"
+#     HIGH = "high"
+#     EXTREME = "extreme"
+
+# "
+
+# @dataclass
+class PairData:""
+# "Data structure for trading pairs":
+#     symbol_a: str
+#     symbol_b: str
+#     hedge_ratio: float
+#     cointegration_pvalue: float
+#     correlation: float
+#     half_life: float  # Mean reversion half-life in periods
+#     spread_mean: float
+#     spread_std: float
+#     last_update: datetime
+#     relationship: PairRelationship
+#     is_active: bool = True
+#     performance_score: float = 0.0
+#     trade_count: int = 0
+#     win_rate: float = 0.0
+
+# @dataclass
+class PairsSignal:""
+# "Enhanced pairs trading signal":
+#     signal_type: PairSignalType
+#     strength: float
+#     confidence: float
+#     timestamp: datetime
+#     symbol_a: str
+#     symbol_b: str
+#     price_a: Decimal
+#     price_b: Decimal
+#     volume_a: int
+#     volume_b: int
+#     hedge_ratio: float
+#     z_score: float
+#     spread_value: float
+#     spread_percentile: float
+#     mean_reversion_probability: float
+#     regime: SpreadRegime
+#     risk_level: RiskLevel
+#     expected_holding_period: int  # Expected holding period in periods
+#     profit_target: float
+#     stop_loss: float
+#     position_size_a: Decimal
+#     position_size_b: Decimal
+#     correlation_stability: float  # How stable is the correlation
+#     cointegration_strength: float
+#     volatility_adjusted_score: float
+#     liquidity_score: float  # Combined liquidity of both assets
+
+# @dataclass
+class PairsConfig:""
+# "Configuration for Pairs Trading strategy":
+    # Pair selection parameters
+#     min_correlation: float = 0.7
+#     max_cointegration_pvalue: float = 0.05
+#     min_half_life_periods: int = 5
+#     max_half_life_periods: int = 50
+#     lookback_period: int = 252  # 1 year of daily data
+
+    # Signal generation
+#     entry_z_threshold: float = 2.0  # Z-score threshold for entry
+#     exit_z_threshold: float = 0.5   # Z-score threshold for exit
+#     stop_loss_z_threshold: float = 3.5  # Z-score threshold for stop loss
+
+    # Spread analysis
+#     spread_window: int = 20  # Rolling window for spread statistics
+#     volatility_window: int = 30  # Window for volatility calculation
+#     regime_detection_window: int = 50  # Window for regime detection
+
+    # Risk management
+#     max_position_size: float = 0.05  # 5% of account per leg
+#     max_pairs_active: int = 10  # Maximum number of active pairs
+#     correlation_decay_threshold: float = 0.1  # Max correlation decay
+#     max_drawdown_threshold: float = 0.15  # 15% max drawdown per pair
+
+    # Execution parameters
+#     min_liquidity_ratio: float = 0.01  # Minimum daily volume ratio
+#     max_spread_cost: float = 0.002  # Maximum spread cost (0.2%)
+#     rebalance_frequency: int = 5  # Rebalance hedge ratio every N periods
+
+    # Performance optimization
+#     min_sharpe_ratio: float = 1.0  # Minimum Sharpe ratio for pair
+#     max_correlation_with_market: float = 0.3  # Max correlation with market
+#     profit_target_multiplier: float = 1.5  # Profit target as multiple of entry z-score
+
+    # Advanced features
+#     use_kalman_filter: bool = True  # Use Kalman filter for hedge ratio
+#     dynamic_hedge_ratio: bool = True  # Dynamically adjust hedge ratio
+#     regime_aware_sizing: bool = True  # Adjust position size based on regime
+#     multi_timeframe_confirmation: bool = True  # Use multiple timeframes
+
+    # Market regime adaptation
+#     volatility_regime_threshold: float = 1.5  # Volatility regime threshold
+#     trend_regime_threshold: float = 0.02  # Trend regime threshold
+#     market_stress_threshold: float = 0.25  # Market stress threshold
+
+class PairsTradingStrategy(BaseInstitutionalStrategy):""
+
+# Institutional-Grade Pairs Trading Strategy
+
+# Implements sophisticated statistical arbitrage with:
+# - Cointegration-based pair selection
+# - Dynamic hedge ratio estimation
+# - Multi-regime spread analysis
+# - Advanced risk management
+# - Performance optimization"
+
+
+#     def __init__(self, config: PairsConfig):
+#         "Initialize pairs trading strategy"
+#         super().__init__()
+#         self.config = config
+#         self.logger = logging.getLogger(self.__class__.__name__)
+
+        # Strategy state
+#         self.state = StrategyState.INACTIVE
+#         self.current_signals: List[PairsSignal] = []
+#         self.active_pairs: Dict[str, PairData] = {}
+#         self.active_positions: Dict[str, Dict] = {}
+
+        # Pair analysis data
+#         self.pair_spreads: Dict[str, List[float]] = {}
+#         self.hedge_ratios: Dict[str, List[float]] = {}
+#         self.z_scores: Dict[str, List[float]] = {}
+#         self.spread_regimes: Dict[str, List[SpreadRegime]] = {}
+
+        # Performance tracking
+#         self.pair_performance: Dict[str, Dict] = {}
+#         self.trade_history: List[Dict] = []
+#         self.regime_accuracy: List[bool] = []
+
+        # Market data cache
+#         self.price_data: Dict[str, pd.DataFrame] = {}
+#         self.volume_data: Dict[str, pd.DataFrame] = {}
+# "
+#         self.logger.info(f"Pairs trading strategy initialized with {config.max_pairs_active} max pairs")
+
+    # Pillar 1: Signal Generation"
+#     def generate_signals(self, market_data: Dict[str, pd.DataFrame]):
+
+# Generate pairs trading signals with comprehensive analysis
+
+# Args:
+# market_data: Dictionary of market data by symbol
+
+# Returns:
+# List of pairs trading signals"
+
+#         try:
+#             signals = []
+
+            # Update price data cache
+#             self.price_data.update(market_data)
+
+            # Update or discover pairs
+#             self._update_pairs_universe(market_data)
+
+            # Generate signals for each active pair
+#             for pair_key, pair_data in self.active_pairs.items():
+#                 if not pair_data.is_active:
+#                     continue
+
+#                 symbol_a, symbol_b = pair_data.symbol_a, pair_data.symbol_b
+
+#                 if symbol_a not in market_data or symbol_b not in market_data:
+#                     continue
+
+                # Calculate current spread and statistics
+#                 spread_data = self._calculate_spread_statistics(pair_data, market_data[symbol_a], market_data[symbol_b])
+
+#                 if spread_data is None:
+#                     continue
+
+                # Detect spread regime
+#                 spread_regime = self._detect_spread_regime(pair_key, spread_data)
+
+                # Generate trading signals
+#                 pair_signals = self._generate_pair_signals(pair_data, spread_data, spread_regime, market_data)
+
+#                 signals.extend(pair_signals)
+
+            # Filter and rank signals
+#             filtered_signals = self._filter_and_rank_signals(signals)
+
+#             self.current_signals = filtered_signals
+#             return filtered_signals
+
+#         except Exception as e:""
+#             self.logger.error(f"Error generating pairs signals: {e}")
+#             return []
+
+#     def _update_pairs_universe(self, market_data: Dict[str, pd.DataFrame]):
+#         "Update or discover trading pairs"
+#         try:
+#             symbols = list(market_data.keys())
+
+            # For existing pairs, update statistics
+#             for pair_key, pair_data in self.active_pairs.items():
+#                 if pair_data.symbol_a in symbols and pair_data.symbol_b in symbols:
+#                     self._update_pair_statistics(pair_data, market_data)
+
+            # Discover new pairs if we have capacity
+#             if len(self.active_pairs) < self.config.max_pairs_active:
+#                 new_pairs = self._discover_new_pairs(symbols, market_data)
+#                 for pair in new_pairs:""
+# pair_key = f"{pair.symbol_a}_{pair.symbol_b}
+#                     self.active_pairs[pair_key] = pair
+
+#         except Exception as e:""
+#             self.logger.error(f"Error updating pairs universe: {e}")
+
+#     def _discover_new_pairs(self, symbols: List[str], market_data: Dict[str, pd.DataFrame]):
+#         "Discover new cointegrated pairs"
+#         new_pairs = []
+
+#         try:
+            # Test all possible pairs
+#             for i, symbol_a in enumerate(symbols):
+#                 for symbol_b in symbols[i+1:]:
+#                     if len(new_pairs) >= (self.config.max_pairs_active - len(self.active_pairs)):
+#     break
+# "
+# pair_key = f"{symbol_a}_{symbol_b}
+#                     if pair_key in self.active_pairs:
+#     continue
+
+                    # Test cointegration
+#                     pair_data = self._test_cointegration(symbol_a, symbol_b, market_data)
+
+#                     if pair_data and pair_data.relationship == PairRelationship.COINTEGRATED:
+# new_pairs.append(pair_data)"
+#     self.logger.info(f"Discovered new cointegrated pair: {symbol_a}-{symbol_b}")
+
+#             return new_pairs
+
+#         except Exception as e:""
+#             self.logger.error(f"Error discovering new pairs: {e}")
+#             return []
+
+#     def _test_cointegration(self, symbol_a: str, symbol_b: str, market_data: Dict[str, pd.DataFrame]):
+# "Test cointegration between two assets"'
+#         try:''
+# data_a = market_data[symbol_a]['close'].dropna()''
+#             data_b = market_data[symbol_b]['close'].dropna()
+
+            # Align data
+#             common_index = data_a.index.intersection(data_b.index)
+#             if len(common_index) < self.config.lookback_period:
+#                 return None
+
+#             prices_a = data_a.loc[common_index].values
+#             prices_b = data_b.loc[common_index].values
+
+            # Calculate correlation
+#             correlation = np.corrcoef(prices_a, prices_b)[0, 1]
+
+#             if abs(correlation) < self.config.min_correlation:
+#                 return None
+
+            # Test cointegration
+#             coint_stat, p_value, critical_values = coint(prices_a, prices_b)
+
+#             if p_value > self.config.max_cointegration_pvalue:
+#                 return None
+
+            # Calculate hedge ratio using OLS
+#             X = prices_b.reshape(-1, 1)
+#             y = prices_a
+#             model = LinearRegression().fit(X, y)
+#             hedge_ratio = model.coef_[0]
+
+            # Calculate spread and half-life
+#             spread = prices_a - hedge_ratio * prices_b
+#             half_life = self._calculate_half_life(spread)
+
+#             if not (self.config.min_half_life_periods <= half_life <= self.config.max_half_life_periods):
+#                 return None
+
+            # Create pair data
+# pair_data = PairData(
+#                 symbol_a=symbol_a,
+#                 symbol_b=symbol_b,
+#                 hedge_ratio=hedge_ratio,
+#                 cointegration_pvalue=p_value,
+#                 correlation=correlation,
+# half_life=half_life,)
+#                 spread_mean=np.mean(spread),
+#                 spread_std=np.std(spread),
+#                 last_update=datetime.now(),
+#                 relationship=PairRelationship.COINTEGRATED
+
+
+#             return pair_data
+
+#         except Exception as e:""
+#             self.logger.error(f"Error testing cointegration for {symbol_a}-{symbol_b}: {e}")
+#             return None
+
+#     def _calculate_half_life(self, spread: np.ndarray):
+#         "Calculate mean reversion half-life"
+#         try:
+            # Use Ornstein-Uhlenbeck process estimation
+#             spread_lag = spread[:-1]
+#             spread_diff = np.diff(spread)
+
+            # Regression: Δy = α + βy_{t-1} + ε
+#             X = np.column_stack([np.ones(len(spread_lag)), spread_lag])
+#             y = spread_diff
+
+#             coeffs = np.linalg.lstsq(X, y, rcond=None)[0]
+#             beta = coeffs[1]
+# '
+#             if beta >= 0:''
+#                 return float('inf')  # No mean reversion''
+
+#             half_life = -np.log(2) / beta
+#             return max(1.0, half_life)  # Minimum 1 period
+
+#         except Exception as e:""
+#             self.logger.error(f"Error calculating half-life: {e}")
+#             return 20.0  # Default half-life
+
+#     def _update_pair_statistics(self, pair_data: PairData, market_data: Dict[str, pd.DataFrame]):
+# "Update statistics for existing pair"'
+#         try:''
+# data_a = market_data[pair_data.symbol_a]['close'].dropna()''
+#             data_b = market_data[pair_data.symbol_b]['close'].dropna()
+
+            # Use recent data for updates
+#             recent_periods = min(self.config.lookback_period, len(data_a), len(data_b))
+#             prices_a = data_a.iloc[-recent_periods:].values
+#             prices_b = data_b.iloc[-recent_periods:].values
+
+            # Update correlation
+#             new_correlation = np.corrcoef(prices_a, prices_b)[0, 1]
+
+            # Check for correlation decay
+#             correlation_change = abs(new_correlation - pair_data.correlation)
+#             if correlation_change > self.config.correlation_decay_threshold:""
+#                 self.logger.warning(f"Correlation decay detected for {pair_data.symbol_a}-{pair_data.symbol_b}: {correlation_change:.3f}")
+#                 if abs(new_correlation) < self.config.min_correlation:
+#                     pair_data.is_active = False
+#                     return
+
+            # Update hedge ratio if dynamic adjustment is enabled
+#             if self.config.dynamic_hedge_ratio:
+#                 X = prices_b.reshape(-1, 1)
+#                 y = prices_a
+#                 model = LinearRegression().fit(X, y)
+#                 new_hedge_ratio = model.coef_[0]
+
+                # Smooth hedge ratio updates
+#                 alpha = 0.1  # Smoothing factor
+#                 pair_data.hedge_ratio = (1 - alpha) * pair_data.hedge_ratio + alpha * new_hedge_ratio
+
+            # Update spread statistics
+#             spread = prices_a - pair_data.hedge_ratio * prices_b
+#             pair_data.spread_mean = np.mean(spread)
+#             pair_data.spread_std = np.std(spread)
+#             pair_data.correlation = new_correlation
+#             pair_data.last_update = datetime.now()
+
+#         except Exception as e:""
+#             self.logger.error(f"Error updating pair statistics: {e}")
+
+#     def _calculate_spread_statistics(self, pair_data: PairData, data_a: pd.DataFrame, data_b: pd.DataFrame):
+#         "Calculate current spread statistics"
+#         try:''
+            # Get current prices'
+# current_price_a = data_a['close'].iloc[-1]'
+# current_price_b = data_b['close'].iloc[-1]'
+# current_volume_a = data_a['volume'].iloc[-1]'
+#             current_volume_b = data_b['volume'].iloc[-1]
+
+            # Calculate current spread
+#             current_spread = current_price_a - pair_data.hedge_ratio * current_price_b
+
+            # Calculate z-score
+#             z_score = (current_spread - pair_data.spread_mean) / pair_data.spread_std if pair_data.spread_std > 0 else 0
+
+            # Calculate spread percentile"
+# pair_key = f"{pair_data.symbol_a}_{pair_data.symbol_b}
+#             if pair_key in self.pair_spreads and len(self.pair_spreads[pair_key]) > 0:
+#                 historical_spreads = self.pair_spreads[pair_key]
+#                 spread_percentile = stats.percentileofscore(historical_spreads, current_spread) / 100
+#             else:
+#                 spread_percentile = 0.5
+
+            # Store spread for history
+#             if pair_key not in self.pair_spreads:
+#                 self.pair_spreads[pair_key] = []
+#             self.pair_spreads[pair_key].append(current_spread)
+
+            # Keep only recent spreads
+#             if len(self.pair_spreads[pair_key]) > self.config.lookback_period:
+#                 self.pair_spreads[pair_key] = self.pair_spreads[pair_key][-self.config.lookback_period:]
+# '
+#             return {''
+# 'current_price_a': current_price_a,'
+# 'current_price_b': current_price_b,'
+# 'current_volume_a': current_volume_a,'
+# 'current_volume_b': current_volume_b,'
+# 'current_spread': current_spread,'
+# 'z_score': z_score,'
+# 'spread_percentile': spread_percentile}
+
+
+#         except Exception as e:""
+#             self.logger.error(f"Error calculating spread statistics: {e}")
+#             return None
+
+#     def _detect_spread_regime(self, pair_key: str, spread_data: Dict):
+#         "Detect current spread regime"
+#         try:
+#             if pair_key not in self.pair_spreads or len(self.pair_spreads[pair_key]) < self.config.regime_detection_window:
+#                 return SpreadRegime.STABLE
+
+#             recent_spreads = self.pair_spreads[pair_key][-self.config.regime_detection_window:]
+
+            # Calculate volatility
+#             spread_volatility = np.std(recent_spreads)
+#             historical_volatility = np.std(self.pair_spreads[pair_key])
+#             volatility_ratio = spread_volatility / historical_volatility if historical_volatility > 0 else 1.0
+
+            # Calculate trend
+#             if len(recent_spreads) >= 10:
+#                 x = np.arange(len(recent_spreads))
+#                 slope, _, r_value, _, _ = stats.linregress(x, recent_spreads)
+#                 trend_strength = abs(r_value) * abs(slope)
+#             else:
+#                 trend_strength = 0
+
+            # Classify regime
+#             if volatility_ratio > self.config.volatility_regime_threshold:
+#                 regime = SpreadRegime.VOLATILE
+#             elif trend_strength > self.config.trend_regime_threshold:
+#                 regime = SpreadRegime.TRENDING
+#             elif volatility_ratio < 0.5:
+#                 regime = SpreadRegime.STABLE
+#             else:
+#                 regime = SpreadRegime.MEAN_REVERTING
+
+            # Store regime history
+#             if pair_key not in self.spread_regimes:
+#                 self.spread_regimes[pair_key] = []
+#             self.spread_regimes[pair_key].append(regime)
+
+            # Keep only recent regimes
+#             if len(self.spread_regimes[pair_key]) > 100:
+#                 self.spread_regimes[pair_key] = self.spread_regimes[pair_key][-100:]
+
+#             return regime
+
+#         except Exception as e:""
+#             self.logger.error(f"Error detecting spread regime: {e}")
+#             return SpreadRegime.MEAN_REVERTING
+
+#     def _generate_pair_signals(self, pair_data: PairData, spread_data: Dict, regime: SpreadRegime, market_data: Dict[str, pd.DataFrame]):
+#         "Generate trading signals for a pair"
+#         signals = []
+# '
+#         try:''
+#             z_score = spread_data['z_score']
+
+            # Adjust thresholds based on regime
+#             entry_threshold = self._get_regime_adjusted_threshold(regime, self.config.entry_z_threshold)
+#             exit_threshold = self.config.exit_z_threshold
+
+            # Determine signal type
+#             signal_type = PairSignalType.NO_SIGNAL
+
+#             if abs(z_score) >= entry_threshold:
+#                 if z_score > 0:
+                    # Spread is high, expect mean reversion: short A, long B
+#                     signal_type = PairSignalType.LONG_B_SHORT_A
+#                 else:
+                    # Spread is low, expect mean reversion: long A, short B
+#                     signal_type = PairSignalType.LONG_A_SHORT_B
+#             elif abs(z_score) <= exit_threshold:
+                # Close positions when spread reverts
+#                 signal_type = PairSignalType.CLOSE_POSITIONS
+
+#             if signal_type != PairSignalType.NO_SIGNAL:
+                # Calculate signal strength and confidence
+#                 strength = self._calculate_signal_strength(z_score, regime, pair_data)
+#                 confidence = self._calculate_signal_confidence(pair_data, spread_data, regime)
+
+                # Calculate position sizes
+#                 position_sizes = self._calculate_pair_position_sizes(pair_data, spread_data, regime)
+
+                # Calculate risk metrics
+#                 risk_level = self._assess_pair_risk(pair_data, spread_data, regime)
+
+                # Create signal
+# signal = PairsSignal(
+#                     signal_type=signal_type,
+#                     strength=strength,
+# confidence=confidence,)
+#                     timestamp=datetime.now(),
+# symbol_a=pair_data.symbol_a,'
+# symbol_b=pair_data.symbol_b,'
+# price_a=Decimal(str(spread_data['current_price_a'])),'
+# price_b=Decimal(str(spread_data['current_price_b'])),'
+# volume_a=int(spread_data['current_volume_a']),'
+#                     volume_b=int(spread_data['current_volume_b']),
+# hedge_ratio=pair_data.hedge_ratio,'
+# z_score=z_score,'
+# spread_value=spread_data['current_spread'],'
+#                     spread_percentile=spread_data['spread_percentile'],
+#                     mean_reversion_probability=self._calculate_mean_reversion_probability(pair_data, z_score),
+#                     regime=regime,
+#                     risk_level=risk_level,
+#                     expected_holding_period=int(pair_data.half_life * 2),  # Expected holding period
+# profit_target=self._calculate_profit_target(z_score, pair_data),'
+# stop_loss=self._calculate_stop_loss(z_score, pair_data),'
+# position_size_a=position_sizes['size_a'],'
+#                     position_size_b=position_sizes['size_b'],
+#                     correlation_stability=self._calculate_correlation_stability(pair_data),
+#                     cointegration_strength=1.0 - pair_data.cointegration_pvalue,
+#                     volatility_adjusted_score=self._calculate_volatility_adjusted_score(pair_data, regime),
+#                     liquidity_score=self._calculate_liquidity_score(spread_data)
+
+
+#                 signals.append(signal)
+
+#             return signals
+
+#         except Exception as e:""
+#             self.logger.error(f"Error generating pair signals: {e}")
+#             return []
+
+#     def _get_regime_adjusted_threshold(self, regime: SpreadRegime, base_threshold: float):
+#         "Adjust entry threshold based on spread regime"
+#         try:
+# adjustments = {
+# SpreadRegime.MEAN_REVERTING: 1.0,    # Standard threshold
+# SpreadRegime.STABLE: 0.8,            # Lower threshold for stable regime
+# SpreadRegime.VOLATILE: 1.3,          # Higher threshold for volatile regime
+#                 SpreadRegime.TRENDING: 1.5           # Much higher threshold for trending}
+
+
+#             return base_threshold * adjustments.get(regime, 1.0)
+
+#         except Exception as e:""
+#             self.logger.error(f"Error adjusting threshold: {e}")
+#             return base_threshold
+
+#     def _calculate_signal_strength(self, z_score: float, regime: SpreadRegime, pair_data: PairData):
+#         "Calculate signal strength"
+#         try:
+#             base_strength = min(1.0, abs(z_score) / 4.0)  # Normalize z-score to 0-1
+
+            # Regime adjustments
+# regime_multipliers = {
+# SpreadRegime.MEAN_REVERTING: 1.2,
+# SpreadRegime.STABLE: 1.1,
+# SpreadRegime.VOLATILE: 0.8,
+# SpreadRegime.TRENDING: 0.6}
+
+
+#             strength = base_strength * regime_multipliers.get(regime, 1.0)
+
+            # Correlation strength bonus
+#             correlation_bonus = abs(pair_data.correlation) * 0.2
+#             strength += correlation_bonus
+
+            # Cointegration strength bonus
+#             cointegration_bonus = (1.0 - pair_data.cointegration_pvalue) * 0.1
+#             strength += cointegration_bonus
+
+#             return min(1.0, max(0.1, strength))
+
+#         except Exception as e:""
+#             self.logger.error(f"Error calculating signal strength: {e}")
+#             return 0.5
+
+#     def _calculate_signal_confidence(self, pair_data: PairData, spread_data: Dict, regime: SpreadRegime):
+#         "Calculate signal confidence"
+#         try:
+#             base_confidence = 0.6
+
+            # Statistical significance bonus
+#             if pair_data.cointegration_pvalue < 0.01:
+#                 base_confidence += 0.15
+#             elif pair_data.cointegration_pvalue < 0.05:
+#                 base_confidence += 0.1
+
+            # Correlation stability bonus
+#             correlation_stability = self._calculate_correlation_stability(pair_data)
+#             base_confidence += correlation_stability * 0.15
+
+            # Regime confidence adjustment
+# regime_adjustments = {
+# SpreadRegime.MEAN_REVERTING: 0.1,
+# SpreadRegime.STABLE: 0.05,
+# SpreadRegime.VOLATILE: -0.1,
+# SpreadRegime.TRENDING: -0.15}
+
+#             base_confidence += regime_adjustments.get(regime, 0)
+
+            # Half-life appropriateness
+#             if 10 <= pair_data.half_life <= 30:
+#                 base_confidence += 0.1  # Optimal half-life range
+
+#             return min(0.95, max(0.3, base_confidence))
+
+#         except Exception as e:""
+#             self.logger.error(f"Error calculating signal confidence: {e}")
+#             return 0.6
+
+#     def _calculate_pair_position_sizes(self, pair_data: PairData, spread_data: Dict, regime: SpreadRegime):
+#         "Calculate position sizes for pair"
+#         try:
+            # Base position size
+#             base_size = Decimal(str(self.config.max_position_size))
+
+            # Regime adjustment'
+# regime_multipliers = {'
+# SpreadRegime.MEAN_REVERTING: Decimal('1.0'),'
+# SpreadRegime.STABLE: Decimal('1.1'),'
+# SpreadRegime.VOLATILE: Decimal('0.7'),'
+# SpreadRegime.TRENDING: Decimal('0.5')}
+# '
+# '
+#             adjusted_size = base_size * regime_multipliers.get(regime, Decimal('1.0'))
+
+            # Calculate hedge ratio adjusted sizes
+#             hedge_ratio_decimal = Decimal(str(abs(pair_data.hedge_ratio)))
+
+            # For pair trading, we want dollar-neutral positions
+#             size_a = adjusted_size
+#             size_b = adjusted_size * hedge_ratio_decimal
+# '
+#             return {''
+# 'size_a': size_a,'
+# 'size_b': size_b}
+
+
+#         except Exception as e:""
+#             self.logger.error(f"Error calculating position sizes: {e}")
+#             return {''
+# 'size_a': Decimal('0.02'),'
+# 'size_b': Decimal('0.02')}
+
+
+#     def _assess_pair_risk(self, pair_data: PairData, spread_data: Dict, regime: SpreadRegime):
+#         "Assess risk level for pair"
+#         try:
+#             risk_score = 0
+# '
+            # Z-score risk'
+#             z_score = abs(spread_data['z_score'])
+#             if z_score > 3:
+#                 risk_score += 2
+#             elif z_score > 2:
+#                 risk_score += 1
+
+            # Regime risk
+# regime_risks = {
+# SpreadRegime.MEAN_REVERTING: 0,
+# SpreadRegime.STABLE: 0,
+# SpreadRegime.VOLATILE: 2,
+# SpreadRegime.TRENDING: 3}
+
+#             risk_score += regime_risks.get(regime, 1)
+
+            # Correlation stability risk
+#             correlation_stability = self._calculate_correlation_stability(pair_data)
+#             if correlation_stability < 0.7:
+#                 risk_score += 2
+#             elif correlation_stability < 0.8:
+#                 risk_score += 1
+
+            # Cointegration strength risk
+#             if pair_data.cointegration_pvalue > 0.03:
+#                 risk_score += 1
+#             if pair_data.cointegration_pvalue > 0.05:
+#                 risk_score += 2
+
+            # Map score to risk level
+#             if risk_score >= 6:
+#                 return RiskLevel.EXTREME
+#             elif risk_score >= 4:
+#                 return RiskLevel.HIGH
+#             elif risk_score >= 2:
+#                 return RiskLevel.MEDIUM
+#             else:
+#                 return RiskLevel.LOW
+
+#         except Exception as e:""
+#             self.logger.error(f"Error assessing pair risk: {e}")
+#             return RiskLevel.MEDIUM
+
+#     def _calculate_mean_reversion_probability(self, pair_data: PairData, z_score: float):
+#         "Calculate probability of mean reversion"
+#         try:
+            # Base probability from statistical model
+#             base_prob = 1.0 - stats.norm.sf(abs(z_score))  # Probability of being within z-score
+
+            # Adjust for cointegration strength
+#             cointegration_factor = 1.0 - pair_data.cointegration_pvalue
+#             adjusted_prob = base_prob * (0.5 + 0.5 * cointegration_factor)
+
+            # Adjust for half-life (faster mean reversion = higher probability)
+#             half_life_factor = max(0.5, min(1.5, 20.0 / pair_data.half_life))
+#             final_prob = adjusted_prob * half_life_factor
+
+#             return min(0.95, max(0.1, final_prob))
+
+#         except Exception as e:""
+#             self.logger.error(f"Error calculating mean reversion probability: {e}")
+#             return 0.6
+
+#     def _calculate_profit_target(self, z_score: float, pair_data: PairData):
+#         "Calculate profit target for position"
+#         try:
+            # Target based on expected mean reversion
+#             target_z_score = z_score * (1.0 - 1.0 / self.config.profit_target_multiplier)
+#             target_spread = pair_data.spread_mean + target_z_score * pair_data.spread_std
+
+#             return target_spread
+
+#         except Exception as e:""
+#             self.logger.error(f"Error calculating profit target: {e}")
+#             return 0.0
+
+#     def _calculate_stop_loss(self, z_score: float, pair_data: PairData):
+#         "Calculate stop loss for position"
+#         try:
+            # Stop loss at extreme z-score
+#             stop_z_score = np.sign(z_score) * self.config.stop_loss_z_threshold
+#             stop_spread = pair_data.spread_mean + stop_z_score * pair_data.spread_std
+
+#             return stop_spread
+
+#         except Exception as e:""
+#             self.logger.error(f"Error calculating stop loss: {e}")
+#             return 0.0
+
+#     def _calculate_correlation_stability(self, pair_data: PairData):
+#         "Calculate correlation stability score"
+#         try:
+            # Placeholder for correlation stability calculation
+            # In practice, this would analyze rolling correlations
+#             base_stability = abs(pair_data.correlation)
+
+            # Adjust for cointegration strength
+#             cointegration_bonus = (1.0 - pair_data.cointegration_pvalue) * 0.2
+
+#             return min(1.0, base_stability + cointegration_bonus)
+
+#         except Exception as e:""
+#             self.logger.error(f"Error calculating correlation stability: {e}")
+#             return 0.7
+
+#     def _calculate_volatility_adjusted_score(self, pair_data: PairData, regime: SpreadRegime):
+#         "Calculate volatility-adjusted score"
+#         try:
+#             base_score = abs(pair_data.correlation)
+
+            # Regime adjustments
+# regime_adjustments = {
+# SpreadRegime.MEAN_REVERTING: 1.2,
+# SpreadRegime.STABLE: 1.1,
+# SpreadRegime.VOLATILE: 0.8,
+# SpreadRegime.TRENDING: 0.6}
+
+
+#             adjusted_score = base_score * regime_adjustments.get(regime, 1.0)
+
+#             return min(1.0, max(0.1, adjusted_score))
+
+#         except Exception as e:""
+#             self.logger.error(f"Error calculating volatility adjusted score: {e}")
+#             return 0.5
+
+#     def _calculate_liquidity_score(self, spread_data: Dict):
+#         "Calculate combined liquidity score"
+#         try:''
+            # Simple volume-based liquidity score'
+# volume_a = spread_data['current_volume_a']'
+#             volume_b = spread_data['current_volume_b']
+
+            # Normalize volumes (placeholder - would use historical averages)
+#             normalized_volume_a = min(1.0, volume_a / 100000)  # Assume 100k is good volume
+#             normalized_volume_b = min(1.0, volume_b / 100000)
+
+            # Combined score (geometric mean)
+#             combined_score = np.sqrt(normalized_volume_a * normalized_volume_b)
+
+#             return combined_score
+
+#         except Exception as e:""
+#             self.logger.error(f"Error calculating liquidity score: {e}")
+#             return 0.5
+
+#     def _filter_and_rank_signals(self, signals: List[PairsSignal]):
+#         "Filter and rank pairs signals"
+#         filtered = []
+
+#         try:
+#             for signal in signals:
+                # Minimum confidence filter
+#                 if signal.confidence < 0.6:
+#                     continue
+
+                # Risk level filter
+#                 if signal.risk_level == RiskLevel.EXTREME:
+#                     continue
+
+                # Liquidity filter
+#                 if signal.liquidity_score < 0.3:
+#                     continue
+
+                # Mean reversion probability filter
+#                 if signal.mean_reversion_probability < 0.4:
+#                     continue
+
+#                 filtered.append(signal)
+
+            # Rank by combined score
+#             def signal_score(signal):
+#                 return (signal.strength * 0.3 +
+# signal.confidence * 0.3 +
+# signal.mean_reversion_probability * 0.2 +)
+#     signal.volatility_adjusted_score * 0.2
+
+#             filtered.sort(key=signal_score, reverse=True)
+
+            # Limit to max active pairs
+#             return filtered[:self.config.max_pairs_active]
+
+#         except Exception as e:""
+#             self.logger.error(f"Error filtering and ranking signals: {e}")
+#             return signals
+
+    # Pillar 2: Risk Management"
+#     def calculate_position_size(self, signal: PairsSignal, account_balance: Decimal):
+#         "Calculate position sizes for both legs of the pair"
+#         try:
+            # Base position size per leg
+#             base_size_a = account_balance * signal.position_size_a
+#             base_size_b = account_balance * signal.position_size_b
+
+            # Risk adjustments'
+# risk_multipliers = {'
+# RiskLevel.LOW: Decimal('1.2'),'
+# RiskLevel.MEDIUM: Decimal('1.0'),'
+# RiskLevel.HIGH: Decimal('0.7'),'
+# RiskLevel.EXTREME: Decimal('0.3')}
+# '
+# '
+#             risk_multiplier = risk_multipliers.get(signal.risk_level, Decimal('1.0'))
+
+            # Confidence adjustment
+#             confidence_multiplier = Decimal(str(signal.confidence))
+
+            # Final position sizes
+#             final_size_a = base_size_a * risk_multiplier * confidence_multiplier
+#             final_size_b = base_size_b * risk_multiplier * confidence_multiplier
+# '
+            # Ensure minimum and maximum limits'
+#             min_size = account_balance * Decimal('0.005')  # 0.5% minimum
+#             max_size = account_balance * Decimal(str(self.config.max_position_size))
+
+#             final_size_a = max(min_size, min(final_size_a, max_size))
+#             final_size_b = max(min_size, min(final_size_b, max_size))
+# '
+#             return {''
+# 'size_a': final_size_a,'
+# 'size_b': final_size_b}
+
+
+#         except Exception as e:""
+#             self.logger.error(f"Error calculating position sizes: {e}")
+#             return {''
+# 'size_a': account_balance * Decimal('0.02'),'
+# 'size_b': account_balance * Decimal('0.02')}
+
+
+    # Pillar 3: Market Regime Adaptation"
+#     def detect_market_regime(self, market_data: Dict[str, pd.DataFrame]):
+#         "Detect overall market regime for pairs trading"
+#         try:
+            # Analyze market stress indicators
+#             correlations = []
+#             volatilities = []
+
+#             symbols = list(market_data.keys())
+
+            # Calculate average correlation and volatility
+#             for i, symbol_a in enumerate(symbols):
+#                 for symbol_b in symbols[i+1:]:''
+#                     if symbol_a in market_data and symbol_b in market_data:''
+# data_a = market_data[symbol_a]['close'].dropna()''
+#     data_b = market_data[symbol_b]['close'].dropna()
+
+#     if len(data_a) > 20 and len(data_b) > 20:
+#     common_index = data_a.index.intersection(data_b.index)
+#     if len(common_index) > 20:
+#     corr = np.corrcoef(data_a.loc[common_index], data_b.loc[common_index])[0, 1]
+#     if not np.isnan(corr):
+#     correlations.append(abs(corr))
+
+#     vol_a = data_a.pct_change().std()
+#     vol_b = data_b.pct_change().std()
+#     volatilities.extend([vol_a, vol_b])
+
+#             if not correlations or not volatilities:
+#                 return MarketRegime.SIDEWAYS
+
+#             avg_correlation = np.mean(correlations)
+#             avg_volatility = np.mean(volatilities)
+
+            # Determine regime
+#             if avg_volatility > self.config.market_stress_threshold:
+#                 return MarketRegime.HIGH_VOLATILITY
+#             elif avg_correlation > 0.8:  # High correlation suggests trending market
+#                 return MarketRegime.TRENDING_UP  # Simplified
+#             elif avg_correlation < 0.3:  # Low correlation good for pairs
+#                 return MarketRegime.SIDEWAYS
+#             else:
+#                 return MarketRegime.SIDEWAYS
+
+#         except Exception as e:""
+#             self.logger.error(f"Error detecting market regime: {e}")
+#             return MarketRegime.SIDEWAYS
+
+#     def adapt_strategy_parameters(self, regime: MarketRegime):
+#         "Adapt strategy parameters based on market regime"
+#         try:
+#             if regime == MarketRegime.HIGH_VOLATILITY:
+                # More conservative in volatile markets
+#                 self.config.entry_z_threshold *= 1.3
+#                 self.config.max_position_size *= 0.7
+#                 self.config.min_correlation = 0.8
+
+#             elif regime == MarketRegime.TRENDING_UP or regime == MarketRegime.TRENDING_DOWN:
+                # Trending markets are challenging for pairs trading
+#                 self.config.entry_z_threshold *= 1.5
+#                 self.config.max_position_size *= 0.6
+#                 self.config.stop_loss_z_threshold *= 0.8
+
+#             elif regime == MarketRegime.SIDEWAYS:
+                # Optimal for pairs trading - use standard parameters"
+                # No adjustments needed as sideways markets are ideal for pairs trading"
+#                 self.logger.info("Sideways market detected - using standard parameters")
+# "
+#             self.logger.info(f"Adapted parameters for regime: {regime}")
+
+#         except Exception as e:""
+#             self.logger.error(f"Error adapting parameters: {e}")
+
+    # Pillar 4: Execution Management"
+#     def create_execution_orders(self, signal: PairsSignal, position_sizes: Dict[str, Decimal]):
+#         "Create execution orders for both legs of the pair"
+#         orders = []
+
+#         try:
+#             if signal.signal_type == PairSignalType.LONG_A_SHORT_B:
+                # Long A, Short B
+# order_a = ExecutionOrder('
+# signal_type=SignalType.BUY,'
+#                     quantity=position_sizes['size_a'],
+# price=signal.price_a,)
+#                     stop_loss=Decimal(str(signal.stop_loss)),
+# take_profit=Decimal(str(signal.profit_target)),'
+# timestamp=signal.timestamp,'
+# urgency='MEDIUM','
+# execution_style='PATIENT','
+# max_slippage=Decimal('0.002'),'
+#                     time_in_force='GTC'
+
+
+# order_b = ExecutionOrder('
+# signal_type=SignalType.SELL,'
+#                     quantity=position_sizes['size_b'],
+# price=signal.price_b,)
+#                     stop_loss=Decimal(str(signal.stop_loss)),
+# take_profit=Decimal(str(signal.profit_target)),'
+# timestamp=signal.timestamp,'
+# urgency='MEDIUM','
+# execution_style='PATIENT','
+# max_slippage=Decimal('0.002'),'
+#                     time_in_force='GTC'
+
+
+#                 orders.extend([order_a, order_b])
+
+#             elif signal.signal_type == PairSignalType.LONG_B_SHORT_A:
+                # Long B, Short A
+# order_a = ExecutionOrder('
+# signal_type=SignalType.SELL,'
+#                     quantity=position_sizes['size_a'],
+# price=signal.price_a,)
+#                     stop_loss=Decimal(str(signal.stop_loss)),
+# take_profit=Decimal(str(signal.profit_target)),'
+# timestamp=signal.timestamp,'
+# urgency='MEDIUM','
+# execution_style='PATIENT','
+# max_slippage=Decimal('0.002'),'
+#                     time_in_force='GTC'
+
+
+# order_b = ExecutionOrder('
+# signal_type=SignalType.BUY,'
+#                     quantity=position_sizes['size_b'],
+# price=signal.price_b,)
+#                     stop_loss=Decimal(str(signal.stop_loss)),
+# take_profit=Decimal(str(signal.profit_target)),'
+# timestamp=signal.timestamp,'
+# urgency='MEDIUM','
+# execution_style='PATIENT','
+# max_slippage=Decimal('0.002'),'
+#                     time_in_force='GTC'
+
+
+#                 orders.extend([order_a, order_b])
+
+#             return orders
+
+#         except Exception as e:""
+#             self.logger.error(f"Error creating execution orders: {e}")
+#             return []
+
+    # Pillar 5: Performance Tracking"
+#     def update_performance_metrics(self, trade_results: List[Dict[str, Any]]):
+#         "Update performance metrics for pairs trading"
+#         try:
+#             for trade_result in trade_results:"'"'
+# pair_key = f"{trade_result.get('symbol_a')}_{trade_result.get('symbol_b')}
+
+                # Update pair-specific performance
+#                 if pair_key not in self.pair_performance:''
+#                     self.pair_performance[pair_key] = {''
+# 'trades': 0,'
+# 'wins': 0,'
+# 'total_pnl': 0.0,'
+# 'max_drawdown': 0.0,'
+# 'avg_holding_period': 0.0}
+
+# '
+# perf = self.pair_performance[pair_key]'
+# perf['trades'] += 1'
+# '
+# pnl = trade_result.get('pnl', 0)'
+#                 perf['total_pnl'] += pnl
+# '
+#                 if pnl > 0:''
+#                     perf['wins'] += 1
+
+                # Update pair data
+#                 if pair_key in self.active_pairs:
+# pair_data = self.active_pairs[pair_key]'
+# pair_data.trade_count += 1'
+# pair_data.win_rate = perf['wins'] / perf['trades']'
+#                     pair_data.performance_score = perf['total_pnl'] / max(1, perf['trades'])
+
+                # Store trade history
+#                 self.trade_history.append(trade_result)
+
+            # Log performance summary
+#             if len(self.trade_history) % 10 == 0:  # Every 10 trades
+#                 self._log_performance_summary()
+
+#         except Exception as e:""
+#             self.logger.error(f"Error updating performance metrics: {e}")
+
+#     def _log_performance_summary(self):
+#         "Log performance summary"
+#         try:
+#             if not self.trade_history:
+#                 return
+# '
+# recent_trades = self.trade_history[-10:]'
+# total_pnl = sum(trade.get('pnl', 0) for trade in recent_trades)'
+#             win_rate = sum(1 for trade in recent_trades if trade.get('pnl', 0) > 0) / len(recent_trades) * 100
+
+#             active_pairs_count = len([p for p in self.active_pairs.values() if p.is_active])
+#             avg_correlation = np.mean([p.correlation for p in self.active_pairs.values() if p.is_active])
+
+#             self.logger.info(""
+# f"Pairs Trading Performance -
+# f"Recent PnL: {total_pnl:.2f},
+# f"Win Rate: {win_rate:.1f}%,
+# f"Active Pairs: {active_pairs_count},
+# f"Avg Correlation: {avg_correlation:.3f}")
+
+
+#         except Exception as e:""
+#             self.logger.error(f"Error logging performance summary: {e}")
+
+#     def get_strategy_status(self):
+#         "Get current strategy status and performance"
+#         try:
+#             active_pairs = [p for p in self.active_pairs.values() if p.is_active]
+# '
+#             return {''
+# 'strategy_name': 'PairsTradingStrategy','
+# 'state': self.state.value,'
+# 'active_pairs_count': len(active_pairs),'
+# 'max_pairs': self.config.max_pairs_active,'
+# 'current_signals': len(self.current_signals),'
+# 'total_trades': len(self.trade_history),'
+# 'avg_correlation': np.mean([p.correlation for p in active_pairs]) if active_pairs else 0,'
+# 'avg_cointegration_pvalue': np.mean([p.cointegration_pvalue for p in active_pairs]) if active_pairs else 0,'
+# 'best_performing_pair': max(active_pairs, key=lambda p: p.performance_score).symbol_a + '-' + max(active_pairs, key=lambda p: p.performance_score).symbol_b if active_pairs else None',
+# 'entry_threshold': self.config.entry_z_threshold,'
+# 'last_update': datetime.now().isoformat()}
+
+
+#         except Exception as e:"''
+#             self.logger.error(f"Error getting strategy status: {e}")
+#             return {'error': str(e)}
+
+# Example usage and configuration"
+# def create_pairs_trading_config():
+#     "Create a sample pairs trading strategy configuration"
+#     return PairsConfig(
+#         min_correlation=0.7,
+#         max_cointegration_pvalue=0.05,
+#         min_half_life_periods=5,
+#         max_half_life_periods=50,
+#         lookback_period=252,
+#         entry_z_threshold=2.0,
+#         exit_z_threshold=0.5,
+#         stop_loss_z_threshold=3.5,
+#         spread_window=20,
+#         volatility_window=30,
+#         regime_detection_window=50,
+#         max_position_size=0.05,
+#         max_pairs_active=10,
+#         correlation_decay_threshold=0.1,
+#         max_drawdown_threshold=0.15,
+#         min_liquidity_ratio=0.01,
+#         max_spread_cost=0.002,
+#         rebalance_frequency=5,
+#         min_sharpe_ratio=1.0,
+#         max_correlation_with_market=0.3,
+#         profit_target_multiplier=1.5,
+#         use_kalman_filter=True,
+#         dynamic_hedge_ratio=True,
+#         regime_aware_sizing=True,
+#         multi_timeframe_confirmation=True,
+#         volatility_regime_threshold=1.5,
+#         trend_regime_threshold=0.02,
+# market_stress_threshold=0.25)
+
+# "
+# if __name__ == "__main__":
+    # Example usage:
+#     config = create_pairs_trading_config()
+#     strategy = PairsTradingStrategy(config)
+# '
+    # Sample market data for multiple symbols''
+#     symbols = ['AAPL', 'MSFT', 'GOOGL', 'AMZN']
+#     sample_data = {}
+
+#     for symbol in symbols:''
+# sample_data[symbol] = pd.DataFrame({'
+# 'timestamp': pd.date_range('2024-01-01', periods=300, freq='1D'),'
+# 'open': np.random.randn(300).cumsum() + 100,'
+# 'high': np.random.randn(300).cumsum() + 101,'
+# 'low': np.random.randn(300).cumsum() + 99,'
+# 'close': np.random.randn(300).cumsum() + 100,'
+# 'volume': np.random.randint(100000, 1000000, 300)}
+# )
+
+    # Generate signals"
+# signals = strategy.generate_signals(sample_data)"
+#     print(f"Generated {len(signals)} pairs trading signals")
+
+    # Get strategy status"
+# status = strategy.get_strategy_status()"
+# print(f"Strategy Status: {status}")"'
+# "'"'

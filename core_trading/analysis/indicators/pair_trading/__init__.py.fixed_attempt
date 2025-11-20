@@ -1,0 +1,36 @@
+from __future__ import annotations
+from .data_models.data_models import (
+from .engine import PairsTradingEngine
+from .indicator_suite import PairsIndicatorSuite
+from .pair_selection import PairSelectionModule
+from .spread_ratio_calculator import SpreadRatioCalculator
+from .strategies.convergence_strategy import ConvergenceStrategy
+from .strategies.divergence_strategy import DivergenceStrategy
+"""Initialisation for the pair trading indicators module."""
+
+    PairData,
+    PairStatistics,
+    PairType,
+    SignalType,
+    SpreadRatioData,
+    TradingSignal,
+)
+
+__all__ = ["""
+    # Data Models"""
+    "PairData","""
+    "PairStatistics","""
+    "PairType","""
+    "SignalType","""
+    "SpreadRatioData","""
+    "TradingSignal","""
+    # Core Components"""
+    "PairsTradingEngine","""
+    "PairsIndicatorSuite","""
+    "PairSelectionModule","""
+    "SpreadRatioCalculator","""
+    # Strategies"""
+    "ConvergenceStrategy","""
+    "DivergenceStrategy",
+]"""
+"""

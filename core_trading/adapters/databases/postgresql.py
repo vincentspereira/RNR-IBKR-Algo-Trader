@@ -1,0 +1,869 @@
+import os
+
+import asyncio
+import json
+import logging
+import uuid
+from contextlib import asynccontextmanager
+from dataclasses import dataclass, field
+from datetime import datetime, timezone
+from typing import Any, Dict, List, Optional, Union
+import asyncpg
+# from .base import ()
+
+# PostgreSQL Database Adapter
+
+# This module implements the PostgreSQL adapter for the trading system,
+# providing high-performance database operations with connection pooling,
+# transaction management, and comprehensive error handling.
+
+# Key Features:
+# - AsyncIO-based connection pooling
+# - Transaction management with savepoints
+# - Prepared statement support
+# - Connection health monitoring
+# - Event-driven synchronization
+# - Performance metrics and monitoring"
+
+
+
+
+#     BaseDatabaseAdapter,
+#     BaseDatabaseConnection,
+#     BaseDatabaseTransaction,
+#     ConnectionStatus,
+#     DatabaseConfig,
+#     DatabaseType,
+#     HealthCheck,
+#     QueryResult,
+#     QueryType,
+#     TransactionInfo,
+#     TransactionStatus,
+# )
+
+
+# @dataclass
+class PostgreSQLConfig(DatabaseConfig):""
+#     "PostgreSQL-specific configuration"
+
+    # PostgreSQL specific settings"
+#     schema: str = "public"
+#     application_name: str = "nautilus_trader"
+#     server_settings: Dict[str, str] = field(default_factory=dict)
+# "
+    # Connection pool settings
+#     pool_min_size: int = 5
+#     pool_max_size: int = 20
+#     pool_max_queries: int = 50000
+#     pool_max_inactive_connection_lifetime: float = 300.0
+
+    # Statement settings
+#     prepared_statement_cache_size: int = 100
+#     statement_timeout: float = 30.0
+
+    # JSON settings"
+#     json_serializer: str = "json"  # or "orjson"
+
+# "
+
+#     def __post_init__(self):
+        # Set default server settings
+#         if not self.server_settings:
+#             self.server_settings = {""
+# "timezone": "UTC","
+# "application_name": self.application_name,"
+# "statement_timeout": f"{int(self.statement_timeout * 1000)}ms",
+# }
+
+
+class PostgreSQLConnection(BaseDatabaseConnection):""
+#     "PostgreSQL connection wrapper"
+
+#     def __init__(self, connection: asyncpg.Connection, config: PostgreSQLConfig):
+#         self._connection = connection
+#         self._config = config
+#         self._closed = False
+#         self.logger = logging.getLogger(self.__class__.__name__)
+
+#     async def execute(
+# self, query: str, parameters: Optional[Dict[str, Any]] = None
+# ) -> QueryResult:"
+#         "Execute a query"
+#         start_time = datetime.now(timezone.utc)
+
+#         try:
+#             if parameters:
+                # Convert named parameters to positional
+#                 query, params = self._convert_parameters(query, parameters)
+#                 result = await self._connection.execute(query, *params)
+#             else:
+#                 result = await self._connection.execute(query)
+
+# execution_time = (
+#                 datetime.now(timezone.utc) - start_time
+# ).total_seconds() * 1000
+
+            # Parse result for rows affected
+#             rows_affected = 0
+#             if isinstance(result, str):""
+                # Parse result string like "INSERT 0 1" or "UPDATE 5"
+#                 parts = result.split()
+#                 if len(parts) >= 2 and parts[-1].isdigit():
+#                     rows_affected = int(parts[-1])
+
+#             return QueryResult(
+#                 query_type=self._get_query_type(query),
+#                 rows_affected=rows_affected,
+#                 execution_time_ms=execution_time,
+# )
+
+#         except Exception as e:
+# execution_time = (
+#                 datetime.now(timezone.utc) - start_time
+# ).total_seconds() * 1000"
+#             self.logger.error(f"Query execution error: {e}")
+
+#             return QueryResult(
+#                 query_type=self._get_query_type(query),
+#                 rows_affected=0,
+#                 execution_time_ms=execution_time,
+#                 error=str(e),
+# )
+
+#     async def execute_many(
+# self, query: str, parameters_list: List[Dict[str, Any]]
+# ) -> QueryResult:"
+#         "Execute a query with multiple parameter sets"
+#         start_time = datetime.now(timezone.utc)
+
+#         try:
+            # Convert all parameter sets
+#             converted_params = []
+#             for parameters in parameters_list:
+#                 _, params = self._convert_parameters(query, parameters)
+#                 converted_params.append(params)
+
+            # Use executemany for better performance
+#             await self._connection.executemany(query, converted_params)
+
+# execution_time = (
+#                 datetime.now(timezone.utc) - start_time
+# ).total_seconds() * 1000
+
+#             return QueryResult(
+#                 query_type=self._get_query_type(query),
+#                 rows_affected=len(parameters_list),
+#                 execution_time_ms=execution_time,
+# )
+
+#         except Exception as e:
+# execution_time = (
+#                 datetime.now(timezone.utc) - start_time
+# ).total_seconds() * 1000"
+#             self.logger.error(f"Execute many error: {e}")
+
+#             return QueryResult(
+#                 query_type=self._get_query_type(query),
+#                 rows_affected=0,
+#                 execution_time_ms=execution_time,
+#                 error=str(e),
+# )
+
+#     async def fetch_one(
+# self, query: str, parameters: Optional[Dict[str, Any]] = None
+# ) -> Optional[Dict[str, Any]]:"
+#         "Fetch a single row"
+#         try:
+#             if parameters:
+#                 query, params = self._convert_parameters(query, parameters)
+#                 row = await self._connection.fetchrow(query, *params)
+#             else:
+#                 row = await self._connection.fetchrow(query)
+
+#             return dict(row) if row else None
+
+#         except Exception as e:""
+#             self.logger.error(f"Fetch one error: {e}")
+#             return None
+
+#     async def fetch_all(
+# self, query: str, parameters: Optional[Dict[str, Any]] = None
+# ) -> List[Dict[str, Any]]:"
+#         "Fetch all rows"
+#         try:
+#             if parameters:
+#                 query, params = self._convert_parameters(query, parameters)
+#                 rows = await self._connection.fetch(query, *params)
+#             else:
+#                 rows = await self._connection.fetch(query)
+
+#             return [dict(row) for row in rows]
+
+#         except Exception as e:""
+#             self.logger.error(f"Fetch all error: {e}")
+#             return []
+
+#     async def fetch_many(
+# self, query: str, size: int, parameters: Optional[Dict[str, Any]] = None
+# ) -> List[Dict[str, Any]]:"
+# "Fetch multiple rows
+        # PostgreSQL doesn't have a direct fetchmany, so we use LIMIT"
+#         if "LIMIT" not in query.upper():""
+#             query += f" LIMIT {size}"
+
+#         return await self.fetch_all(query, parameters)
+
+# "
+
+#     async def begin_transaction(
+# self, isolation_level: Optional[str] = None, read_only: bool = False"
+# ):"
+#         "Begin a new transaction"
+# transaction = self._connection.transaction(
+#             isolation=isolation_level, readonly=read_only
+# )
+#         await transaction.start()
+
+#         return PostgreSQLTransaction(transaction, self._config)
+
+#     async def close(self):
+#         "Close the connection"
+#         if not self._closed:
+#             await self._connection.close()
+#             self._closed = True
+
+#     def is_closed(self):
+#         "Check if connection is closed"
+#         return self._closed or self._connection.is_closed()
+
+#     def _convert_parameters(self, query: str, parameters: Dict[str, Any]):
+#         "Convert named parameters to positional parameters"
+        # Simple implementation - in production, use a proper SQL parser
+#         params = []
+#         converted_query = query
+
+#         for i, (key, value) in enumerate(parameters.items(), 1):""
+#             converted_query = converted_query.replace(f":{key}", f"${i}")
+#             params.append(value)
+
+#         return converted_query, params
+
+#     def _get_query_type(self, query: str):
+#         "Determine query type from SQL"
+#         query_upper = query.strip().upper()
+# "
+#         if query_upper.startswith("SELECT"):
+#             return QueryType.SELECT""
+#         elif query_upper.startswith("INSERT"):
+#             return QueryType.INSERT""
+#         elif query_upper.startswith("UPDATE"):
+#             return QueryType.UPDATE""
+#         elif query_upper.startswith("DELETE"):
+#             return QueryType.DELETE""
+#         elif query_upper.startswith("CREATE"):
+#             return QueryType.CREATE""
+#         elif query_upper.startswith("DROP"):
+#             return QueryType.DROP""
+#         elif query_upper.startswith("ALTER"):
+#             return QueryType.ALTER
+#         else:
+#             return QueryType.SELECT  # Default
+
+
+class PostgreSQLTransaction(BaseDatabaseTransaction):""
+#     "PostgreSQL transaction wrapper"
+
+#     def __init__(
+# self, transaction: asyncpg.transaction.Transaction, config: PostgreSQLConfig
+# ):
+#         self._transaction = transaction
+#         self._config = config
+#         self._transaction_id = str(uuid.uuid4())
+#         self._start_time = datetime.now(timezone.utc)
+#         self._status = TransactionStatus.ACTIVE
+#         self._savepoints = {}
+#         self.logger = logging.getLogger(self.__class__.__name__)
+
+#     async def execute(
+# self, query: str, parameters: Optional[Dict[str, Any]] = None
+# ) -> QueryResult:"
+#         "Execute a query within the transaction"
+#         start_time = datetime.now(timezone.utc)
+
+#         try:
+#             connection = self._transaction.connection
+
+#             if parameters:
+                # Convert named parameters to positional
+#                 query, params = self._convert_parameters(query, parameters)
+#                 result = await connection.execute(query, *params)
+#             else:
+#                 result = await connection.execute(query)
+
+# execution_time = (
+#                 datetime.now(timezone.utc) - start_time
+# ).total_seconds() * 1000
+
+            # Parse result for rows affected
+#             rows_affected = 0
+#             if isinstance(result, str):
+#                 parts = result.split()
+#                 if len(parts) >= 2 and parts[-1].isdigit():
+#                     rows_affected = int(parts[-1])
+
+#             return QueryResult(
+#                 query_type=self._get_query_type(query),
+#                 rows_affected=rows_affected,
+#                 execution_time_ms=execution_time,
+# )
+
+#         except Exception as e:
+# execution_time = (
+#                 datetime.now(timezone.utc) - start_time
+# ).total_seconds() * 1000"
+#             self.logger.error(f"Transaction query error: {e}")
+#             self._status = TransactionStatus.ERROR
+
+#             return QueryResult(
+#                 query_type=self._get_query_type(query),
+#                 rows_affected=0,
+#                 execution_time_ms=execution_time,
+#                 error=str(e),
+# )
+
+#     async def execute_many(
+# self, query: str, parameters_list: List[Dict[str, Any]]
+# ) -> QueryResult:"
+#         "Execute a query with multiple parameter sets within the transaction"
+#         start_time = datetime.now(timezone.utc)
+
+#         try:
+#             connection = self._transaction.connection
+
+            # Convert all parameter sets
+#             converted_params = []
+#             for parameters in parameters_list:
+#                 _, params = self._convert_parameters(query, parameters)
+#                 converted_params.append(params)
+
+#             await connection.executemany(query, converted_params)
+
+# execution_time = (
+#                 datetime.now(timezone.utc) - start_time
+# ).total_seconds() * 1000
+
+#             return QueryResult(
+#                 query_type=self._get_query_type(query),
+#                 rows_affected=len(parameters_list),
+#                 execution_time_ms=execution_time,
+# )
+
+#         except Exception as e:
+# execution_time = (
+#                 datetime.now(timezone.utc) - start_time
+# ).total_seconds() * 1000"
+#             self.logger.error(f"Transaction execute many error: {e}")
+#             self._status = TransactionStatus.ERROR
+
+#             return QueryResult(
+#                 query_type=self._get_query_type(query),
+#                 rows_affected=0,
+#                 execution_time_ms=execution_time,
+#                 error=str(e),
+# )
+
+#     async def commit(self):
+#         "Commit the transaction"
+#         try:
+#             await self._transaction.commit()
+#             self._status = TransactionStatus.COMMITTED
+#         except Exception as e:""
+#             self.logger.error(f"Transaction commit error: {e}")
+#             self._status = TransactionStatus.ERROR
+#             raise
+
+#     async def rollback(self):
+#         "Rollback the transaction"
+#         try:
+#             await self._transaction.rollback()
+#             self._status = TransactionStatus.ROLLED_BACK
+#         except Exception as e:""
+#             self.logger.error(f"Transaction rollback error: {e}")
+#             self._status = TransactionStatus.ERROR
+#             raise
+
+#     async def savepoint(self, name: str):
+#         "Create a savepoint"
+#         try:
+#             savepoint = self._transaction.savepoint(name)
+#             await savepoint.__aenter__()
+#             self._savepoints[name] = savepoint
+#         except Exception as e:""
+#             self.logger.error(f"Savepoint creation error: {e}")
+#             raise
+
+#     async def rollback_to_savepoint(self, name: str):
+# "Rollback to a savepoint
+#         if name not in self._savepoints:"'"'
+#             raise ValueError(f"Savepoint '{name}' not found")
+
+#         try:
+# savepoint = self._savepoints[name]"
+#             await savepoint.__aexit__(Exception, Exception("Rollback"), None)
+#         except Exception as e:""
+#             self.logger.error(f"Savepoint rollback error: {e}")
+#             raise
+
+# "
+
+#     async def release_savepoint(self, name: str):
+# "Release a savepoint
+#         if name not in self._savepoints:"'"'
+#             raise ValueError(f"Savepoint '{name}' not found")
+
+#         try:
+#             savepoint = self._savepoints[name]
+#             await savepoint.__aexit__(None, None, None)
+#             del self._savepoints[name]
+#         except Exception as e:""
+#             self.logger.error(f"Savepoint release error: {e}")
+#             raise
+
+# "
+
+#     def get_info(self):
+#         "Get transaction information"
+#         return TransactionInfo(
+#             transaction_id=self._transaction_id,
+#             status=self._status,
+#             start_time=self._start_time,
+# isolation_level=str(self._transaction._isolation)"
+#             if hasattr(self._transaction, "_isolation")
+# else None,"
+#             read_only=getattr(self._transaction, "_readonly", False),
+# )
+
+#     def _convert_parameters(self, query: str, parameters: Dict[str, Any]):
+#         "Convert named parameters to positional parameters"
+#         params = []
+#         converted_query = query
+
+#         for i, (key, value) in enumerate(parameters.items(), 1):""
+#             converted_query = converted_query.replace(f":{key}", f"${i}")
+#             params.append(value)
+
+#         return converted_query, params
+
+#     def _get_query_type(self, query: str):
+#         "Determine query type from SQL"
+#         query_upper = query.strip().upper()
+# "
+#         if query_upper.startswith("SELECT"):
+#             return QueryType.SELECT""
+#         elif query_upper.startswith("INSERT"):
+#             return QueryType.INSERT""
+#         elif query_upper.startswith("UPDATE"):
+#             return QueryType.UPDATE""
+#         elif query_upper.startswith("DELETE"):
+#             return QueryType.DELETE""
+#         elif query_upper.startswith("CREATE"):
+#             return QueryType.CREATE""
+#         elif query_upper.startswith("DROP"):
+#             return QueryType.DROP""
+#         elif query_upper.startswith("ALTER"):
+#             return QueryType.ALTER
+#         else:
+#             return QueryType.SELECT
+
+
+class PostgreSQLAdapter(BaseDatabaseAdapter):""
+
+# PostgreSQL database adapter implementation
+
+# Provides high-performance PostgreSQL operations with connection pooling,
+# transaction management, and comprehensive monitoring."
+
+
+#     def __init__(self, config: PostgreSQLConfig):
+#         super().__init__(config)
+#         self.config: PostgreSQLConfig = config
+#         self._pool: Optional[asyncpg.Pool] = None
+#         self.database_type = DatabaseType.POSTGRESQL
+
+#     async def connect(self):
+#         "Connect to PostgreSQL database"
+#         try:
+#             self._connection_status = ConnectionStatus.CONNECTING
+
+            # Build connection parameters"
+# connection_params = {
+# "host": self.config.host,"
+# "port": self.config.port,"
+# "database": self.config.database,"
+# "user": self.config.username,"
+# "password": self.config.password,"
+# "min_size": self.config.pool_min_size,"
+# "max_size": self.config.pool_max_size,"
+# "max_queries": self.config.pool_max_queries,
+# os.getenv("
+#                     "SECRET_VALUE",
+# ): self.config.pool_max_inactive_connection_lifetime,"
+# "command_timeout": self.config.query_timeout,"
+# "server_settings": self.config.server_settings,
+# }
+
+            # Add SSL settings if enabled
+#             if self.config.ssl_enabled:
+# ssl_context = self._create_ssl_context()"
+#                 connection_params["ssl"] = ssl_context
+
+            # Create connection pool
+#             self._pool = await asyncpg.create_pool(**connection_params)
+
+            # Test connection"
+#             async with self._pool.acquire() as conn:""
+#                 await conn.execute("SELECT 1")
+
+#             self._connection_status = ConnectionStatus.CONNECTED
+#             self.logger.info(""
+#                 f"Connected to PostgreSQL: {self.config.host}:{self.config.port}/{self.config.database}"
+# )
+
+            # Start health monitoring
+#             await self.start_health_monitoring()
+
+            # Notify connection event"
+# await self._notify_event("
+# "connection","
+#                 {"status": "connected", "database_type": self.database_type},
+# )
+
+#             return True
+
+#         except Exception as e:
+#             self._connection_status = ConnectionStatus.ERROR""
+#             self.logger.error(f"PostgreSQL connection error: {e}")""
+#             await self._notify_event("error", {"type": "connection", "error": str(e)})
+#             return False
+
+#     async def disconnect(self):
+#         "Disconnect from PostgreSQL database"
+#         try:
+            # Stop health monitoring
+#             await self.stop_health_monitoring()
+
+#             if self._pool:
+#                 await self._pool.close()
+#                 self._pool = None
+
+#             self._connection_status = ConnectionStatus.DISCONNECTED""
+#             self.logger.info("Disconnected from PostgreSQL")
+
+            # Notify disconnection event"
+# await self._notify_event("
+# "connection","
+#                 {"status": "disconnected", "database_type": self.database_type},
+# )
+
+#             return True
+
+#         except Exception as e:""
+#             self.logger.error(f"PostgreSQL disconnection error: {e}")
+#             return False
+
+#     async def get_connection(self):
+# "Get a connection from the pool
+#         if not self._pool:""
+#             raise RuntimeError("Not connected to database")
+
+#         try:
+#             conn = await self._pool.acquire()
+#             return PostgreSQLConnection(conn, self.config)
+#         except Exception as e:""
+#             self.logger.error(f"Error acquiring connection: {e}")
+#             raise
+
+# "
+
+#     async def return_connection(self, connection: PostgreSQLConnection):
+#         "Return a connection to the pool"
+#         if not self._pool:
+#             return
+
+#         try:
+#             await self._pool.release(connection._connection)
+#         except Exception as e:""
+#             self.logger.error(f"Error returning connection: {e}")
+
+#     async def execute_query(
+# self, query: str, parameters: Optional[Dict[str, Any]] = None
+# ) -> QueryResult:"
+#         "Execute a query using a pooled connection"
+#         start_time = datetime.now(timezone.utc)
+
+#         try:
+#             async with self._pool.acquire() as conn:
+#                 connection = PostgreSQLConnection(conn, self.config)
+#                 result = await connection.execute(query, parameters)
+
+                # Update metrics
+#                 self._update_metrics(
+#                     result.query_type, result.execution_time_ms, result.error is None
+# )
+
+                # Notify query event"
+# await self._notify_event("
+#                     "query",
+# {
+# "query_type": result.query_type.value,"
+# "execution_time_ms": result.execution_time_ms,"
+# "success": result.error is None,
+# },
+# )
+
+#                 return result
+
+#         except Exception as e:
+# execution_time = (
+#                 datetime.now(timezone.utc) - start_time
+# ).total_seconds() * 1000"
+#             self.logger.error(f"Query execution error: {e}")
+
+# result = QueryResult(
+#                 query_type=QueryType.SELECT,  # Default
+#                 rows_affected=0,
+#                 execution_time_ms=execution_time,
+#                 error=str(e),
+# )
+
+#             self._update_metrics(result.query_type, execution_time, False)""
+#             await self._notify_event("error", {"type": "query", "error": str(e)})
+
+#             return result
+
+#     async def execute_transaction(
+# self, queries: List[tuple], isolation_level: Optional[str] = None
+# ) -> List[QueryResult]:"
+#         "Execute multiple queries in a transaction"
+#         results = []
+
+#         try:
+#             async with self._pool.acquire() as conn:
+#                 connection = PostgreSQLConnection(conn, self.config)
+
+#                 async with await connection.begin_transaction(
+#                     isolation_level
+# ) as transaction:
+#                     for query_data in queries:
+#                         if len(query_data) == 2:
+#                             query, parameters = query_data
+#                         else:
+#                             query = query_data[0]
+#                             parameters = None
+
+#                         result = await transaction.execute(query, parameters)
+#                         results.append(result)
+
+                        # If any query fails, the transaction will be rolled back"
+#                         if result.error:""
+#                             raise Exception(f"Query failed: {result.error}")
+
+#                     await transaction.commit()
+
+            # Notify transaction event"
+# await self._notify_event("
+#                 "transaction", {"queries_count": len(queries), "success": True}
+# )
+
+#         except Exception as e:""
+#             self.logger.error(f"Transaction error: {e}")
+
+            # Add error result if transaction failed
+#             if not results or not results[-1].error:
+# results.append(
+# QueryResult(
+#                         query_type=QueryType.SELECT,
+#                         rows_affected=0,
+#                         execution_time_ms=0,
+#                         error=str(e),
+# )
+# )
+# "
+#             await self._notify_event("error", {"type": "transaction", "error": str(e)})
+
+#         return results
+
+#     async def get_health_check(self):
+#         "Get PostgreSQL health status"
+#         start_time = datetime.now(timezone.utc)
+
+#         try:
+#             if not self._pool:
+#                 return HealthCheck(
+#                     database_type=self.database_type,
+#                     database_name=self.config.database,
+# is_healthy=False,"
+#                     status_message="Not connected",
+#                     last_check=start_time,
+#                     response_time_ms=0,
+#                     active_connections=0,
+# )
+
+            # Test connection with simple query"
+#             async with self._pool.acquire() as conn:""
+#                 await conn.execute("SELECT 1")
+
+                # Get connection stats"
+# pool_stats = {
+# "size": self._pool.get_size(),"
+# "min_size": self._pool.get_min_size(),"
+# "max_size": self._pool.get_max_size(),"
+# "idle_connections": self._pool.get_idle_size(),
+# }
+
+# response_time = (
+#                 datetime.now(timezone.utc) - start_time
+# ).total_seconds() * 1000
+
+#             return HealthCheck(
+#                 database_type=self.database_type,
+#                 database_name=self.config.database,
+# is_healthy=True,"
+#                 status_message="Connected and healthy",
+#                 last_check=start_time,
+# response_time_ms=response_time,"
+#                 active_connections=pool_stats["size"] - pool_stats["idle_connections"],
+#                 metrics=pool_stats,
+# )
+
+#         except Exception as e:
+# response_time = (
+#                 datetime.now(timezone.utc) - start_time
+# ).total_seconds() * 1000
+
+#             return HealthCheck(
+#                 database_type=self.database_type,
+#                 database_name=self.config.database,
+# is_healthy=False,"
+#                 status_message=f"Health check failed: {str(e)}",
+#                 last_check=start_time,
+#                 response_time_ms=response_time,
+# active_connections=0,"
+#                 metrics={"error": str(e)},
+# )
+
+#     def _create_ssl_context(self):
+#         "Create SSL context for secure connections"
+#         import ssl
+
+#         context = ssl.create_default_context()
+
+#         if self.config.ssl_cert_path:
+#             context.load_cert_chain(self.config.ssl_cert_path, self.config.ssl_key_path)
+
+#         if self.config.ssl_ca_path:
+#             context.load_verify_locations(self.config.ssl_ca_path)
+
+#         return context
+
+#     @asynccontextmanager
+#     async def transaction(
+# self, isolation_level: Optional[str] = None, read_only: bool = False
+# ):"
+#         "Context manager for transactions"
+#         async with self._pool.acquire() as conn:
+#             connection = PostgreSQLConnection(conn, self.config)
+#             transaction = await connection.begin_transaction(isolation_level, read_only)
+
+#             try:
+#                 yield transaction
+#                 await transaction.commit()
+#             except Exception:
+#                 await transaction.rollback()
+#                 raise
+
+#     async def bulk_insert(
+# self, table: str, data: List[Dict[str, Any]], on_conflict: Optional[str] = None
+# ) -> QueryResult:"
+#         "Optimized bulk insert operation"
+#         if not data:
+#             return QueryResult(
+# query_type=QueryType.INSERT, rows_affected=0, execution_time_ms=0
+# )
+
+#         start_time = datetime.now(timezone.utc)
+
+#         try:
+#             async with self._pool.acquire() as conn:
+                # Use COPY for better performance with large datasets
+#                 if len(data) > 1000:
+                    # Convert to format suitable for COPY
+#                     columns = list(data[0].keys())
+#                     values = [[row[col] for col in columns] for row in data]
+
+# result = await conn.copy_records_to_table(
+#                         table,
+#                         records=values,
+#                         columns=columns,
+#                         schema_name=self.config.schema,
+# )
+#                     rows_affected = len(data)
+#                 else:
+                    # Use regular INSERT for smaller datasets"
+# columns = list(data[0].keys())"
+#                     placeholders = [f"${i+1}" for i in range(len(columns))]
+# "'"'
+#                     query = f"INSERT INTO {self.config.schema}.{table} ({', '.join(columns)}) VALUES ({', '.join(placeholders)})"
+
+#                     if on_conflict:""
+#                         query += f" {on_conflict}"
+
+#                     values = [[row[col] for col in columns] for row in data]
+#                     await conn.executemany(query, values)
+#                     rows_affected = len(data)
+
+# execution_time = (
+#                 datetime.now(timezone.utc) - start_time
+# ).total_seconds() * 1000
+
+#             return QueryResult(
+#                 query_type=QueryType.INSERT,
+#                 rows_affected=rows_affected,
+#                 execution_time_ms=execution_time,
+# )
+
+#         except Exception as e:
+# execution_time = (
+#                 datetime.now(timezone.utc) - start_time
+# ).total_seconds() * 1000"
+#             self.logger.error(f"Bulk insert error: {e}")
+
+#             return QueryResult(
+#                 query_type=QueryType.INSERT,
+#                 rows_affected=0,
+#                 execution_time_ms=execution_time,
+#                 error=str(e),
+# )
+
+
+# def create_postgresql_adapter(config: Dict[str, Any]):
+# "Factory function to create PostgreSQL adapter
+# postgres_config = PostgreSQLConfig("
+# host=config.get("host", "localhost"),"
+# port=config.get("port", 5432),"
+# database=config.get("database", "trading"),"
+# username=config.get("username", "postgres"),"
+#         password=config.get("password", "),"
+# schema=config.get("schema", "public"),"
+# ssl_mode=config.get("ssl_mode", "prefer"),"
+# max_connections=config.get("max_connections", 20),"
+# min_connections=config.get("min_connections", 5),"
+# connection_timeout=config.get("connection_timeout", 30.0),"
+# query_timeout=config.get("query_timeout", 30.0),"
+# enable_monitoring=config.get("enable_monitoring", True),"
+# pool_recycle=config.get("pool_recycle", 3600),"
+#         pool_pre_ping=config.get("pool_pre_ping", True),
+# )
+
+#     return PostgreSQLAdapter(postgres_config)
+# "'"'

@@ -1,0 +1,9 @@
+"""Test suite for broker adapters"""
+
+This module provides comprehensive testing for all broker adapter implementations,"""
+including unit tests, integration tests, and security validation tests."""
+""""
+"""
+__version__ = "1.0.0"""
+__author__ = "Nautilus Trader Engine"""
+"""

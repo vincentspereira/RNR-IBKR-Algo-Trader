@@ -1,0 +1,1446 @@
+import asyncio
+import json
+import logging
+import time
+from datetime import datetime, timedelta
+from typing import Any, Dict, List, Optional, Union, Tuple, Set
+from dataclasses import dataclass, field, asdict
+from enum import Enum
+import numpy as np
+import uuid
+from collections import defaultdict, Counter
+import math
+from .vector_ml_integration import (
+from infrastructure.wrappers.mcp.qdrant_wrapper import SearchResult, DistanceMetric
+"""
+Semantic Pattern Recognition System with Historical Matching
+Provides advanced pattern recognition capabilities using semantic search,
+historical pattern matching, and cross-asset similarity analysis.
+
+Author: Vincent S. Pereira
+Version: 1.0.0
+"""
+
+
+# Local imports
+    MarketPattern, AssetClass, PatternType, VectorDatabaseMLEngine,
+    VectorDatabaseConfig, MLModelConfig
+)
+
+# Configure logging
+logger = logging.getLogger(__name__)
+
+
+class SemanticCategory(Enum):
+    """Semantic categories for pattern classification."""
+    TREND_FOLLOWING = "trend_following"
+    MEAN_REVERSION = "mean_reversion"
+    BREAKOUT = "breakout"
+    CONSOLIDATION = "consolidation"
+    REVERSAL = "reversal"
+    CONTINUATION = "continuation"
+    VOLATILITY_EXPANSION = "volatility_expansion"
+    VOLATILITY_CONTRACTION = "volatility_contraction"
+
+
+class MarketRegime(Enum):
+    """Market regimes for pattern context."""
+    BULL_MARKET = "bull_market"
+    BEAR_MARKET = "bear_market"
+    SIDEWAYS_MARKET = "sideways_market"
+    HIGH_VOLATILITY = "high_volatility"
+    LOW_VOLATILITY = "low_volatility"
+    TRANSITIONAL = "transitional"
+
+
+class PatternComplexity(Enum):
+    """Pattern complexity levels."""
+    SIMPLE = "simple"  # Basic price/volume patterns
+    MODERATE = "moderate"  # Multi-indicator patterns
+    COMPLEX = "complex"  # Multi-timeframe, multi-asset patterns
+    SOPHISTICATED = "sophisticated"  # Advanced ML-detected patterns
+
+
+@dataclass
+class SemanticPattern:
+    """Enhanced pattern with semantic information."""
+
+    # Base pattern information
+    base_pattern: MarketPattern
+
+    # Semantic classification
+    semantic_category: SemanticCategory
+    market_regime: MarketRegime
+    pattern_complexity: PatternComplexity
+
+    # Semantic features
+    conceptual_similarity: float  # Similarity to pattern concepts
+    contextual_relevance: float   # Relevance to current market context
+    temporal_consistency: float   # Consistency across timeframes
+
+    # Historical context
+    historical_frequency: float    # How often this pattern appears historically
+    seasonal_strength: float       # Seasonal characteristics
+    cyclical_components: List[str] = field(default_factory=list)
+
+    # Cross-asset relationships
+    correlated_assets: List[str] = field(default_factory=list)
+    lead_lag_relationships: Dict[str, float] = field(default_factory=dict)
+    spillover_effects: List[str] = field(default_factory=list)
+
+    # Pattern taxonomy
+    parent_patterns: List[str] = field(default_factory=list)
+    child_patterns: List[str] = field(default_factory=list)
+    sibling_patterns: List[str] = field(default_factory=list)
+
+    # Metadata
+    semantic_tags: Set[str] = field(default_factory=set)
+    confidence_factors: Dict[str, float] = field(default_factory=dict)
+    uncertainty_estimates: Dict[str, float] = field(default_factory=dict)
+
+
+@dataclass
+class HistoricalMatch:
+    """Represents a historical pattern match with context."""
+
+    # Match information
+    matched_pattern: SemanticPattern
+    similarity_score: float
+    temporal_distance: timedelta  # Time distance from current pattern
+
+    # Performance outcomes
+    outcome_return: float
+    outcome_volatility: float
+    max_drawdown: float
+    sharpe_ratio: float
+    success_probability: float
+
+    # Market conditions during match
+    market_conditions: Dict[str, Any]
+    economic_indicators: Dict[str, float]
+    sentiment_indicators: Dict[str, float]
+
+    # Pattern evolution
+    pattern_duration: timedelta
+    breakout_magnitude: float
+    follow_through_strength: float
+
+    # Contextual factors
+    sector_performance: Dict[str, float]
+    market_breadth: float
+    liquidity_conditions: float
+    risk_appetite: float
+
+
+@dataclass
+class PatternCluster:
+    """Represents a cluster of similar patterns."""
+
+    cluster_id: str
+    centroid_vector: List[float]
+    patterns: List[SemanticPattern]
+
+    # Cluster characteristics
+    coherence_score: float
+    diversity_score: float
+    stability_score: float
+
+    # Performance metrics
+    average_return: float
+    average_volatility: float
+    success_rate: float
+    risk_adjusted_return: float
+
+    # Temporal characteristics
+    temporal_span: timedelta
+    frequency_trend: float
+    seasonality_profile: Dict[str, float]
+
+    # Cluster metadata
+    dominant_semantic_category: SemanticCategory
+    asset_class_distribution: Dict[AssetClass, float]
+    timeframe_distribution: Dict[str, float]
+
+
+@dataclass
+class SemanticSearchConfig:
+    """Configuration for semantic pattern search."""
+
+    # Search parameters
+    max_results: int = 100
+    similarity_threshold: float = 0.6
+    temporal_weight: float = 0.3
+    semantic_weight: float = 0.4
+    performance_weight: float = 0.3
+
+    # Historical matching
+    max_historical_lookback_days: int = 365 * 5  # 5 years
+    min_historical_matches: int = 10
+    temporal_decay_factor: float = 0.95  # Weekly decay
+
+    # Semantic analysis
+    enable_cross_asset_search: bool = True
+    enable_multi_timeframe_analysis: bool = True
+    enable_contextual_filtering: bool = True
+
+    # Clustering
+    enable_pattern_clustering: bool = True
+    min_cluster_size: int = 5
+    clustering_threshold: float = 0.7
+
+    # Performance analysis
+    min_outcome_samples: int = 5
+    confidence_interval: float = 0.95
+    bootstrap_samples: int = 1000
+
+
+class SemanticPatternAnalyzer:
+    """
+    Advanced semantic pattern recognition system.
+    Provides pattern classification, semantic search, and historical matching.
+    """
+
+    def __init__(self, vector_ml_engine: VectorDatabaseMLEngine, config: SemanticSearchConfig)"""
+        self.vector_ml_engine = vector_ml_engine
+        self.config = config
+
+        self.logger = logging.getLogger(__name__)
+
+        # Semantic knowledge base
+        self.pattern_taxonomy = self._initialize_pattern_taxonomy()
+        self.semantic_embeddings = {}
+        self.regime_classifiers = {}
+
+        # Pattern clusters
+        self.pattern_clusters: Dict[str, PatternCluster] = {}
+        self.cluster_centroids: Dict[str, List[float]] = {}
+
+        # Historical performance database
+        self.historical_outcomes: Dict[str, List[HistoricalMatch]] = defaultdict(list)
+
+        # Semantic similarity cache
+        self.similarity_cache = {}
+        self.semantic_cache_ttl = timedelta(hours=1)
+
+    def _initialize_pattern_taxonomy(self) -> Dict[str, Dict[str, Any]]:
+        """Initialize pattern taxonomy with semantic relationships."""
+        return {
+            "head_and_shoulders": {
+                "category": SemanticCategory.REVERSAL,
+                "parent_patterns": ["double_top", "triple_top"],
+                "child_patterns": ["inverse_head_and_shoulders"],
+                "semantic_tags": {"reversal", "top", "distribution", "bearish"},
+                "typical_duration": timedelta(weeks=4),
+                "reliability": 0.75,
+                "market_conditions": ["overbought", "high_volume"]
+            },
+            "double_bottom": {
+                "category": SemanticCategory.REVERSAL,
+                "parent_patterns": ["triple_bottom"],
+                "child_patterns": ["head_and_shoulders_inverse"],
+                "semantic_tags": {"reversal", "bottom", "accumulation", "bullish"},
+                "typical_duration": timedelta(weeks=3),
+                "reliability": 0.70,
+                "market_conditions": ["oversold", "increasing_volume"]
+            },
+            "ascending_triangle": {
+                "category": SemanticCategory.CONTINUATION,
+                "parent_patterns": ["triangle"],
+                "child_patterns": ["breakout"],
+                "semantic_tags": {"continuation", "bullish", "consolidation", "breakout"},
+                "typical_duration": timedelta(weeks=2),
+                "reliability": 0.65,
+                "market_conditions": ["uptrend", "volume_confirmation"]
+            },
+            "flag_pattern": {
+                "category": SemanticCategory.CONTINUATION,
+                "parent_patterns": ["rectangle"],
+                "child_patterns": ["pennant"],
+                "semantic_tags": {"continuation", "consolidation", "short_term"},
+                "typical_duration": timedelta(days=5),
+                "reliability": 0.60,
+                "market_conditions": ["strong_trend", "low_volume"]
+            },
+            "cup_and_handle": {
+                "category": SemanticCategory.CONTINUATION,
+                "parent_patterns": ["rounded_bottom"],
+                "child_patterns": ["breakout"],
+                "semantic_tags": {"continuation", "bullish", "accumulation"},
+                "typical_duration": timedelta(weeks=7),
+                "reliability": 0.80,
+                "market_conditions": ["uptrend", "volume_pattern"]
+            },
+            "rounded_top": {
+                "category": SemanticCategory.REVERSAL,
+                "parent_patterns": ["distribution_pattern"],
+                "child_patterns": ["head_and_shoulders"],
+                "semantic_tags": {"reversal", "top", "gradual", "bearish"},
+                "typical_duration": timedelta(weeks=5),
+                "reliability": 0.72,
+                "market_conditions": ["overbought", "declining_volume"]
+            },
+            "symmetrical_triangle": {
+                "category": SemanticCategory.CONSOLIDATION,
+                "parent_patterns": ["triangle"],
+                "child_patterns": ["breakout", "breakdown"],
+                "semantic_tags": {"consolidation", "indecision", "coiling"},
+                "typical_duration": timedelta(weeks=3),
+                "reliability": 0.55,
+                "market_conditions": ["range_bound", "decreasing_volatility"]
+            },
+            "wedge_rising": {
+                "category": SemanticCategory.REVERSAL,
+                "parent_patterns": ["wedge"],
+                "child_patterns": ["bearish_breakdown"],
+                "semantic_tags": {"reversal", "bearish", "exhaustion"},
+                "typical_duration": timedelta(weeks=4),
+                "reliability": 0.68,
+                "market_conditions": ["overbought", "declining_volume"]
+            },
+            "wedge_falling": {
+                "category": SemanticCategory.REVERSAL,
+                "parent_patterns": ["wedge"],
+                "child_patterns": ["bullish_breakout"],
+                "semantic_tags": {"reversal", "bullish", "accumulation"},
+                "typical_duration": timedelta(weeks=4),
+                "reliability": 0.71,
+                "market_conditions": ["oversold", "increasing_volume"]
+            }
+        }
+
+    async def classify_pattern_semantically(self, pattern: MarketPattern) -> SemanticPattern"""
+        """
+        Classify a market pattern with semantic information.
+
+        Args:
+            pattern: Base market pattern to classify
+
+        Returns:
+            Semantically enhanced pattern
+        """
+        try:
+            # Determine semantic category
+            semantic_category = self._classify_semantic_category(pattern)
+
+            # Detect market regime
+            market_regime = self._detect_market_regime(pattern)
+
+            # Assess pattern complexity
+            complexity = self._assess_pattern_complexity(pattern)
+
+            # Calculate semantic features
+            conceptual_similarity = self._calculate_conceptual_similarity(pattern, semantic_category)
+            contextual_relevance = self._calculate_contextual_relevance(pattern, market_regime)
+            temporal_consistency = self._calculate_temporal_consistency(pattern)
+
+            # Analyze historical context
+            historical_frequency = self._calculate_historical_frequency(pattern)
+            seasonal_strength = self._calculate_seasonal_strength(pattern)
+            cyclical_components = self._identify_cyclical_components(pattern)
+
+            # Determine cross-asset relationships
+            correlated_assets = self._find_correlated_assets(pattern)
+            lead_lag_relationships = self._determine_lead_lag_relationships(pattern)
+            spillover_effects = self._identify_spillover_effects(pattern)
+
+            # Build pattern taxonomy
+            parent_patterns, child_patterns, sibling_patterns = self._build_pattern_relationships(
+                pattern, semantic_category
+            )
+
+            # Generate semantic tags
+            semantic_tags = self._generate_semantic_tags(pattern, semantic_category, market_regime)
+
+            # Calculate confidence factors
+            confidence_factors = self._calculate_confidence_factors(pattern)
+
+            # Estimate uncertainty
+            uncertainty_estimates = self._estimate_uncertainty(pattern)
+
+            # Create semantic pattern
+            semantic_pattern = SemanticPattern(
+                base_pattern=pattern,
+                semantic_category=semantic_category,
+                market_regime=market_regime,
+                pattern_complexity=complexity,
+                conceptual_similarity=conceptual_similarity,
+                contextual_relevance=contextual_relevance,
+                temporal_consistency=temporal_consistency,
+                historical_frequency=historical_frequency,
+                seasonal_strength=seasonal_strength,
+                cyclical_components=cyclical_components,
+                correlated_assets=correlated_assets,
+                lead_lag_relationships=lead_lag_relationships,
+                spillover_effects=spillover_effects,
+                parent_patterns=parent_patterns,
+                child_patterns=child_patterns,
+                sibling_patterns=sibling_patterns,
+                semantic_tags=semantic_tags,
+                confidence_factors=confidence_factors,
+                uncertainty_estimates=uncertainty_estimates
+            )
+
+            self.logger.info(f"Classified pattern {pattern.pattern_id} as {semantic_category.value}")
+            return semantic_pattern
+
+        except Exception as e:
+            self.logger.error(f"Error classifying pattern semantically: {e}")
+            # Return basic semantic pattern on error
+            return SemanticPattern(
+                base_pattern=pattern,
+                semantic_category=SemanticCategory.TREND_FOLLOWING,
+                market_regime=MarketRegime.TRANSITIONAL,
+                pattern_complexity=PatternComplexity.SIMPLE,
+                conceptual_similarity=0.5,
+                contextual_relevance=0.5,
+                temporal_consistency=0.5,
+                historical_frequency=0.5,
+                seasonal_strength=0.5,
+                confidence_factors={"base": 0.5},
+                uncertainty_estimates={"total": 0.5}
+            )
+
+    def _classify_semantic_category(self, pattern: MarketPattern) -> SemanticCategory"""
+        """Classify pattern into semantic category based on characteristics."""
+        # Use pattern type as primary indicator
+        pattern_type_mapping = {
+            PatternType.BREAKOUT: SemanticCategory.BREAKOUT,
+            PatternType.MOMENTUM: SemanticCategory.TREND_FOLLOWING,
+            PatternType.MEAN_REVERSION: SemanticCategory.MEAN_REVERSION,
+            PatternType.VOLATILITY: SemanticCategory.VOLATILITY_EXPANSION,
+            PatternType.PRICE_ACTION: SemanticCategory.CONTINUATION,
+            PatternType.TECHNICAL: SemanticCategory.TREND_FOLLOWING,
+            PatternType.SENTIMENT: SemanticCategory.REVERSAL,
+            PatternType.VOLUME: SemanticCategory.CONTINUATION
+        }
+
+        base_category = pattern_type_mapping.get(pattern.pattern_type, SemanticCategory.CONTINUATION)
+
+        # Refine based on pattern characteristics
+        if pattern.trend_strength > 0.7:
+            if pattern.volatility > 0.4:
+                return SemanticCategory.VOLATILITY_EXPANSION
+            else:
+                return SemanticCategory.TREND_FOLLOWING
+        elif pattern.trend_strength < 0.3:
+            if pattern.volatility < 0.2:
+                return SemanticCategory.VOLATILITY_CONTRACTION
+            else:
+                return SemanticCategory.CONSOLIDATION
+        else:
+            # Use pattern metadata for more specific classification
+            if pattern.metadata.get('reversal_indicator', False):
+                return SemanticCategory.REVERSAL
+            elif pattern.metadata.get('continuation_indicator', False):
+                return SemanticCategory.CONTINUATION
+
+        return base_category
+
+    def _detect_market_regime(self, pattern: MarketPattern) -> MarketRegime"""
+        """Detect market regime based on pattern characteristics."""
+        # Determine trend direction
+        if pattern.trend_strength > 0.6:
+            if pattern.metadata.get('trend_direction', 'up') == 'up':
+                regime = MarketRegime.BULL_MARKET
+            else:
+                regime = MarketRegime.BEAR_MARKET
+        elif pattern.trend_strength < 0.4:
+            regime = MarketRegime.SIDEWAYS_MARKET
+        else:
+            regime = MarketRegime.TRANSITIONAL
+
+        # Adjust for volatility
+        if pattern.volatility > 0.4:
+            if regime == MarketRegime.TRANSITIONAL:
+                regime = MarketRegime.HIGH_VOLATILITY
+            else:
+                # Add volatility modifier
+                if regime == MarketRegime.BULL_MARKET:
+                    regime = MarketRegime.TRANSITIONAL  # High volatility suggests uncertainty
+        elif pattern.volatility < 0.15:
+            if regime in [MarketRegime.SIDEWAYS_MARKET, MarketRegime.TRANSITIONAL]:
+                regime = MarketRegime.LOW_VOLATILITY
+
+        return regime
+
+    def _assess_pattern_complexity(self, pattern: MarketPattern) -> PatternComplexity"""
+        """Assess the complexity of a pattern."""
+        complexity_score = 0
+
+        # Base complexity from pattern type
+        type_complexity = {
+            PatternType.PRICE_ACTION: 1,
+            PatternType.VOLUME: 1,
+            PatternType.MOMENTUM: 2,
+            PatternType.VOLATILITY: 2,
+            PatternType.MEAN_REVERSION: 2,
+            PatternType.BREAKOUT: 3,
+            PatternType.TECHNICAL: 3,
+            PatternType.SENTIMENT: 4
+        }
+        complexity_score += type_complexity.get(pattern.pattern_type, 2)
+
+        # Add complexity for multi-timeframe data
+        if pattern.metadata.get('multi_timeframe', False):
+            complexity_score += 1
+
+        # Add complexity for cross-asset data
+        if pattern.metadata.get('cross_asset', False):
+            complexity_score += 1
+
+        # Add complexity for advanced indicators
+        if len(pattern.metadata.get('indicators', [])) > 5:
+            complexity_score += 1
+
+        # Add complexity for ML-generated patterns
+        if pattern.metadata.get('ml_generated', False):
+            complexity_score += 1
+
+        # Map score to complexity level
+        if complexity_score <= 2:
+            return PatternComplexity.SIMPLE
+        elif complexity_score <= 4:
+            return PatternComplexity.MODERATE
+        elif complexity_score <= 6:
+            return PatternComplexity.COMPLEX
+        else:
+            return PatternComplexity.SOPHISTICATED
+
+    def _calculate_conceptual_similarity(self, pattern: MarketPattern, category: SemanticCategory) -> float"""
+        """Calculate conceptual similarity to pattern category."""
+        # Base similarity from pattern type matching
+        type_match_score = 0.8 if pattern.pattern_type.value in category.value else 0.5
+
+        # Adjust based on pattern characteristics
+        characteristic_score = 0.0
+
+        if category == SemanticCategory.TREND_FOLLOWING:
+            characteristic_score = pattern.trend_strength
+        elif category == SemanticCategory.MEAN_REVERSION:
+            characteristic_score = 1.0 - pattern.trend_strength
+        elif category == SemanticCategory.VOLATILITY_EXPANSION:
+            characteristic_score = pattern.volatility
+        elif category == SemanticCategory.VOLATILITY_CONTRACTION:
+            characteristic_score = 1.0 - pattern.volatility
+        elif category == SemanticCategory.BREAKOUT:
+            characteristic_score = pattern.metadata.get('breakout_potential', 0.5)
+        elif category == SemanticCategory.REVERSAL:
+            characteristic_score = pattern.metadata.get('reversal_probability', 0.5)
+
+        # Combine scores
+        return (type_match_score + characteristic_score) / 2
+
+    def _calculate_contextual_relevance(self, pattern: MarketPattern, regime: MarketRegime) -> float"""
+        """Calculate contextual relevance to current market regime."""
+        # Pattern-regime compatibility matrix
+        compatibility_matrix = {
+            (SemanticCategory.TREND_FOLLOWING, MarketRegime.BULL_MARKET): 0.9,
+            (SemanticCategory.TREND_FOLLOWING, MarketRegime.BEAR_MARKET): 0.8,
+            (SemanticCategory.TREND_FOLLOWING, MarketRegime.SIDEWAYS_MARKET): 0.4,
+            (SemanticCategory.MEAN_REVERSION, MarketRegime.SIDEWAYS_MARKET): 0.9,
+            (SemanticCategory.MEAN_REVERSION, MarketRegime.TRANSITIONAL): 0.7,
+            (SemanticCategory.BREAKOUT, MarketRegime.TRANSITIONAL): 0.8,
+            (SemanticCategory.BREAKOUT, MarketRegime.HIGH_VOLATILITY): 0.9,
+            (SemanticCategory.REVERSAL, MarketRegime.BULL_MARKET): 0.7,
+            (SemanticCategory.REVERSAL, MarketRegime.BEAR_MARKET): 0.7,
+            (SemanticCategory.REVERSAL, MarketRegime.TRANSITIONAL): 0.8,
+            (SemanticCategory.CONSOLIDATION, MarketRegime.SIDEWAYS_MARKET): 0.9,
+            (SemanticCategory.CONSOLIDATION, MarketRegime.LOW_VOLATILITY): 0.8,
+        }
+
+        semantic_category = self._classify_semantic_category(pattern)
+        compatibility_key = (semantic_category, regime)
+
+        base_relevance = compatibility_matrix.get(compatibility_key, 0.5)
+
+        # Adjust based on pattern confidence
+        adjusted_relevance = base_relevance * (0.5 + 0.5 * pattern.confidence_score)
+
+        return min(1.0, adjusted_relevance)
+
+    def _calculate_temporal_consistency(self, pattern: MarketPattern) -> float"""
+        """Calculate temporal consistency across timeframes."""
+        # Check if pattern is consistent across multiple timeframes
+        multi_timeframe_data = pattern.metadata.get('multi_timeframe_analysis', {})
+
+        if not multi_timeframe_data:
+            # Single timeframe pattern
+            return 0.7  # Moderate consistency
+
+        consistency_scores = []
+
+        # Compare pattern characteristics across timeframes
+        timeframes = list(multi_timeframe_data.keys())
+        if len(timeframes) < 2:
+            return 0.7
+
+        for i in range(len(timeframes)):
+            for j in range(i + 1, len(timeframes)):
+                tf1, tf2 = timeframes[i], timeframes[j]
+                data1, data2 = multi_timeframe_data[tf1], multi_timeframe_data[tf2]
+
+                # Compare trend directions
+                trend_consistency = 1.0 if data1.get('trend_direction') == data2.get('trend_direction') else 0.0
+
+                # Compare pattern types
+                pattern_consistency = 1.0 if data1.get('pattern_type') == data2.get('pattern_type') else 0.5
+
+                # Compare volatility regimes
+                vol_consistency = 1.0 - abs(data1.get('volatility', 0.5) - data2.get('volatility', 0.5))
+
+                # Overall consistency for this pair
+                pair_consistency = (trend_consistency + pattern_consistency + vol_consistency) / 3
+                consistency_scores.append(pair_consistency)
+
+        if consistency_scores:
+            return np.mean(consistency_scores)
+        else:
+            return 0.7
+
+    def _calculate_historical_frequency(self, pattern: MarketPattern) -> float"""
+        """Calculate how frequently this pattern appears historically."""
+        # This would typically query a historical pattern database
+        # For now, use pattern metadata or return a default value
+        return pattern.metadata.get('historical_frequency', 0.1)  # Default 10% frequency
+
+    def _calculate_seasonal_strength(self, pattern: MarketPattern) -> float"""
+        """Calculate seasonal characteristics of the pattern."""
+        # Check if pattern has seasonal components
+        seasonal_data = pattern.metadata.get('seasonal_analysis', {})
+
+        if seasonal_data:
+            return seasonal_data.get('seasonal_strength', 0.5)
+
+        # Simple heuristic based on pattern timing
+        pattern_month = pattern.start_time.month
+        pattern_quarter = (pattern_month - 1) // 3
+
+        # Some patterns have seasonal tendencies
+        seasonal_patterns = {
+            PatternType.BREAKOUT: {2: 0.7, 3: 0.8, 9: 0.6, 10: 0.7},  # Spring and Fall
+            PatternType.MEAN_REVERSION: {1: 0.6, 7: 0.7, 8: 0.6},  # Winter and Summer
+        }
+
+        if pattern.pattern_type in seasonal_patterns:
+            return seasonal_patterns[pattern.pattern_type].get(pattern_quarter, 0.5)
+
+        return 0.5
+
+    def _identify_cyclical_components(self, pattern: MarketPattern) -> List[str]"""
+        """Identify cyclical components in the pattern."""
+        cycles = []
+
+        # Check for business cycle effects
+        if pattern.metadata.get('business_cycle_sensitive', False):
+            cycles.append("business_cycle")
+
+        # Check for sector rotation
+        if pattern.metadata.get('sector_rotation', False):
+            cycles.append("sector_rotation")
+
+        # Check for earnings cycle
+        if pattern.metadata.get('earnings_related', False):
+            cycles.append("earnings_cycle")
+
+        # Check for monetary cycle
+        if pattern.metadata.get('interest_rate_sensitive', False):
+            cycles.append("monetary_cycle")
+
+        # Check for seasonal cycles
+        if self._calculate_seasonal_strength(pattern) > 0.7:
+            cycles.append("seasonal")
+
+        return cycles
+
+    def _find_correlated_assets(self, pattern: MarketPattern) -> List[str]"""
+        """Find assets correlated with this pattern."""
+        # This would typically query correlation data
+        # For now, use pattern metadata
+        return pattern.metadata.get('correlated_assets', [])
+
+    def _determine_lead_lag_relationships(self, pattern: MarketPattern) -> Dict[str, float]"""
+        """Determine lead-lag relationships with other assets."""
+        return pattern.metadata.get('lead_lag_relationships', {})
+
+    def _identify_spillover_effects(self, pattern: MarketPattern) -> List[str]"""
+        """Identify spillover effects to other assets/sectors."""
+        return pattern.metadata.get('spillover_effects', [])
+
+    def _build_pattern_relationships(
+        self,
+        pattern: MarketPattern,
+        category: SemanticCategory
+    ) -> Tuple[List[str], List[str], List[str]]:
+        """Build pattern taxonomy relationships."""
+        # Use pattern taxonomy to find relationships
+        pattern_name = pattern.metadata.get('pattern_name', 'unknown')
+        taxonomy_info = self.pattern_taxonomy.get(pattern_name, {})
+
+        parent_patterns = taxonomy_info.get('parent_patterns', [])
+        child_patterns = taxonomy_info.get('child_patterns', [])
+
+        # Find sibling patterns (same parent)
+        sibling_patterns = []
+        for parent in parent_patterns:
+            for other_pattern, info in self.pattern_taxonomy.items():
+                if parent in info.get('parent_patterns', []) and other_pattern != pattern_name:
+                    sibling_patterns.append(other_pattern)
+
+        return parent_patterns, child_patterns, sibling_patterns
+
+    def _generate_semantic_tags(
+        self,
+        pattern: MarketPattern,
+        category: SemanticCategory,
+        regime: MarketRegime
+    ) -> Set[str]:
+        """Generate semantic tags for the pattern."""
+        tags = set()
+
+        # Add category and regime tags
+        tags.add(category.value)
+        tags.add(regime.value)
+
+        # Add pattern type tag
+        tags.add(pattern.pattern_type.value)
+
+        # Add characteristic tags
+        if pattern.trend_strength > 0.7:
+            tags.add("strong_trend")
+        elif pattern.trend_strength < 0.3:
+            tags.add("weak_trend")
+
+        if pattern.volatility > 0.4:
+            tags.add("high_volatility")
+        elif pattern.volatility < 0.2:
+            tags.add("low_volatility")
+
+        if pattern.confidence_score > 0.8:
+            tags.add("high_confidence")
+
+        # Add timeframe tags
+        tags.add(f"timeframe_{pattern.timeframe}")
+
+        # Add asset class tags
+        tags.add(pattern.asset_class.value)
+
+        # Add pattern-specific tags from taxonomy
+        pattern_name = pattern.metadata.get('pattern_name', '')
+        if pattern_name in self.pattern_taxonomy:
+            tags.update(self.pattern_taxonomy[pattern_name].get('semantic_tags', set()))
+
+        return tags
+
+    def _calculate_confidence_factors(self, pattern: MarketPattern) -> Dict[str, float]"""
+        """Calculate various confidence factors for the pattern."""
+        factors = {}
+
+        # Base confidence from pattern recognition
+        factors['pattern_recognition'] = pattern.confidence_score
+
+        # Confidence from volume confirmation
+        factors['volume_confirmation'] = pattern.metadata.get('volume_confirmation', 0.5)
+
+        # Confidence from multiple indicators
+        indicator_count = len(pattern.metadata.get('indicators', []))
+        factors['indicator_confluence'] = min(1.0, indicator_count / 5.0)
+
+        # Confidence from timeframe alignment
+        multi_tf_alignment = pattern.metadata.get('multi_timeframe_alignment', 0.5)
+        factors['timeframe_alignment'] = multi_tf_alignment
+
+        # Confidence from historical success rate
+        factors['historical_success'] = pattern.success_rate
+
+        # Confidence from market condition suitability
+        market_suitability = pattern.metadata.get('market_condition_suitability', 0.5)
+        factors['market_suitability'] = market_suitability
+
+        # Overall confidence (weighted average)
+        weights = {
+            'pattern_recognition': 0.3,
+            'volume_confirmation': 0.2,
+            'indicator_confluence': 0.2,
+            'timeframe_alignment': 0.1,
+            'historical_success': 0.1,
+            'market_suitability': 0.1
+        }
+
+        overall_confidence = sum(
+            factors[factor] * weights[factor]
+            for factor in factors
+        )
+        factors['overall'] = overall_confidence
+
+        return factors
+
+    def _estimate_uncertainty(self, pattern: MarketPattern) -> Dict[str, float]"""
+        """Estimate uncertainty in pattern classification and prediction."""
+        uncertainty = {}
+
+        # Pattern recognition uncertainty
+        uncertainty['pattern_recognition'] = 1.0 - pattern.confidence_score
+
+        # Market regime uncertainty
+        regime_indicators = pattern.metadata.get('regime_indicators', {})
+        if regime_indicators:
+            # Calculate entropy of regime probabilities
+            probs = list(regime_indicators.values())
+            entropy = -sum(p * math.log(p + 1e-8) for p in probs if p > 0)
+            max_entropy = math.log(len(probs))
+            uncertainty['market_regime'] = entropy / max_entropy
+        else:
+            uncertainty['market_regime'] = 0.5
+
+        # Model uncertainty (if ML-generated)
+        if pattern.metadata.get('ml_generated', False):
+            model_uncertainty = pattern.metadata.get('model_uncertainty', 0.3)
+            uncertainty['model_prediction'] = model_uncertainty
+        else:
+            uncertainty['model_prediction'] = 0.2
+
+        # Data quality uncertainty
+        data_quality = pattern.metadata.get('data_quality_score', 0.8)
+        uncertainty['data_quality'] = 1.0 - data_quality
+
+        # Temporal uncertainty (pattern age)
+        pattern_age = datetime.now() - pattern.end_time
+        max_age = timedelta(days=30)
+        uncertainty['temporal'] = min(1.0, pattern_age / max_age)
+
+        # Total uncertainty (weighted average)
+        weights = {
+            'pattern_recognition': 0.3,
+            'market_regime': 0.2,
+            'model_prediction': 0.2,
+            'data_quality': 0.2,
+            'temporal': 0.1
+        }
+
+        total_uncertainty = sum(
+            uncertainty[factor] * weights[factor]
+            for factor in uncertainty
+        )
+        uncertainty['total'] = total_uncertainty
+
+        return uncertainty
+
+    async def find_historical_matches(
+        self,
+        semantic_pattern: SemanticPattern,
+        max_matches: Optional[int] = None
+    ) -> List[HistoricalMatch]:
+        """
+        Find historical matches for a semantic pattern.
+
+        Args:
+            semantic_pattern: Semantic pattern to match
+            max_matches: Maximum number of matches to return
+
+        Returns:
+            List of historical matches with performance data
+        """
+        try:
+            max_matches = max_matches or self.config.max_results
+
+            # Search for similar patterns using vector similarity
+            similar_patterns = await self.vector_ml_engine.find_similar_patterns(
+                semantic_pattern.base_pattern,
+                limit=max_matches * 2,  # Get more to filter
+                similarity_threshold=self.config.similarity_threshold
+            )
+
+            historical_matches = []
+
+            for similar_pattern, similarity_score in similar_patterns:
+                # Classify similar pattern semantically
+                semantic_similar = await self.classify_pattern_semantically(similar_pattern)
+
+                # Calculate temporal distance
+                temporal_distance = datetime.now() - similar_pattern.end_time
+
+                # Get performance outcomes (would typically come from backtesting data)
+                outcome_data = await self._get_pattern_outcomes(similar_pattern)
+
+                # Create historical match
+                historical_match = HistoricalMatch(
+                    matched_pattern=semantic_similar,
+                    similarity_score=similarity_score,
+                    temporal_distance=temporal_distance,
+                    outcome_return=outcome_data.get('return', 0.0),
+                    outcome_volatility=outcome_data.get('volatility', 0.0),
+                    max_drawdown=outcome_data.get('max_drawdown', 0.0),
+                    sharpe_ratio=outcome_data.get('sharpe_ratio', 0.0),
+                    success_probability=outcome_data.get('success_rate', 0.5),
+                    market_conditions=outcome_data.get('market_conditions', {}),
+                    economic_indicators=outcome_data.get('economic_indicators', {}),
+                    sentiment_indicators=outcome_data.get('sentiment_indicators', {}),
+                    pattern_duration=outcome_data.get('duration', timedelta(days=1)),
+                    breakout_magnitude=outcome_data.get('breakout_magnitude', 0.0),
+                    follow_through_strength=outcome_data.get('follow_through', 0.5),
+                    sector_performance=outcome_data.get('sector_performance', {}),
+                    market_breadth=outcome_data.get('market_breadth', 0.5),
+                    liquidity_conditions=outcome_data.get('liquidity', 0.5),
+                    risk_appetite=outcome_data.get('risk_appetite', 0.5)
+                )
+
+                historical_matches.append(historical_match)
+
+            # Sort by composite score (similarity + performance + temporal proximity)
+            def composite_score(match: HistoricalMatch) -> float"""
+                # Apply temporal decay
+                temporal_weight = math.exp(
+                    -math.log(1/self.config.temporal_decay_factor) *
+                    match.temporal_distance.days / 365
+                )
+
+                # Combine scores
+                similarity_weight = self.config.semantic_weight
+                performance_weight = self.config.performance_weight
+                temporal_weight_final = self.config.temporal_weight * temporal_weight
+
+                return (
+                    similarity_weight * match.similarity_score +
+                    performance_weight * match.success_probability +
+                    temporal_weight_final
+                )
+
+            historical_matches.sort(key=composite_score, reverse=True)
+
+            # Limit results
+            historical_matches = historical_matches[:max_matches]
+
+            # Store in historical outcomes database
+            pattern_id = semantic_pattern.base_pattern.pattern_id
+            self.historical_outcomes[pattern_id].extend(historical_matches)
+
+            self.logger.info(f"Found {len(historical_matches)} historical matches for pattern {pattern_id}")
+            return historical_matches
+
+        except Exception as e:
+            self.logger.error(f"Error finding historical matches: {e}")
+            return []
+
+    async def _get_pattern_outcomes(self, pattern: MarketPattern) -> Dict[str, Any]"""
+        """Get performance outcomes for a historical pattern."""
+        # This would typically query a comprehensive backtesting database
+        # For now, return simulated data based on pattern characteristics
+
+        # Simulate outcomes based on pattern success rate
+        base_return = pattern.success_rate * 0.05 - 0.01  # 5% max return, 1% max loss
+        return_volatility = pattern.volatility * 0.02  # Scale volatility to returns
+
+        # Add some randomness
+        random_factor = np.random.normal(0, 0.01)
+        total_return = base_return + random_factor
+
+        # Calculate derived metrics
+        sharpe_ratio = total_return / return_volatility if return_volatility > 0 else 0
+        max_drawdown = min(-abs(total_return) * np.random.uniform(0.5, 2.0), -0.01)
+
+        return {
+            'return': total_return,
+            'volatility': return_volatility,
+            'max_drawdown': max_drawdown,
+            'sharpe_ratio': sharpe_ratio,
+            'success_rate': pattern.success_rate,
+            'duration': timedelta(days=np.random.randint(1, 30)),
+            'breakout_magnitude': abs(total_return) * np.random.uniform(0.5, 1.5),
+            'follow_through': pattern.trend_strength * np.random.uniform(0.5, 1.0),
+            'market_conditions': {
+                'trend': 'bullish' if total_return > 0 else 'bearish',
+                'volatility': 'high' if return_volatility > 0.02 else 'normal',
+                'volume': 'high' if pattern.volume_profile > 0.6 else 'normal'
+            },
+            'economic_indicators': {
+                'interest_rate': np.random.uniform(0.01, 0.05),
+                'inflation': np.random.uniform(0.02, 0.04),
+                'gdp_growth': np.random.uniform(-0.02, 0.04)
+            },
+            'sentiment_indicators': {
+                'fear_greed': np.random.uniform(0, 100),
+                'vix': np.random.uniform(10, 40),
+                'put_call_ratio': np.random.uniform(0.5, 1.5)
+            },
+            'sector_performance': {
+                'technology': np.random.uniform(-0.05, 0.05),
+                'finance': np.random.uniform(-0.05, 0.05),
+                'healthcare': np.random.uniform(-0.05, 0.05)
+            },
+            'market_breadth': np.random.uniform(0.3, 0.8),
+            'liquidity': np.random.uniform(0.4, 0.9),
+            'risk_appetite': np.random.uniform(0.3, 0.8)
+        }
+
+    async def cluster_patterns(
+        self,
+        patterns: List[SemanticPattern],
+        cluster_threshold: Optional[float] = None
+    ) -> Dict[str, PatternCluster]:
+        """
+        Cluster similar patterns into groups.
+
+        Args:
+            patterns: List of semantic patterns to cluster
+            cluster_threshold: Similarity threshold for clustering
+
+        Returns:
+            Dictionary of pattern clusters
+        """
+        try:
+            if not patterns:
+                return {}
+
+            cluster_threshold = cluster_threshold or self.config.clustering_threshold
+
+            # Initialize clusters
+            clusters = {}
+            processed_patterns = set()
+
+            for pattern in patterns:
+                if pattern.base_pattern.pattern_id in processed_patterns:
+                    continue
+
+                # Find similar patterns for clustering
+                similar_patterns = [pattern]
+
+                for other_pattern in patterns:
+                    if (other_pattern.base_pattern.pattern_id != pattern.base_pattern.pattern_id and
+                        other_pattern.base_pattern.pattern_id not in processed_patterns):
+
+                        similarity = await self._calculate_semantic_similarity(pattern, other_pattern)
+
+                        if similarity >= cluster_threshold:
+                            similar_patterns.append(other_pattern)
+                            processed_patterns.add(other_pattern.base_pattern.pattern_id)
+
+                # Create cluster if enough patterns
+                if len(similar_patterns) >= self.config.min_cluster_size:
+                    cluster = await self._create_pattern_cluster(similar_patterns)
+                    clusters[cluster.cluster_id] = cluster
+
+                processed_patterns.add(pattern.base_pattern.pattern_id)
+
+            # Store clusters
+            self.pattern_clusters.update(clusters)
+
+            self.logger.info(f"Created {len(clusters)} pattern clusters from {len(patterns)} patterns")
+            return clusters
+
+        except Exception as e:
+            self.logger.error(f"Error clustering patterns: {e}")
+            return {}
+
+    async def _calculate_semantic_similarity(
+        self,
+        pattern1: SemanticPattern,
+        pattern2: SemanticPattern
+    ) -> float:
+        """Calculate semantic similarity between two patterns."""
+        # Check cache first
+        cache_key = f"{pattern1.base_pattern.pattern_id}_{pattern2.base_pattern.pattern_id}"
+        if cache_key in self.similarity_cache:
+            cached_result, timestamp = self.similarity_cache[cache_key]
+            if datetime.now() - timestamp < self.semantic_cache_ttl:
+                return cached_result
+
+        # Calculate vector similarity
+        vector_similarity = np.dot(pattern1.base_pattern.vector, pattern2.base_pattern.vector) / (
+            np.linalg.norm(pattern1.base_pattern.vector) * np.linalg.norm(pattern2.base_pattern.vector)
+        )
+
+        # Calculate semantic category similarity
+        category_similarity = 1.0 if pattern1.semantic_category == pattern2.semantic_category else 0.5
+
+        # Calculate market regime similarity
+        regime_similarity = 1.0 if pattern1.market_regime == pattern2.market_regime else 0.3
+
+        # Calculate tag similarity
+        tags1, tags2 = pattern1.semantic_tags, pattern2.semantic_tags
+        tag_intersection = len(tags1.intersection(tags2))
+        tag_union = len(tags1.union(tags2))
+        tag_similarity = tag_intersection / tag_union if tag_union > 0 else 0.0
+
+        # Calculate asset class similarity
+        asset_similarity = 1.0 if pattern1.base_pattern.asset_class == pattern2.base_pattern.asset_class else 0.2
+
+        # Calculate timeframe similarity
+        timeframe_similarity = 1.0 if pattern1.base_pattern.timeframe == pattern2.base_pattern.timeframe else 0.5
+
+        # Combine similarities with weights
+        weights = {
+            'vector': 0.4,
+            'category': 0.2,
+            'regime': 0.15,
+            'tags': 0.1,
+            'asset': 0.1,
+            'timeframe': 0.05
+        }
+
+        overall_similarity = (
+            weights['vector'] * vector_similarity +
+            weights['category'] * category_similarity +
+            weights['regime'] * regime_similarity +
+            weights['tags'] * tag_similarity +
+            weights['asset'] * asset_similarity +
+            weights['timeframe'] * timeframe_similarity
+        )
+
+        # Cache result
+        self.similarity_cache[cache_key] = (overall_similarity, datetime.now())
+
+        return overall_similarity
+
+    async def _create_pattern_cluster(self, patterns: List[SemanticPattern]) -> PatternCluster"""
+        """Create a pattern cluster from similar patterns."""
+        # Calculate centroid vector
+        vectors = [p.base_pattern.vector for p in patterns]
+        centroid_vector = np.mean(vectors, axis=0).tolist()
+
+        # Calculate cluster metrics
+        coherence_score = await self._calculate_coherence_score(patterns)
+        diversity_score = await self._calculate_diversity_score(patterns)
+        stability_score = await self._calculate_stability_score(patterns)
+
+        # Calculate performance metrics
+        returns = [p.base_pattern.success_rate for p in patterns]
+        average_return = np.mean(returns)
+        average_volatility = np.mean([p.base_pattern.volatility for p in patterns])
+        success_rate = np.mean([p.base_pattern.success_rate for p in patterns])
+        risk_adjusted_return = average_return / average_volatility if average_volatility > 0 else 0
+
+        # Calculate temporal span
+        start_times = [p.base_pattern.start_time for p in patterns]
+        end_times = [p.base_pattern.end_time for p in patterns]
+        temporal_span = max(end_times) - min(start_times)
+
+        # Calculate frequency trend
+        frequency_trend = await self._calculate_frequency_trend(patterns)
+
+        # Determine dominant characteristics
+        category_counts = Counter([p.semantic_category for p in patterns])
+        dominant_semantic_category = category_counts.most_common(1)[0][0]
+
+        asset_counts = Counter([p.base_pattern.asset_class for p in patterns])
+        total_patterns = len(patterns)
+        asset_class_distribution = {
+            asset_class: count / total_patterns for asset_class, count in asset_counts.items()
+        }
+
+        timeframe_counts = Counter([p.base_pattern.timeframe for p in patterns])
+        timeframe_distribution = {
+            timeframe: count / total_patterns for timeframe, count in timeframe_counts.items()
+        }
+
+        # Create cluster
+        cluster = PatternCluster(
+            cluster_id=str(uuid.uuid4()),
+            centroid_vector=centroid_vector,
+            patterns=patterns,
+            coherence_score=coherence_score,
+            diversity_score=diversity_score,
+            stability_score=stability_score,
+            average_return=average_return,
+            average_volatility=average_volatility,
+            success_rate=success_rate,
+            risk_adjusted_return=risk_adjusted_return,
+            temporal_span=temporal_span,
+            frequency_trend=frequency_trend,
+            seasonality_profile={},  # Would calculate from temporal data
+            dominant_semantic_category=dominant_semantic_category,
+            asset_class_distribution=asset_class_distribution,
+            timeframe_distribution=timeframe_distribution
+        )
+
+        return cluster
+
+    async def _calculate_coherence_score(self, patterns: List[SemanticPattern]) -> float"""
+        """Calculate how coherent the patterns in a cluster are."""
+        if len(patterns) < 2:
+            return 1.0
+
+        # Calculate average pairwise similarity
+        similarities = []
+        for i in range(len(patterns)):
+            for j in range(i + 1, len(patterns)):
+                similarity = await self._calculate_semantic_similarity(patterns[i], patterns[j])
+                similarities.append(similarity)
+
+        return np.mean(similarities)
+
+    async def _calculate_diversity_score(self, patterns: List[SemanticPattern]) -> float"""
+        """Calculate diversity within a cluster."""
+        # Diversity based on different dimensions
+        asset_classes = len(set(p.base_pattern.asset_class for p in patterns))
+        timeframes = len(set(p.base_pattern.timeframe for p in patterns))
+        semantic_categories = len(set(p.semantic_category for p in patterns))
+
+        # Normalize by maximum possible diversity
+        max_asset_classes = len(AssetClass)
+        max_timeframes = 10  # Approximate number of common timeframes
+        max_categories = len(SemanticCategory)
+
+        asset_diversity = asset_classes / max_asset_classes
+        timeframe_diversity = timeframes / max_timeframes
+        category_diversity = semantic_categories / max_categories
+
+        # Combined diversity score
+        return (asset_diversity + timeframe_diversity + category_diversity) / 3
+
+    async def _calculate_stability_score(self, patterns: List[SemanticPattern]) -> float"""
+        """Calculate stability of patterns over time."""
+        # Stability based on consistency of pattern performance
+        success_rates = [p.base_pattern.success_rate for p in patterns]
+        confidence_scores = [p.base_pattern.confidence_score for p in patterns]
+
+        # Lower variance indicates higher stability
+        success_variance = np.var(success_rates)
+        confidence_variance = np.var(confidence_scores)
+
+        # Convert variance to stability score (lower variance = higher stability)
+        success_stability = 1.0 - min(1.0, success_variance)
+        confidence_stability = 1.0 - min(1.0, confidence_variance)
+
+        return (success_stability + confidence_stability) / 2
+
+    async def _calculate_frequency_trend(self, patterns: List[SemanticPattern]) -> float"""
+        """Calculate trend in pattern frequency over time."""
+        if len(patterns) < 3:
+            return 0.0
+
+        # Sort patterns by end time
+        sorted_patterns = sorted(patterns, key=lambda p: p.base_pattern.end_time)
+
+        # Count patterns in time windows
+        window_size = timedelta(days=30)
+        current_time = sorted_patterns[-1].base_pattern.end_time
+
+        frequency_counts = []
+        for i in range(3):  # Last 3 windows
+            window_start = current_time - (i + 1) * window_size
+            window_end = current_time - i * window_size
+
+            count = sum(
+                1 for p in sorted_patterns
+                if window_start <= p.base_pattern.end_time < window_end
+            )
+            frequency_counts.append(count)
+
+        # Calculate trend (simple linear regression slope)
+        if len(frequency_counts) < 2:
+            return 0.0
+
+        x = np.arange(len(frequency_counts))
+        y = np.array(frequency_counts)
+
+        # Calculate slope
+        slope = np.polyfit(x, y, 1)[0]
+
+        # Normalize to [-1, 1] range
+        max_slope = max(frequency_counts) / len(frequency_counts) if frequency_counts else 1.0
+        normalized_slope = np.tanh(slope / max_slope) if max_slope > 0 else 0.0
+
+        return normalized_slope
+
+    async def get_pattern_analysis_report(
+        self,
+        pattern: SemanticPattern,
+        include_historical_matches: bool = True,
+        include_cluster_analysis: bool = True
+    ) -> Dict[str, Any]:
+        """
+        Generate comprehensive pattern analysis report.
+
+        Args:
+            pattern: Semantic pattern to analyze
+            include_historical_matches: Include historical match analysis
+            include_cluster_analysis: Include cluster analysis
+
+        Returns:
+            Comprehensive analysis report
+        """
+        try:
+            report = {
+                'pattern_id': pattern.base_pattern.pattern_id,
+                'analysis_timestamp': datetime.now().isoformat(),
+                'semantic_classification': {
+                    'category': pattern.semantic_category.value,
+                    'market_regime': pattern.market_regime.value,
+                    'complexity': pattern.pattern_complexity.value,
+                    'conceptual_similarity': pattern.conceptual_similarity,
+                    'contextual_relevance': pattern.contextual_relevance,
+                    'temporal_consistency': pattern.temporal_consistency
+                },
+                'pattern_characteristics': {
+                    'asset_class': pattern.base_pattern.asset_class.value,
+                    'symbol': pattern.base_pattern.symbol,
+                    'timeframe': pattern.base_pattern.timeframe,
+                    'confidence_score': pattern.base_pattern.confidence_score,
+                    'trend_strength': pattern.base_pattern.trend_strength,
+                    'volatility': pattern.base_pattern.volatility,
+                    'volume_profile': pattern.base_pattern.volume_profile
+                },
+                'historical_context': {
+                    'historical_frequency': pattern.historical_frequency,
+                    'seasonal_strength': pattern.seasonal_strength,
+                    'cyclical_components': pattern.cyclical_components
+                },
+                'relationships': {
+                    'correlated_assets': pattern.correlated_assets,
+                    'lead_lag_relationships': pattern.lead_lag_relationships,
+                    'spillover_effects': pattern.spillover_effects,
+                    'parent_patterns': pattern.parent_patterns,
+                    'child_patterns': pattern.child_patterns,
+                    'sibling_patterns': pattern.sibling_patterns
+                },
+                'semantic_tags': list(pattern.semantic_tags),
+                'confidence_analysis': pattern.confidence_factors,
+                'uncertainty_analysis': pattern.uncertainty_estimates
+            }
+
+            # Add historical matches analysis
+            if include_historical_matches:
+                historical_matches = await self.find_historical_matches(pattern, max_matches=20)
+
+                if historical_matches:
+                    # Analyze historical performance
+                    returns = [m.outcome_return for m in historical_matches]
+                    success_rates = [m.success_probability for m in historical_matches]
+
+                    report['historical_performance'] = {
+                        'match_count': len(historical_matches),
+                        'average_return': np.mean(returns),
+                        'return_std': np.std(returns),
+                        'success_rate': np.mean(success_rates),
+                        'best_case_return': max(returns),
+                        'worst_case_return': min(returns),
+                        'average_sharpe_ratio': np.mean([m.sharpe_ratio for m in historical_matches]),
+                        'average_max_drawdown': np.mean([m.max_drawdown for m in historical_matches])
+                    }
+
+                    # Add top matches details
+                    report['top_historical_matches'] = [
+                        {
+                            'pattern_id': m.matched_pattern.base_pattern.pattern_id,
+                            'similarity_score': m.similarity_score,
+                            'temporal_distance_days': m.temporal_distance.days,
+                            'outcome_return': m.outcome_return,
+                            'success_probability': m.success_probability,
+                            'market_conditions': m.market_conditions
+                        }
+                        for m in historical_matches[:5]
+                    ]
+
+            # Add cluster analysis
+            if include_cluster_analysis:
+                # Find which cluster this pattern belongs to
+                belonging_cluster = None
+                for cluster_id, cluster in self.pattern_clusters.items():
+                    if pattern.base_pattern.pattern_id in [p.base_pattern.pattern_id for p in cluster.patterns]:
+                        belonging_cluster = cluster
+                        break
+
+                if belonging_cluster:
+                    report['cluster_analysis'] = {
+                        'cluster_id': belonging_cluster.cluster_id,
+                        'cluster_size': len(belonging_cluster.patterns),
+                        'dominant_category': belonging_cluster.dominant_semantic_category.value,
+                        'coherence_score': belonging_cluster.coherence_score,
+                        'diversity_score': belonging_cluster.diversity_score,
+                        'stability_score': belonging_cluster.stability_score,
+                        'cluster_performance': {
+                            'average_return': belonging_cluster.average_return,
+                            'success_rate': belonging_cluster.success_rate,
+                            'risk_adjusted_return': belonging_cluster.risk_adjusted_return
+                        },
+                        'asset_class_distribution': belonging_cluster.asset_class_distribution,
+                        'timeframe_distribution': belonging_cluster.timeframe_distribution
+                    }
+
+            return report
+
+        except Exception as e:
+            self.logger.error(f"Error generating pattern analysis report: {e}")
+            return {'error': str(e)}
+
+
+# Factory function
+def create_semantic_analyzer(
+    vector_ml_engine: VectorDatabaseMLEngine,
+    config: Optional[SemanticSearchConfig] = None
+) -> SemanticPatternAnalyzer:
+    """
+    Factory function to create semantic pattern analyzer.
+
+    Args:
+        vector_ml_engine: Vector database ML engine
+        config: Semantic search configuration
+
+    Returns:
+        Configured SemanticPatternAnalyzer instance
+    """
+    return SemanticPatternAnalyzer(
+        vector_ml_engine=vector_ml_engine,
+        config=config or SemanticSearchConfig()
+    )
+
+
+# Example usage
+async def main():
+    """Example usage of semantic pattern recognition."""
+    from .vector_ml_integration import create_vector_ml_engine, MarketPattern, AssetClass, PatternType
+
+    # Create engines
+    vector_ml_engine = create_vector_ml_engine()
+    semantic_analyzer = create_semantic_analyzer(vector_ml_engine)
+
+    try:
+        # Initialize vector ML engine
+        await vector_ml_engine.initialize()
+
+        # Create sample pattern
+        pattern = MarketPattern(
+            pattern_id="semantic_test_001",
+            asset_class=AssetClass.EQUITIES,
+            symbol="AAPL",
+            pattern_type=PatternType.BREAKOUT,
+            timeframe="1h",
+            vector=[0.1] * 512,
+            metadata={
+                'pattern_name': 'ascending_triangle',
+                'trend_direction': 'up',
+                'volume_confirmation': 0.8,
+                'indicators': ['rsi', 'macd', 'bb', 'volume'],
+                'multi_timeframe': True,
+                'breakout_potential': 0.75
+            },
+            confidence_score=0.85,
+            start_time=datetime.now() - timedelta(hours=4),
+            end_time=datetime.now(),
+            volatility=0.25,
+            trend_strength=0.7,
+            volume_profile=0.6,
+            success_rate=0.72
+        )
+
+        # Classify pattern semantically
+        semantic_pattern = await semantic_analyzer.classify_pattern_semantically(pattern)
+        print(f"Semantic classification: {semantic_pattern.semantic_category.value}")
+        print(f"Market regime: {semantic_pattern.market_regime.value}")
+        print(f"Pattern complexity: {semantic_pattern.pattern_complexity.value}")
+        print(f"Semantic tags: {semantic_pattern.semantic_tags}")
+
+        # Find historical matches
+        historical_matches = await semantic_analyzer.find_historical_matches(semantic_pattern, max_matches=5)
+        print(f"Found {len(historical_matches)} historical matches")
+
+        # Generate analysis report
+        report = await semantic_analyzer.get_pattern_analysis_report(semantic_pattern)
+        print(f"Analysis report generated with {len(report)} sections")
+
+    finally:
+        await vector_ml_engine.shutdown()
+
+
+if __name__ == "__main__":
+    asyncio.run(main())

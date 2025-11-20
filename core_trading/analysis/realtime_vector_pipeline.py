@@ -1,0 +1,1291 @@
+import asyncio
+import json
+import logging
+import time
+import uuid
+from datetime import datetime, timedelta
+from typing import Any, Dict, List, Optional, Union, Tuple, Callable, AsyncIterator
+from dataclasses import dataclass, field, asdict
+from enum import Enum
+import numpy as np
+from collections import deque, defaultdict
+import threading
+from concurrent.futures import ThreadPoolExecutor, ProcessPoolExecutor
+from queue import Queue, PriorityQueue
+import multiprocessing as mp
+from pathlib import Path
+import pickle
+import hashlib
+import psutil
+import uvloop
+# from .vector_ml_integration import ()
+# from .semantic_pattern_recognition import ()
+
+# Real-Time Vector Operations Pipeline
+# High-performance pipeline for real-time vector embedding generation, similarity search,
+# and pattern updates with sub-100μs latency and 10,000+ operations per second throughput.
+
+# Author: Vincent S. Pereira
+# Version: 1.0.0
+
+
+
+# Performance monitoring imports
+
+# Local imports
+#     VectorDatabaseMLEngine, MarketPattern, AssetClass, PatternType,
+# ""VectorDatabaseConfig, MLModelConfig, TradingSignal"
+# )
+#     SemanticPatternAnalyzer, SemanticPattern, SemanticSearchConfig
+# )
+
+# Configure logging
+logger = logging.getLogger(__name__)
+
+
+# class OperationType(Enum):
+#     "Types of vector operations."
+#     ENCODE = "encode"
+#     SEARCH = "search"
+#     UPSERT = "upsert"
+#     DELETE = "delete"
+#     CLUSTER = "cluster"
+#     ANALYZE = "analyze"
+
+
+# class OperationPriority(Enum):
+#     "Priority levels for operations."
+#     CRITICAL = 1    # Real-time trading signals
+#     HIGH = 2        # Pattern updates
+#     NORMAL = 3      # Batch operations
+#     LOW = 4         # Analytics and reporting
+
+
+# class PipelineStage(Enum):
+#     "Pipeline processing stages."
+#     INGESTION = "ingestion"
+#     PREPROCESSING = "preprocessing"
+#     ENCODING = "encoding"
+#     INDEXING = "indexing"
+#     SEARCH = "search"
+#     POSTPROCESSING = "postprocessing"
+#     OUTPUT = "output"
+
+
+# @dataclass
+# class VectorOperation:
+#     "Represents a vector operation in the pipeline."
+
+    # Operation identification
+#     operation_id: str
+#     operation_type: OperationType
+#     priority: OperationPriority
+#     timestamp: datetime = field(default_factory=datetime.now)
+
+    # Operation data
+#     data: Dict[str, Any] = field(default_factory=dict)
+#     payload: Optional[bytes] = None
+#     metadata: Dict[str, Any] = field(default_factory=dict)
+
+    # Performance tracking
+#     created_at: datetime = field(default_factory=datetime.now)
+#     started_at: Optional[datetime] = None
+#     completed_at: Optional[datetime] = None
+#     processing_time: float = 0.0
+#     queue_time: float = 0.0
+
+    # Error handling
+#     error: Optional[str] = None
+#     retry_count: int = 0
+#     max_retries: int = 3
+
+#     def __lt__(self, other):
+#         "Priority queue comparison."
+#         return self.priority.value < other.priority.value
+
+
+# @dataclass
+# class PipelineMetrics:
+#     "Pipeline performance metrics."
+
+    # Throughput metrics
+#     operations_per_second: float = 0.0
+#     encoding_ops_per_second: float = 0.0
+#     search_ops_per_second: float = 0.0
+#     upsert_ops_per_second: float = 0.0
+
+    # Latency metrics (microseconds)
+#     average_latency_us: float = 0.0
+#     p50_latency_us: float = 0.0
+#     p95_latency_us: float = 0.0
+#     p99_latency_us: float = 0.0
+#     max_latency_us: float = 0.0
+
+    # Queue metrics
+#     queue_depth: int = 0
+#     max_queue_depth: int = 0
+#     average_queue_time_ms: float = 0.0
+
+    # Error metrics
+#     error_rate: float = 0.0
+#     timeout_rate: float = 0.0
+#     retry_rate: float = 0.0
+
+    # Resource metrics
+#     cpu_usage_percent: float = 0.0
+#     memory_usage_mb: float = 0.0
+#     gpu_usage_percent: float = 0.0
+
+    # System metrics
+#     active_connections: int = 0
+#     cache_hit_rate: float = 0.0
+#     index_size_mb: float = 0.0
+
+    # Timestamps
+#     last_updated: datetime = field(default_factory=datetime.now)
+#     window_start: datetime = field(default_factory=datetime.now)
+
+
+# @dataclass
+# class PipelineConfig:
+#     "Configuration for the real-time vector pipeline."
+
+    # Performance targets
+#     target_latency_us: float = 100.0  # Target sub-100μs latency
+#     target_throughput_ops: int = 10000  # Target 10K ops/sec
+#     max_queue_size: int = 50000
+
+    # Concurrency settings
+#     max_concurrent_operations: int = 100
+#     encoding_workers: int = 4
+#     search_workers: int = 8
+#     indexing_workers: int = 2
+#     preprocessing_workers: int = 2
+
+    # Batch processing
+#     batch_size: int = 100
+#     batch_timeout_ms: float = 10.0
+#     enable_batching: bool = True
+
+    # Caching
+#     enable_encoding_cache: bool = True
+#     encoding_cache_size: int = 10000
+#     enable_search_cache: bool = True
+#     search_cache_size: int = 5000
+#     cache_ttl_seconds: int = 300
+
+    # Memory management
+#     max_memory_mb: int = 4096
+#     memory_cleanup_interval_seconds: int = 60
+#     enable_memory_monitoring: bool = True
+
+    # Persistence
+#     enable_persistence: bool = True
+#     persistence_interval_seconds: int = 30
+#     checkpoint_directory: str = "checkpoints"
+
+    # Monitoring
+#     enable_metrics: bool = True
+#     metrics_window_seconds: int = 60
+#     enable_profiling: bool = False
+
+    # Reliability
+#     enable_retry: bool = True
+#     circuit_breaker_threshold: float = 0.1
+#     circuit_breaker_timeout_seconds: int = 30
+
+    # Advanced features
+#     enable_gpu_acceleration: bool = False
+#     enable_quantization: bool = False
+#     enable_compression: bool = False
+
+
+# class HighPerformanceCache:
+#     "High-performance cache with LRU eviction and TTL support."
+
+#     def __init__(self, max_size: int, ttl_seconds: int):
+#         self.max_size = max_size
+#         self.ttl_seconds = ttl_seconds
+
+#         self.cache = {}
+#         self.access_times = {}
+#         self.creation_times = {}
+#         self.lock = threading.RLock()
+
+#         self.hits = 0
+#         self.misses = 0
+
+#     def get(self, key: str) -> Optional[Any]:
+#         "Get item from cache."
+#         with self.lock:
+#             now = time.time()
+
+#             if key in self.cache:
+                # Check TTL
+#                 if now - self.creation_times[key] > self.ttl_seconds:
+#                     self._remove(key)
+#                     self.misses += 1
+#                     return None
+
+                # Update access time
+#                 self.access_times[key] = now
+#                 self.hits += 1
+#                 return self.cache[key]
+
+#             self.misses += 1
+#             return None
+
+#     def put(self, key: str, value: Any) -> None:
+#         "Put item in cache."
+#         with self.lock:
+#             now = time.time()
+
+            # Remove if expired
+#             if key in self.cache and now - self.creation_times[key] > self.ttl_seconds:
+#                 self._remove(key)
+
+            # Add or update
+#             self.cache[key] = value
+#             self.access_times[key] = now
+#             self.creation_times[key] = now
+
+            # Evict if necessary
+#             while len(self.cache) > self.max_size:
+#                 self._evict_lru()
+
+#     def remove(self, key: str) -> bool:
+#         "Remove item from cache."
+#         with self.lock:
+#             if key in self.cache:
+#                 self._remove(key)
+#                 return True
+#             return False
+
+#     def clear(self) -> None:
+#         "Clear all items from cache."
+#         with self.lock:
+#             self.cache.clear()
+#             self.access_times.clear()
+#             self.creation_times.clear()
+
+#     def _remove(self, key: str) -> None:
+#         "Remove item from cache (internal)."
+#         if key in self.cache:
+#             del self.cache[key]
+#             del self.access_times[key]
+#             del self.creation_times[key]
+
+#     def _evict_lru(self) -> None:
+#         "Evict least recently used item."
+#         if not self.access_times:
+#             return
+
+#         lru_key = min(self.access_times.keys(), key=lambda k: self.access_times[k])
+#         self._remove(lru_key)
+
+#     def get_hit_rate(self) -> float:
+#         "Get cache hit rate."
+#         total = self.hits + self.misses
+#         return self.hits / total if total > 0 else 0.0
+
+#     def get_stats(self) -> Dict[str, Any]:
+#         "Get cache statistics."
+#         with self.lock:
+#             return {
+# 'size': len(self.cache),
+# 'max_size': self.max_size,
+# 'hits': self.hits,
+# 'misses': self.misses,
+# 'hit_rate': self.get_hit_rate()
+# }
+
+
+# class VectorEncoder:
+#     "High-performance vector encoder with caching and batch processing."
+
+#     def __init__(self, config: PipelineConfig):
+#         self.config = config
+#         self.logger = logging.getLogger(__name__)
+
+        # Caching
+#         self.encoding_cache = HighPerformanceCache(
+#             config.encoding_cache_size,
+#             config.cache_ttl_seconds
+# )
+
+        # Batch processing
+#         self.batch_queue = asyncio.Queue(maxsize=config.batch_size * 2)
+#         self.batch_results = {}
+
+        # Thread pool for CPU-intensive encoding
+#         self.executor = ThreadPoolExecutor(max_workers=config.encoding_workers)
+
+        # Performance tracking
+#         self.encoding_times = deque(maxlen=1000)
+#         self.encoding_count = 0
+
+#     async def encode_async(self, data: Dict[str, Any], cache_key: Optional[str] = None) -> List[float]:
+
+# Encode data to vector asynchronously.
+
+# Args:
+# data: Data to encode
+# cache_key: Optional cache key for caching
+
+# Returns:
+# Vector embedding
+
+#         start_time = time.perf_counter()
+
+#         try:
+            # Check cache first
+#             if cache_key and self.config.enable_encoding_cache:
+#                 cached_vector = self.encoding_cache.get(cache_key)
+#                 if cached_vector:
+#                     return cached_vector
+
+            # Generate cache key if not provided
+#             if not cache_key:
+#                 cache_key = self._generate_cache_key(data)
+
+            # Check cache again with generated key
+#             if self.config.enable_encoding_cache:
+#                 cached_vector = self.encoding_cache.get(cache_key)
+#                 if cached_vector:
+#                     return cached_vector
+
+            # Perform encoding
+#             vector = await self._perform_encoding(data)
+
+            # Cache result
+#             if self.config.enable_encoding_cache:
+#                 self.encoding_cache.put(cache_key, vector)
+
+            # Track performance
+#             encoding_time = (time.perf_counter() - start_time) * 1e6  # microseconds
+#             self.encoding_times.append(encoding_time)
+#             self.encoding_count += 1
+
+#             return vector
+
+#         except Exception as e:
+#             self.logger.error(f"Error encoding data: {e}")
+#             return [0.0] * 512  # Return zero vector on error
+
+#     async def encode_batch_async(self, data_list: List[Dict[str, Any]]) -> List[List[float]]:
+
+# Encode multiple data items in batch.
+
+# Args:
+# data_list: List of data items to encode
+
+# Returns:
+# List of vector embeddings
+
+#         if not data_list:
+#             return []
+
+        # Process in batches
+#         batch_size = min(self.config.batch_size, len(data_list))
+#         batches = [data_list[i:i + batch_size] for i in range(0, len(data_list), batch_size)]
+
+#         results = []
+#         for batch in batches:
+            # Create tasks for batch processing
+#             tasks = [self.encode_async(data) for data in batch]
+#             batch_results = await asyncio.gather(*tasks)
+#             results.extend(batch_results)
+
+#         return results
+
+#     def _generate_cache_key(self, data: Dict[str, Any]) -> str:
+#         "Generate cache key from data."
+        # Create deterministic hash of data
+#         data_str = json.dumps(data, sort_keys=True, default=str)
+#         return hashlib.md5(data_str.encode()).hexdigest()
+
+#     async def _perform_encoding(self, data: Dict[str, Any]) -> List[float]:
+#         "Perform the actual encoding operation."
+        # This would use the actual encoding logic from PatternVectorizer
+        # For now, simulate encoding with some processing
+
+        # Simulate encoding work
+#         encoding_function = lambda: self._simulate_encoding_work(data)
+
+        # Run in thread pool to avoid blocking
+#         loop = asyncio.get_event_loop()
+#         vector = await loop.run_in_executor(self.executor, encoding_function)
+
+#         return vector
+
+#     def _simulate_encoding_work(self, data: Dict[str, Any]) -> List[float]:
+#         "Simulate encoding work (replace with actual encoding)."
+        # Simulate some computational work
+#         time.sleep(0.001)  # 1ms simulation
+
+        # Generate pseudo-random vector based on data
+#         data_hash = hash(json.dumps(data, sort_keys=True, default=str))
+#         np.random.seed(abs(data_hash) % (2**32))
+
+#         vector_size = 512
+#         vector = np.random.randn(vector_size).astype(np.float32)
+#         vector = vector / np.linalg.norm(vector)  # Normalize
+
+#         return vector.tolist()
+
+#     def get_encoding_stats(self) -> Dict[str, Any]:
+#         "Get encoding performance statistics."
+#         if self.encoding_times:
+#             times_array = np.array(list(self.encoding_times))
+#             return {
+# 'total_encodings': self.encoding_count,
+# 'average_latency_us': np.mean(times_array),
+# 'p50_latency_us': np.percentile(times_array, 50),
+# 'p95_latency_us': np.percentile(times_array, 95),
+# 'p99_latency_us': np.percentile(times_array, 99),
+# 'max_latency_us': np.max(times_array),
+# 'encodings_per_second': self.encoding_count / (sum(self.encoding_times) / 1e6) if self.encoding_times else 0,
+# 'cache_stats': self.encoding_cache.get_stats()
+# }
+#         return {
+# 'total_encodings': 0,
+# 'cache_stats': self.encoding_cache.get_stats()
+# }
+
+
+# class VectorIndexer:
+#     "High-performance vector indexing and search."
+
+#     def __init__(self, config: PipelineConfig, vector_ml_engine: VectorDatabaseMLEngine):
+#         self.config = config
+#         self.vector_ml_engine = vector_ml_engine
+#         self.logger = logging.getLogger(__name__)
+
+        # Search caching
+#         self.search_cache = HighPerformanceCache(
+#             config.search_cache_size,
+#             config.cache_ttl_seconds
+# )
+
+        # Search performance tracking
+#         self.search_times = deque(maxlen=1000)
+#         self.search_count = 0
+
+        # Connection pool
+#         self.semaphore = asyncio.Semaphore(config.max_concurrent_operations)
+
+#     async def search_async(
+#         self,
+# query_vector: List[float],
+# collection_name: str,
+#         limit: int = 10,
+#         similarity_threshold: float = 0.7,
+#         cache_key: Optional[str] = None
+# ) -> List[SearchResult]:
+
+# Perform vector search asynchronously.
+
+# Args:
+# query_vector: Query vector
+# collection_name: Collection to search
+# limit: Maximum number of results
+# similarity_threshold: Minimum similarity score
+# cache_key: Optional cache key
+
+# Returns:
+# List of search results
+
+#         start_time = time.perf_counter()
+
+#         async with self.semaphore:  # Limit concurrent searches
+#             try:
+                # Check cache first
+#                 if cache_key and self.config.enable_search_cache:
+#                     cached_results = self.search_cache.get(cache_key)
+#                     if cached_results:
+#                         return cached_results
+
+                # Perform search
+# results = await self.vector_ml_engine.qdrant_wrapper.search_points(
+#                     collection_name=collection_name,
+#                     query_vector=query_vector,
+#                     limit=limit,
+#                     score_threshold=similarity_threshold
+# )
+
+                # Cache results
+#                 if cache_key and self.config.enable_search_cache:
+#                     self.search_cache.put(cache_key, results)
+
+                # Track performance
+#                 search_time = (time.perf_counter() - start_time) * 1e6  # microseconds
+#                 self.search_times.append(search_time)
+#                 self.search_count += 1
+
+#                 return results
+
+#             except Exception as e:
+#                 self.logger.error(f"Error performing vector search: {e}")
+#                 return []
+
+#     async def upsert_async(
+#         self,
+# collection_name: str,
+# vectors: List[List[float]],
+# payloads: List[Dict[str, Any]],
+#         ids: Optional[List[str]] = None
+# ) -> bool:
+
+# Upsert vectors asynchronously.
+
+# Args:
+# collection_name: Collection to upsert to
+# vectors: List of vectors to upsert
+# payloads: List of payloads
+# ids: Optional list of IDs
+
+# Returns:
+# True if successful
+
+#         async with self.semaphore:
+#             try:
+                # Create vector points
+#                 if ids is None:
+#                     ids = [str(uuid.uuid4()) for _ in vectors]
+
+#                 from infrastructure.wrappers.mcp.qdrant_wrapper import VectorPoint
+# points = [
+# VectorPoint(
+#                         id=id,
+#                         vector=vector,
+#                         payload=payload
+# )
+#                     for id, vector, payload in zip(ids, vectors, payloads)
+# ]
+
+                # Perform upsert
+# success = await self.vector_ml_engine.qdrant_wrapper.upsert_points(
+#                     collection_name=collection_name,
+#                     points=points
+# )
+
+#                 return success
+
+#             except Exception as e:
+#                 self.logger.error(f"Error upserting vectors: {e}")
+#                 return False
+
+#     def get_search_stats(self) -> Dict[str, Any]:
+#         "Get search performance statistics."
+#         if self.search_times:
+#             times_array = np.array(list(self.search_times))
+#             return {
+# 'total_searches': self.search_count,
+# 'average_latency_us': np.mean(times_array),
+# 'p50_latency_us': np.percentile(times_array, 50),
+# 'p95_latency_us': np.percentile(times_array, 95),
+# 'p99_latency_us': np.percentile(times_array, 99),
+# 'max_latency_us': np.max(times_array),
+# 'searches_per_second': self.search_count / (sum(self.search_times) / 1e6) if self.search_times else 0,
+# 'cache_stats': self.search_cache.get_stats()
+# }
+#         return {
+# 'total_searches': 0,
+# 'cache_stats': self.search_cache.get_stats()
+# }
+
+
+# class RealTimeVectorPipeline:
+
+# Real-time vector operations pipeline with high performance and reliability.
+# Provides sub-100μs latency and 10,000+ ops/sec throughput for vector operations.
+
+
+#     def __init__(
+#         self,
+# vector_ml_engine: VectorDatabaseMLEngine,
+# semantic_analyzer: SemanticPatternAnalyzer,
+#         config: PipelineConfig
+# ):
+#         self.vector_ml_engine = vector_ml_engine
+#         self.semantic_analyzer = semantic_analyzer
+#         self.config = config
+
+#         self.logger = logging.getLogger(__name__)
+
+        # Core components
+#         self.encoder = VectorEncoder(config)
+#         self.indexer = VectorIndexer(config, vector_ml_engine)
+
+        # Operation queues
+#         self.operation_queues = {
+#             priority: PriorityQueue()
+#             for priority in OperationPriority
+# }
+
+        # Operation processing
+#         self.operation_futures = {}
+#         self.operation_results = {}
+
+        # Background tasks
+#         self.processor_tasks = []
+#         self.metrics_task = None
+#         self.cleanup_task = None
+
+        # Performance metrics
+#         self.metrics = PipelineMetrics()
+#         self.operation_history = deque(maxlen=10000)
+
+        # Circuit breaker
+#         self.circuit_breaker_open = False
+#         self.circuit_breaker_time = None
+#         self.error_count = 0
+#         self.success_count = 0
+
+        # Resource monitoring
+#         self.process = psutil.Process()
+
+        # Pipeline state
+#         self.running = False
+#         self.start_time = None
+
+#     async def start(self) -> None:
+#         "Start the real-time vector pipeline."
+#         if self.running:
+#             return
+
+#         self.logger.info("Starting real-time vector pipeline...")
+#         self.running = True
+#         self.start_time = datetime.now()
+
+#         try:
+            # Set up asyncio event loop policy for better performance
+#             if hasattr(asyncio, 'WindowsSelectorEventLoopPolicy'):
+#                 asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
+#             else:
+#                 asyncio.set_event_loop_policy(uvloop.EventLoopPolicy())
+
+            # Start processor tasks
+#             for priority in OperationPriority:
+#                 task = asyncio.create_task(self._process_operations(priority))
+#                 self.processor_tasks.append(task)
+
+            # Start monitoring tasks
+#             if self.config.enable_metrics:
+#                 self.metrics_task = asyncio.create_task(self._update_metrics())
+
+#             if self.config.enable_memory_monitoring:
+#                 self.cleanup_task = asyncio.create_task(self._periodic_cleanup())
+
+#             self.logger.info("Real-time vector pipeline started successfully")
+
+#         except Exception as e:
+#             self.logger.error(f"Error starting pipeline: {e}")
+#             await self.stop()
+#             raise
+
+#     async def stop(self) -> None:
+#         "Stop the real-time vector pipeline."
+#         if not self.running:
+#             return
+
+#         self.logger.info("Stopping real-time vector pipeline...")
+#         self.running = False
+
+        # Cancel processor tasks
+#         for task in self.processor_tasks:
+#             task.cancel()
+
+        # Cancel monitoring tasks
+#         if self.metrics_task:
+#             self.metrics_task.cancel()
+#         if self.cleanup_task:
+#             self.cleanup_task.cancel()
+
+        # Wait for tasks to complete
+#         await asyncio.gather(*self.processor_tasks, return_exceptions=True)
+#         if self.metrics_task:
+#             await self.metrics_task
+#         if self.cleanup_task:
+#             await self.cleanup_task
+
+#         self.logger.info("Real-time vector pipeline stopped")
+
+#     async def submit_operation(self, operation: VectorOperation) -> str:
+
+# Submit operation to the pipeline.
+
+# Args:
+# operation: Operation to submit
+
+# Returns:
+# Operation ID for tracking
+
+#         if not self.running:
+#             raise RuntimeError("Pipeline is not running")
+
+        # Check circuit breaker
+#         if self.circuit_breaker_open:
+#             raise RuntimeError("Circuit breaker is open due to high error rate")
+
+        # Add to appropriate priority queue
+#         queue = self.operation_queues[operation.priority]
+#         queue.put(operation)
+
+        # Create future for result
+#         future = asyncio.Future()
+#         self.operation_futures[operation.operation_id] = future
+
+#         self.logger.debug(f"Submitted operation {operation.operation_id} of type {operation.operation_type.value}")
+#         return operation.operation_id
+
+#     async def get_operation_result(self, operation_id: str, timeout: Optional[float] = None) -> Any:
+
+# Get result of submitted operation.
+
+# Args:
+# operation_id: Operation ID
+# timeout: Optional timeout
+
+# Returns:
+# Operation result
+
+#         if operation_id not in self.operation_futures:
+#             raise ValueError(f"Operation {operation_id} not found")
+
+#         future = self.operation_futures[operation_id]
+#         try:
+#             result = await asyncio.wait_for(future, timeout=timeout)
+#             return result
+#         except asyncio.TimeoutError:
+#             raise TimeoutError(f"Operation {operation_id} timed out")
+#         finally:
+            # Clean up
+#             self.operation_futures.pop(operation_id, None)
+#             self.operation_results.pop(operation_id, None)
+
+#     async def encode_pattern(
+#         self,
+# market_data: Dict[str, Any],
+# pattern_metadata: Dict[str, Any],
+#         priority: OperationPriority = OperationPriority.NORMAL
+# ) -> List[float]:
+
+# Encode market pattern to vector.
+
+# Args:
+# market_data: Market data
+# pattern_metadata: Pattern metadata
+# priority: Operation priority
+
+# Returns:
+# Vector embedding
+
+# operation = VectorOperation(
+#             operation_id=str(uuid.uuid4()),
+#             operation_type=OperationType.ENCODE,
+#             priority=priority,
+# data={
+# 'market_data': market_data,
+# 'pattern_metadata': pattern_metadata
+# }
+# )
+
+#         operation_id = await self.submit_operation(operation)
+#         result = await self.get_operation_result(operation_id, timeout=1.0)
+
+#         if result is None:
+#             raise RuntimeError("Encoding operation failed")
+
+#         return result
+
+#     async def search_similar_patterns(
+#         self,
+# query_vector: List[float],
+# asset_class: AssetClass,
+#         limit: int = 10,
+#         priority: OperationPriority = OperationPriority.HIGH
+# ) -> List[SearchResult]:
+
+# Search for similar patterns.
+
+# Args:
+# query_vector: Query vector
+# asset_class: Asset class to search
+# limit: Maximum results
+# priority: Operation priority
+
+# Returns:
+# List of similar patterns
+
+#         collection_name = f"market_patterns_{asset_class.value}"
+#         cache_key = hashlib.md5(str(query_vector).encode()).hexdigest()
+
+# operation = VectorOperation(
+#             operation_id=str(uuid.uuid4()),
+#             operation_type=OperationType.SEARCH,
+#             priority=priority,
+# data={
+# 'query_vector': query_vector,
+# 'collection_name': collection_name,
+# 'limit': limit,
+# 'cache_key': cache_key
+# }
+# )
+
+#         operation_id = await self.submit_operation(operation)
+#         result = await self.get_operation_result(operation_id, timeout=0.5)
+
+#         if result is None:
+#             raise RuntimeError("Search operation failed")
+
+#         return result
+
+#     async def store_pattern(
+#         self,
+# pattern: MarketPattern,
+#         priority: OperationPriority = OperationPriority.HIGH
+# ) -> bool:
+
+# Store pattern in vector database.
+
+# Args:
+# pattern: Pattern to store
+# priority: Operation priority
+
+# Returns:
+# True if successful
+
+# operation = VectorOperation(
+#             operation_id=str(uuid.uuid4()),
+#             operation_type=OperationType.UPSERT,
+#             priority=priority,
+#             data={'pattern': pattern}
+# )
+
+#         operation_id = await self.submit_operation(operation)
+#         result = await self.get_operation_result(operation_id, timeout=2.0)
+
+#         if result is None:
+#             raise RuntimeError("Store operation failed")
+
+#         return result
+
+#     async def _process_operations(self, priority: OperationPriority) -> None:
+#         "Process operations from priority queue."
+#         queue = self.operation_queues[priority]
+
+#         while self.running:
+#             try:
+                # Get operation from queue (with timeout to allow checking running flag)
+#                 operation = await asyncio.wait_for(queue.get(), timeout=0.1)
+
+                # Process operation
+#                 await self._execute_operation(operation)
+
+                # Mark task as done
+#                 queue.task_done()
+
+#             except asyncio.TimeoutError:
+#                 continue  # Check running flag
+#             except Exception as e:
+#                 self.logger.error(f"Error processing operation: {e}")
+
+#     async def _execute_operation(self, operation: VectorOperation) -> None:
+#         "Execute a single operation."
+#         start_time = time.perf_counter()
+#         operation.started_at = datetime.now()
+#         operation.queue_time = (operation.started_at - operation.created_at).total_seconds() * 1000
+
+#         try:
+#             result = None
+
+#             if operation.operation_type == OperationType.ENCODE:
+#                 result = await self._handle_encode_operation(operation)
+
+#             elif operation.operation_type == OperationType.SEARCH:
+#                 result = await self._handle_search_operation(operation)
+
+#             elif operation.operation_type == OperationType.UPSERT:
+#                 result = await self._handle_upsert_operation(operation)
+
+#             elif operation.operation_type == OperationType.DELETE:
+#                 result = await self._handle_delete_operation(operation)
+
+#             else:
+#                 raise ValueError(f"Unsupported operation type: {operation.operation_type}")
+
+            # Update success metrics
+#             self.success_count += 1
+#             self._check_circuit_breaker()
+
+            # Complete operation
+#             operation.completed_at = datetime.now()
+#             operation.processing_time = (time.perf_counter() - start_time) * 1e6  # microseconds
+
+            # Store result
+#             self.operation_results[operation.operation_id] = result
+
+            # Complete future
+#             if operation.operation_id in self.operation_futures:
+#                 future = self.operation_futures[operation.operation_id]
+#                 if not future.done():
+#                     future.set_result(result)
+
+            # Track operation
+#             self.operation_history.append(operation)
+
+#         except Exception as e:
+            # Update error metrics
+#             self.error_count += 1
+#             operation.error = str(e)
+
+            # Check circuit breaker
+#             if self._check_circuit_breaker():
+#                 self.logger.warning("Circuit breaker opened due to high error rate")
+
+            # Complete future with exception
+#             if operation.operation_id in self.operation_futures:
+#                 future = self.operation_futures[operation.operation_id]
+#                 if not future.done():
+#                     future.set_exception(e)
+
+#             self.logger.error(f"Operation {operation.operation_id} failed: {e}")
+
+#     async def _handle_encode_operation(self, operation: VectorOperation) -> List[float]:
+#         "Handle encoding operation."
+#         data = operation.data
+#         market_data = data['market_data']
+#         pattern_metadata = data['pattern_metadata']
+
+        # Generate cache key
+#         cache_data = {**market_data, **pattern_metadata}
+#         cache_key = hashlib.md5(json.dumps(cache_data, sort_keys=True, default=str).encode()).hexdigest()
+
+        # Perform encoding
+#         vector = await self.encoder.encode_async(market_data, cache_key)
+
+#         return vector
+
+#     async def _handle_search_operation(self, operation: VectorOperation) -> List[SearchResult]:
+#         "Handle search operation."
+#         data = operation.data
+#         query_vector = data['query_vector']
+#         collection_name = data['collection_name']
+#         limit = data['limit']
+#         cache_key = data.get('cache_key')
+
+        # Perform search
+# results = await self.indexer.search_async(
+#             query_vector=query_vector,
+#             collection_name=collection_name,
+#             limit=limit,
+#             cache_key=cache_key
+# )
+
+#         return results
+
+#     async def _handle_upsert_operation(self, operation: VectorOperation) -> bool:
+#         "Handle upsert operation."
+#         data = operation.data
+#         pattern = data['pattern']
+
+        # Store pattern using vector ML engine
+#         success = await self.vector_ml_engine.store_pattern(pattern)
+
+#         return success
+
+#     async def _handle_delete_operation(self, operation: VectorOperation) -> bool:
+#         "Handle delete operation."
+#         data = operation.data
+#         collection_name = data['collection_name']
+#         point_ids = data['point_ids']
+
+        # Perform deletion
+# success = await self.vector_ml_engine.qdrant_wrapper.delete_points(
+#             collection_name=collection_name,
+#             point_ids=point_ids
+# )
+
+#         return success
+
+#     def _check_circuit_breaker(self) -> bool:
+#         "Check and update circuit breaker state."
+#         total_operations = self.success_count + self.error_count
+
+#         if total_operations < 10:  # Minimum operations before triggering
+#             return False
+
+#         error_rate = self.error_count / total_operations
+
+#         if error_rate > self.config.circuit_breaker_threshold:
+#             if not self.circuit_breaker_open:
+#                 self.circuit_breaker_open = True
+#                 self.circuit_breaker_time = datetime.now()
+#                 self.logger.warning(f"Circuit breaker opened. Error rate: {error_rate:.3f}")
+#             return True
+
+        # Reset circuit breaker after timeout
+#         if (self.circuit_breaker_open and
+#             self.circuit_breaker_time and
+# datetime.now() - self.circuit_breaker_time > timedelta(seconds=self.config.circuit_breaker_timeout_seconds)):
+
+#             self.circuit_breaker_open = False
+#             self.circuit_breaker_time = None
+#             self.error_count = 0
+#             self.success_count = 0
+#             self.logger.info("Circuit breaker closed")
+
+#         return False
+
+#     async def _update_metrics(self) -> None:
+#         "Update pipeline metrics periodically."
+#         while self.running:
+#             try:
+#                 await self._collect_metrics()
+#                 await asyncio.sleep(self.config.metrics_window_seconds)
+#             except Exception as e:
+#                 self.logger.error(f"Error updating metrics: {e}")
+
+#     async def _collect_metrics(self) -> None:
+#         "Collect current pipeline metrics."
+#         now = datetime.now()
+#         window_start = now - timedelta(seconds=self.config.metrics_window_seconds)
+
+        # Filter operations in time window
+# recent_operations = [
+# op for op in self.operation_history
+#             if op.completed_at and op.completed_at >= window_start
+# ]
+
+#         if not recent_operations:
+#             return
+
+        # Calculate throughput
+#         self.metrics.operations_per_second = len(recent_operations) / self.config.metrics_window_seconds
+
+        # Calculate latency metrics
+#         latencies = [op.processing_time for op in recent_operations if op.processing_time > 0]
+#         if latencies:
+#             self.metrics.average_latency_us = np.mean(latencies)
+#             self.metrics.p50_latency_us = np.percentile(latencies, 50)
+#             self.metrics.p95_latency_us = np.percentile(latencies, 95)
+#             self.metrics.p99_latency_us = np.percentile(latencies, 99)
+#             self.metrics.max_latency_us = np.max(latencies)
+
+        # Calculate queue metrics
+#         total_queue_size = sum(q.qsize() for q in self.operation_queues.values())
+#         self.metrics.queue_depth = total_queue_size
+#         self.metrics.max_queue_depth = max(self.metrics.max_queue_depth, total_queue_size)
+
+#         queue_times = [op.queue_time for op in recent_operations if op.queue_time > 0]
+#         if queue_times:
+#             self.metrics.average_queue_time_ms = np.mean(queue_times)
+
+        # Calculate error metrics
+#         error_operations = [op for op in recent_operations if op.error]
+#         self.metrics.error_rate = len(error_operations) / len(recent_operations)
+
+        # Calculate resource metrics
+#         self.metrics.cpu_usage_percent = self.process.cpu_percent()
+#         memory_info = self.process.memory_info()
+#         self.metrics.memory_usage_mb = memory_info.rss / 1024 / 1024
+
+        # Get component stats
+#         encoding_stats = self.encoder.get_encoding_stats()
+#         search_stats = self.indexer.get_search_stats()
+
+#         self.metrics.encoding_ops_per_second = encoding_stats.get('encodings_per_second', 0)
+#         self.metrics.search_ops_per_second = search_stats.get('searches_per_second', 0)
+
+#         self.metrics.cache_hit_rate = (
+# encoding_stats.get('cache_stats', {}).get('hit_rate', 0) +
+#             search_stats.get('cache_stats', {}).get('hit_rate', 0)
+# ) / 2
+
+#         self.metrics.last_updated = now
+#         self.metrics.window_start = window_start
+
+#     async def _periodic_cleanup(self) -> None:
+#         "Perform periodic cleanup tasks."
+#         while self.running:
+#             try:
+                # Clear old operation history
+#                 cutoff_time = datetime.now() - timedelta(hours=1)
+#                 self.operation_history = deque(
+#                     [op for op in self.operation_history if op.created_at > cutoff_time],
+#                     maxlen=10000
+# )
+
+                # Clear expired cache entries
+#                 if self.config.enable_encoding_cache:
+#                     self.encoder.encoding_cache.clear()
+
+#                 if self.config.enable_search_cache:
+#                     self.indexer.search_cache.clear()
+
+#                 await asyncio.sleep(self.config.memory_cleanup_interval_seconds)
+
+#             except Exception as e:
+#                 self.logger.error(f"Error during cleanup: {e}")
+
+#     async def get_pipeline_status(self) -> Dict[str, Any]:
+#         "Get current pipeline status."
+#         return {
+# 'running': self.running,
+# 'start_time': self.start_time.isoformat() if self.start_time else None,
+# 'uptime_seconds': (datetime.now() - self.start_time).total_seconds() if self.start_time else 0,
+# 'circuit_breaker_open': self.circuit_breaker_open,
+# 'queue_depths': {
+#                 priority.name: queue.qsize()
+#                 for priority, queue in self.operation_queues.items()
+# },
+# 'metrics': asdict(self.metrics),
+# 'component_stats': {
+# 'encoder': self.encoder.get_encoding_stats(),
+# 'indexer': self.indexer.get_search_stats()
+# }
+# }
+
+#     async def get_performance_report(self) -> Dict[str, Any]:
+#         "Get detailed performance report."
+        # Get recent operations for analysis
+#         recent_operations = list(self.operation_history)[-1000:] if self.operation_history else []
+
+#         if not recent_operations:
+#             return {'message': 'No operations to analyze'}
+
+        # Analyze operation types
+#         operation_types = Counter([op.operation_type for op in recent_operations])
+#         priority_distribution = Counter([op.priority for op in recent_operations])
+
+        # Analyze performance by operation type
+#         performance_by_type = {}
+#         for op_type in OperationType:
+#             type_operations = [op for op in recent_operations if op.operation_type == op_type]
+#             if type_operations:
+#                 latencies = [op.processing_time for op in type_operations if op.processing_time > 0]
+#                 queue_times = [op.queue_time for op in type_operations if op.queue_time > 0]
+
+# performance_by_type[op_type.value] = {
+# 'count': len(type_operations),
+# 'average_latency_us': np.mean(latencies) if latencies else 0,
+# 'p95_latency_us': np.percentile(latencies, 95) if latencies else 0,
+# 'average_queue_time_ms': np.mean(queue_times) if queue_times else 0,
+# 'error_rate': len([op for op in type_operations if op.error]) / len(type_operations)
+# }
+
+        # Resource utilization trends
+#         memory_trend = [op.processing_time for op in recent_operations[-100:]]  # Last 100 ops as proxy
+
+#         return {
+# 'analysis_period': {
+# 'start': recent_operations[0].created_at.isoformat(),
+# 'end': recent_operations[-1].created_at.isoformat(),
+# 'total_operations': len(recent_operations)
+# },
+# 'operation_distribution': {
+# 'by_type': {op_type.value: count for op_type, count in operation_types.items()},
+# 'by_priority': {priority.name: count for priority, count in priority_distribution.items()}
+# },
+# 'performance_by_type': performance_by_type,
+# 'current_metrics': asdict(self.metrics),
+# 'health_indicators': {
+# 'circuit_breaker_status': 'OPEN' if self.circuit_breaker_open else 'CLOSED''),
+# 'error_rate_status': 'HIGH' if self.metrics.error_rate > 0.05 else 'NORMAL''),
+# 'latency_status': 'HIGH' if self.metrics.average_latency_us > self.config.target_latency_us else 'NORMAL''),
+# 'throughput_status': 'LOW' if self.metrics.operations_per_second < self.config.target_throughput_ops / 2 else 'NORMAL'
+# }
+# }
+
+
+# Factory function
+# def create_realtime_pipeline(
+# vector_ml_engine: VectorDatabaseMLEngine,
+# semantic_analyzer: SemanticPatternAnalyzer,
+#     target_latency_us: float = 100.0,
+#     target_throughput_ops: int = 10000,
+# **kwargs
+# ) -> RealTimeVectorPipeline:
+
+# Factory function to create real-time vector pipeline.
+
+# Args:
+# vector_ml_engine: Vector database ML engine
+# semantic_analyzer: Semantic pattern analyzer
+# target_latency_us: Target latency in microseconds
+# target_throughput_ops: Target throughput in operations per second
+# **kwargs: Additional configuration parameters
+
+# Returns:
+# Configured RealTimeVectorPipeline instance
+
+# config = PipelineConfig(
+#         target_latency_us=target_latency_us,
+#         target_throughput_ops=target_throughput_ops,
+# **kwargs
+# )
+
+#     return RealTimeVectorPipeline(vector_ml_engine, semantic_analyzer, config)
+
+
+# Example usage
+# async def main():
+#     "Example usage of real-time vector pipeline."
+#     from .vector_ml_integration import create_vector_ml_engine
+#     from .semantic_pattern_recognition import create_semantic_analyzer
+
+    # Create components
+#     vector_ml_engine = create_vector_ml_engine()
+#     semantic_analyzer = create_semantic_analyzer(vector_ml_engine)
+# pipeline = create_realtime_pipeline(
+#         vector_ml_engine,
+#         semantic_analyzer,
+#         target_latency_us=100.0,
+#         target_throughput_ops=5000
+# )
+
+#     try:
+        # Initialize components
+#         await vector_ml_engine.initialize()
+#         await pipeline.start()
+
+# print(")
+
+        # Submit some test operations
+#         for i in range(10):
+            # Encode operation
+# market_data = {
+# 'ohlcv': [(i, i+1, i+2, i+0.5, i+1.5, 1000 + i*100) for i in range(20)],
+# 'indicators': {'rsi': 50 + i, 'macd': i * 0.1}
+# }
+#             pattern_metadata = {'symbol': 'TEST', 'timeframe': '1h'}
+
+# encode_result = await pipeline.encode_pattern(
+#                 market_data, pattern_metadata,
+#                 OperationPriority.HIGH
+# )
+#             print(f"Encoded pattern {i}: vector size {len(encode_result)}")
+
+            # Search operation
+# search_results = await pipeline.search_similar_patterns(
+#                 encode_result, AssetClass.EQUITIES, limit=5,
+#                 OperationPriority.HIGH
+# )
+#             print(f"Search {i}: found {len(search_results)} results")
+
+        # Get pipeline status
+#         status = await pipeline.get_pipeline_status()
+#         print(f"Pipeline status: {status['metrics']['operations_per_second']:.1f} ops/sec")
+
+        # Get performance report
+#         report = await pipeline.get_performance_report()
+#         print(f"Average latency: {report['current_metrics']['average_latency_us']:.1f} μs")
+
+#     finally:
+#         await pipeline.stop()
+#         await vector_ml_engine.shutdown()
+
+
+# if __name__ == "__main__":
+#     asyncio.run(main())

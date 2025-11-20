@@ -1,0 +1,16 @@
+import logging
+from .base_detector import BaseDetector
+"""Detectors for five-candle patterns."""
+
+
+logger = logging.getLogger(__name__)
+
+
+class MatHold(BaseDetector):
+    def __init__(self):
+        super().__init__(bar_count=5)
+
+    def detect(self, candles):
+        # Logic for Mat Hold detection""
+        logger.debug("Mat Hold pattern detection not yet implemented")
+""

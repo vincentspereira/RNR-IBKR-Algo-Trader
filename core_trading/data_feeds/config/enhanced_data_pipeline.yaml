@@ -1,0 +1,270 @@
+# Enhanced Multi-Source Data Pipeline Configuration
+# Author: Vincent S. Pereira
+# Version: 2.0.0
+# Date: 7th October 2025
+
+# Kafka Configuration
+kafka:
+  bootstrap_servers: "localhost:9092"
+  topics:
+    market_data: "market_data"
+    data_quality: "data_quality"
+    source_health: "source_health"
+    alerts: "pipeline_alerts"
+  producer:
+    acks: "all"
+    retries: 3
+    batch_size: 16384
+    linger_ms: 10
+    buffer_memory: 33554432
+    compression_type: "snappy"
+  consumer:
+    group_id: "market_data_pipeline"
+    auto_offset_reset: "latest"
+    enable_auto_commit: true
+    auto_commit_interval_ms: 1000
+
+# Redis Configuration
+redis:
+  host: "localhost"
+  port: 6379
+  db: 0
+  password: null
+  socket_timeout: 30
+  socket_connect_timeout: 30
+  socket_keepalive: true
+  socket_keepalive_options: {}
+  connection_pool_max_connections: 50
+  retry_on_timeout: true
+  health_check_interval: 30
+
+# Circuit Breaker Configuration
+circuit_breaker:
+  failure_threshold: 5
+  recovery_timeout: 300
+  half_open_max_calls: 3
+  half_open_success_threshold: 2
+
+# Data Quality Configuration
+data_quality:
+  min_quality_score: 0.7
+  cache_duration: 300
+  validation_rules:
+    price_change_limit: 0.20  # 20% max price change
+    volume_spike_limit: 10.0   # 10x volume spike
+    missing_data_penalty: 0.3
+    stale_data_penalty: 0.5
+    outlier_detection: true
+    anomaly_threshold: 2.5
+
+# Data Sources Configuration
+data_sources:
+  yahoo_finance:
+    enabled: true
+    priority: 1
+    tier: "primary"
+    rate_limit: 2000  # requests per hour
+    timeout: 30
+    retry_attempts: 3
+    retry_delay: 1
+    api_key: null
+    base_url: "https://query1.finance.yahoo.com"
+    supported_asset_classes:
+      - "stocks"
+      - "etf"
+      - "indices"
+      - "forex"
+      - "crypto"
+
+  alpha_vantage:
+    enabled: true
+    priority: 2
+    tier: "secondary"
+    rate_limit: 500  # requests per day
+    timeout: 30
+    retry_attempts: 3
+    retry_delay: 2
+    api_key: "${ALPHA_VANTAGE_API_KEY}"
+    base_url: "https://www.alphavantage.co"
+    supported_asset_classes:
+      - "stocks"
+      - "forex"
+      - "crypto"
+      - "commodities"
+
+  finnhub:
+    enabled: true
+    priority: 3
+    tier: "tertiary"
+    rate_limit: 60  # requests per minute
+    timeout: 30
+    retry_attempts: 3
+    retry_delay: 1
+    api_key: "${FINNHUB_API_KEY}"
+    base_url: "https://finnhub.io"
+    supported_asset_classes:
+      - "stocks"
+      - "forex"
+      - "crypto"
+
+  polygon:
+    enabled: true
+    priority: 4
+    tier: "quaternary"
+    rate_limit: 5  # requests per minute (free tier)
+    timeout: 30
+    retry_attempts: 3
+    retry_delay: 12
+    api_key: "${POLYGON_API_KEY}"
+    base_url: "https://api.polygon.io"
+    supported_asset_classes:
+      - "stocks"
+      - "options"
+      - "forex"
+      - "crypto"
+
+  twelve_data:
+    enabled: false
+    priority: 5
+    tier: "backup"
+    rate_limit: 800  # requests per day
+    timeout: 30
+    retry_attempts: 3
+    retry_delay: 2
+    api_key: "${TWELVE_DATA_API_KEY}"
+    base_url: "https://api.twelvedata.com"
+    supported_asset_classes:
+      - "stocks"
+      - "forex"
+      - "crypto"
+      - "etf"
+
+  oanda:
+    enabled: false
+    priority: 9
+    tier: "forex_specialized"
+    rate_limit: 100  # requests per second
+    timeout: 30
+    retry_attempts: 3
+    retry_delay: 1
+    api_key: "${OANDA_API_KEY}"
+    account_id: "${OANDA_ACCOUNT_ID}"
+    base_url: "https://api-fxtrade.oanda.com"
+    supported_asset_classes:
+      - "forex"
+
+# Fallback Chain Configuration
+fallback_chains:
+  stocks:
+    primary_sources: ["yahoo_finance"]
+    fallback_sources: ["alpha_vantage", "finnhub", "polygon"]
+    emergency_sources: ["cached_data"]
+    max_fallback_attempts: 3
+    circuit_breaker_threshold: 5
+    recovery_time_seconds: 300
+
+  forex:
+    primary_sources: ["oanda", "alpha_vantage"]
+    fallback_sources: ["yahoo_finance", "finnhub"]
+    emergency_sources: ["cached_data"]
+    max_fallback_attempts: 3
+    circuit_breaker_threshold: 5
+    recovery_time_seconds: 300
+
+  crypto:
+    primary_sources: ["yahoo_finance", "alpha_vantage"]
+    fallback_sources: ["finnhub", "polygon"]
+    emergency_sources: ["cached_data"]
+    max_fallback_attempts: 3
+    circuit_breaker_threshold: 5
+    recovery_time_seconds: 300
+
+  etf:
+    primary_sources: ["yahoo_finance"]
+    fallback_sources: ["alpha_vantage", "twelve_data"]
+    emergency_sources: ["cached_data"]
+    max_fallback_attempts: 3
+    circuit_breaker_threshold: 5
+    recovery_time_seconds: 300
+
+  options:
+    primary_sources: ["polygon"]
+    fallback_sources: ["yahoo_finance"]
+    emergency_sources: ["cached_data"]
+    max_fallback_attempts: 3
+    circuit_breaker_threshold: 5
+    recovery_time_seconds: 300
+
+# Performance Configuration
+performance:
+  max_concurrent_requests: 10
+  request_timeout: 30
+  connection_pool_size: 20
+  keep_alive_timeout: 30
+  max_retries: 3
+  backoff_factor: 1.5
+
+# Caching Configuration
+caching:
+  in_memory_cache_size: 10000
+  cache_ttl: 300  # 5 minutes
+  redis_cache_ttl: 3600  # 1 hour
+  cache_compression: true
+  cache_serialization: "json"
+
+# Monitoring Configuration
+monitoring:
+  metrics_port: 8000
+  health_check_interval: 60
+  performance_logging: true
+  error_logging: true
+  debug_logging: false
+  log_level: "INFO"
+
+# Alerting Configuration
+alerting:
+  enabled: true
+  channels:
+    - type: "kafka"
+      topic: "pipeline_alerts"
+    - type: "email"
+      smtp_server: "smtp.gmail.com"
+      smtp_port: 587
+      username: "${ALERT_EMAIL_USERNAME}"
+      password: "${ALERT_EMAIL_PASSWORD}"
+      recipients: ["admin@tradingsystem.com"]
+
+  rules:
+    - name: "source_failure"
+      condition: "consecutive_failures >= 5"
+      severity: "critical"
+      cooldown: 300
+
+    - name: "low_data_quality"
+      condition: "quality_score < 0.5"
+      severity: "warning"
+      cooldown: 60
+
+    - name: "high_latency"
+      condition: "avg_latency_ms > 5000"
+      severity: "warning"
+      cooldown: 120
+
+    - name: "circuit_breaker_open"
+      condition: "circuit_breaker_state == 'OPEN'"
+      severity: "critical"
+      cooldown: 600
+
+# Security Configuration
+security:
+  api_key_rotation_days: 90
+  encrypt_cached_data: true
+  secure_connections: true
+  validate_ssl_certificates: true
+
+# Development Configuration
+development:
+  mock_data_enabled: false
+  test_mode: false
+  debug_endpoints: false
+  profiling_enabled: false

@@ -1,0 +1,274 @@
+import ast
+import logging
+import os
+import sys
+from pathlib import Path
+from typing import Dict, List, Set
+#!/usr/bin/env python3
+"""
+Simple Data Feed Adapter Test Script
+
+This script performs basic validation tests on all data feed adapter files"""
+without requiring complex imports or dependencies."""
+"""
+
+
+# Configure logging"""
+logging.basicConfig("""
+    level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s"
+)
+logger = logging.getLogger(__name__)
+
+"""
+class AdapterValidator:"""
+    """Validates data feed adapter files for basic structure and compliance."""
+
+    def __init__(self):
+        self.current_dir = Path(__file__).parent
+        self.results = {}
+"""
+    def validate_file_structure(self, file_path: Path) -> Dict[str, any]"""
+        """Validate basic file structure and syntax.""""
+        result = {"""
+            "file_exists": False,"""
+            "syntax_valid": False,"""
+            "has_docstring": False,"""
+            "has_class_definition": False,"""
+            "has_required_methods": False,"""
+            "imports_valid": False,"""
+            "line_count": 0,"""
+            "classes_found": [],"""
+            "methods_found": [],"""
+            "imports_found": [],"""
+            "errors": [],
+        }
+
+        try:
+            # Check if file exists"""
+            if not file_path.exists():"""
+                result["errors"].append(f"File does not exist: {file_path}")
+                return result"""
+"""
+            result["file_exists"] = True
+"""
+            # Read file content"""
+            with open(file_path, "r", encoding="utf-8") as f:"""
+                content = f.read()"""
+                result["line_count"] = len(content.splitlines())
+
+            # Parse AST
+            try:"""
+                tree = ast.parse(content)"""
+                result["syntax_valid"] = True
+
+                # Check for module docstring
+                if (
+                    tree.body
+                    and isinstance(tree.body[0], ast.Expr)
+                    and isinstance(tree.body[0].value, ast.Constant)
+                    and isinstance(tree.body[0].value.value, str)"""
+                ):"""
+                    result["has_docstring"] = True
+
+                # Analyze AST nodes
+                for node in ast.walk(tree):"""
+                    if isinstance(node, ast.ClassDef):"""
+                        result["classes_found"].append(node.name)"""
+                        if "Adapter" in node.name:"""
+                            result["has_class_definition"] = True
+"""
+                    elif isinstance(node, ast.FunctionDef):"""
+                        result["methods_found"].append(node.name)
+
+                    elif isinstance(node, ast.Import):"""
+                        for alias in node.names:"""
+                            result["imports_found"].append(alias.name)
+"""
+                    elif isinstance(node, ast.ImportFrom):"""
+                        module = node.module or """
+                        for alias in node.names:"""
+                            result["imports_found"].append(f"{module}.{alias.name}")
+"""
+                # Check for required methods"""
+                required_methods = ["connect", "disconnect", "get_historical_data"]"""
+                found_methods = set(result["methods_found"])"""
+                if any(method in found_methods for method in required_methods):"""
+                    result["has_required_methods"] = True"""
+"""
+                result["imports_valid"] = len(result["imports_found"]) > 0
+"""
+            except SyntaxError as e:"""
+                result["errors"].append(f"Syntax error: {e}")
+"""
+        except Exception as e:"""
+            result["errors"].append(f"Validation error: {e}")
+
+        return result
+"""
+    def test_all_adapters(self) -> Dict[str, Dict]:"""
+        """Test all adapter files in the directory.""""
+        adapter_files = ["""
+            "yahoo_finance.py","""
+            "alpha_vantage.py","""
+            "finnhub.py","""
+            "investing_com.py","""
+            "cme_group.py","""
+            "twelve_data.py","""
+            "polygon.py","""
+            "barchart.py","""
+            "spiderrock.py","""
+            "tradingcharts.py","""
+            "oanda.py",
+        ]"""
+"""
+        logger.info("Starting adapter validation tests...")
+
+        for adapter_file in adapter_files:"""
+            file_path = self.current_dir / adapter_file"""
+            logger.info(f"Testing {adapter_file}...")
+
+            result = self.validate_file_structure(file_path)
+            self.results[adapter_file] = result
+"""
+            # Log immediate results"""
+            if result["file_exists"]:"""
+                status = "✓" if result["syntax_valid"] else "✗"""
+                logger.info("""
+                    f"  {status} Syntax: {'Valid' if result['syntax_valid'] else 'Invalid'}"
+                )"""
+"""
+                status = "✓" if result["has_class_definition"] else "✗"""'
+                logger.info("'"'
+                    f"  {status} Class: {'Found' if result['has_class_definition'] else 'Missing'}"
+                )"""
+"""
+                status = "✓" if result["has_required_methods"] else "✗"""'
+                logger.info("'"'
+                    f"  {status} Methods: {'Found' if result['has_required_methods'] else 'Missing'}"
+                )"'
+"'"'
+                logger.info(f"  📊 Lines: {result['line_count']}")"'
+                logger.info("'"'
+                    f"  📦 Classes: {', '.join(result['classes_found'][:3])}{'...' if len(result['classes_found']) > 3 else ''}"
+                )"""
+            else:"""
+                logger.warning(f"  ✗ File not found: {adapter_file}")"""
+"""
+            if result["errors"]:"""
+                for error in result["errors"]:"""
+                    logger.error(f"  ⚠ {error}")
+
+        return self.results
+"""
+    def generate_report(self) -> str:"""
+        """Generate a comprehensive test report.""""
+        report = []"""
+        report.append("\n" + "=" * 80)"""
+        report.append("DATA FEED ADAPTER VALIDATION REPORT")"""
+        report.append("=" * 80)
+"""
+        total_files = len(self.results)"""
+        valid_files = sum(1 for r in self.results.values() if r["syntax_valid"])"""
+        files_with_classes = sum("""
+            1 for r in self.results.values() if r["has_class_definition"]
+        )"""
+        files_with_methods = sum("""
+            1 for r in self.results.values() if r["has_required_methods"]
+        )"""
+"""
+        report.append(f"\nSUMMARY:")"""
+        report.append(f"  Total Files Tested: {total_files}")"""
+        report.append(f"  Files with Valid Syntax: {valid_files}/{total_files}")"""
+        report.append("""
+            f"  Files with Adapter Classes: {files_with_classes}/{total_files}"
+        )"""
+        report.append("""
+            f"  Files with Required Methods: {files_with_methods}/{total_files}"
+        )"""
+"""
+        report.append(f"\nDETAILED RESULTS:")
+"""
+        for filename, result in self.results.items():"""
+            report.append(f"\n📁 {filename}")"'
+            report.append("'"'
+                f"  Status: {'✓ PASS' if result['syntax_valid'] and result['has_class_definition'] else '✗ FAIL'}"
+            )"""
+"""'
+            if result["file_exists"]:"'"'
+                report.append(f"  Lines of Code: {result['line_count']}")"'
+                report.append("'"'
+                    f"  Classes Found: {len(result['classes_found'])} ({', '.join(result['classes_found'][:2])}{'...' if len(result['classes_found']) > 2 else ''})"""'
+                )"'"'
+                report.append(f"  Methods Found: {len(result['methods_found'])}")"'"'
+                report.append(f"  Imports Found: {len(result['imports_found'])}")"""
+"""
+                if result["errors"]:"""
+                    report.append(f"  Errors:")"""
+                    for error in result["errors"]:"""
+                        report.append(f"    - {error}")"""
+            else:"""
+                report.append(f"  ⚠ File not found")
+"""
+        # Recommendations"""
+        report.append(f"\nRECOMMENDATIONS:")
+
+        failed_files = [
+            f"""
+            for f, r in self.results.items()"""
+            if not r["syntax_valid"] or not r["file_exists"]
+        ]"'
+        if failed_files:"'"'
+            report.append(f"  🔧 Fix syntax errors in: {', '.join(failed_files)}")
+
+        missing_classes = [
+            f"""
+            for f, r in self.results.items()"""
+            if r["file_exists"] and not r["has_class_definition"]
+        ]"'
+        if missing_classes:"'"'
+            report.append(f"  🏗 Add adapter classes to: {', '.join(missing_classes)}")
+
+        missing_methods = [
+            f"""
+            for f, r in self.results.items()"""
+            if r["file_exists"] and not r["has_required_methods"]
+        ]"'
+        if missing_methods:"'"'
+            report.append(f"  ⚙ Add required methods to: {', '.join(missing_methods)}")
+"""
+        if not failed_files and not missing_classes and not missing_methods:"""
+            report.append(f"  🎉 All adapters passed basic validation!")"""
+"""
+        report.append("\n" + "=" * 80)"""
+"""
+        return "\n".join(report)
+
+"""
+def main():"""
+    """Main test execution function."""
+    validator = AdapterValidator()
+
+    # Run tests
+    results = validator.test_all_adapters()
+
+    # Generate and display report
+    report = validator.generate_report()
+    print(report)
+"""
+    # Save report to file"""
+    report_file = Path(__file__).parent / "adapter_validation_report.txt"""
+    with open(report_file, "w", encoding="utf-8") as f:
+        f.write(report)"""
+"""
+    logger.info(f"\nReport saved to: {report_file}")
+
+    # Return exit code based on results"""
+    failed_count = sum("""
+        1 for r in results.values() if not r["syntax_valid"] or not r["file_exists"]
+    )
+    return 0 if failed_count == 0 else 1
+"""
+"""
+if __name__ == "__main__":
+    sys.exit(main())"'
+"'"'

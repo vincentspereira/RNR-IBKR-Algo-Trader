@@ -1,0 +1,374 @@
+import asyncio
+import json
+import os
+import sys
+import time
+from datetime import datetime, timedelta, timezone
+from typing import Dict, List, Optional
+from unittest.mock import AsyncMock, MagicMock, patch
+import numpy as np
+import pandas as pd
+import pytest
+# from enhanced_multi_source_pipeline import ()
+
+# Core Pipeline Test Suite
+
+# Tests for the enhanced multi-source data pipeline core components
+# without external dependencies like Nautilus Trader.
+
+# Author: Vincent S. Pereira
+# Version: 2.0.0
+# Date: 15 October 2025"
+
+
+
+
+# Add parent directory to path for imports
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+#     AssetClass,
+#     CircuitBreaker,
+#     DataQualityValidator,
+#     DataSource,
+#     FallbackChain,
+#     MarketDataPoint,
+#     SourceHealth,
+# )
+
+
+class TestMarketDataPoint:""
+#     "Test MarketDataPoint class"
+
+#     def test_market_data_point_creation(self):
+# "Test creating a market data point
+# data = MarketDataPoint("
+#             symbol="AAPL",
+#             timestamp=datetime.now(timezone.utc),
+#             open=150.0,
+#             high=155.0,
+#             low=149.0,
+#             close=154.0,
+#             volume=1000000,
+#             asset_class=AssetClass.STOCKS,
+#             source=DataSource.YAHOO_FINANCE,
+# )
+# "
+#         assert data.symbol == "AAPL"
+#         assert data.open == 150.0
+#         assert data.high == 155.0
+#         assert data.low == 149.0
+#         assert data.close == 154.0
+#         assert data.volume == 1000000
+#         assert data.asset_class == AssetClass.STOCKS
+#         assert data.source == DataSource.YAHOO_FINANCE
+#         assert data.quality_score == 1.0
+
+#     def test_market_data_point_to_dict(self):
+#         "Test converting market data point to dictionary"
+#         timestamp = datetime.now(timezone.utc)
+# data = MarketDataPoint("
+#             symbol="AAPL",
+#             timestamp=timestamp,
+#             open=150.0,
+#             high=155.0,
+#             low=149.0,
+#             close=154.0,
+#             volume=1000000,
+#             asset_class=AssetClass.STOCKS,
+#             source=DataSource.YAHOO_FINANCE,
+#             quality_score=0.95,
+#             latency_ms=50.0,
+# )
+
+#         data_dict = data.to_dict()
+# "
+#         assert data_dict["symbol"] == "AAPL"
+# assert data_dict["timestamp"] == timestamp.isoformat()"
+# assert data_dict["open"] == 150.0"
+# assert data_dict["close"] == 154.0"
+#         assert data_dict["asset_class"] == "stocks"
+#         assert data_dict["source"] == "yahoo_finance"
+# assert data_dict["quality_score"] == 0.95"
+#         assert data_dict["latency_ms"] == 50.0
+
+
+# "
+
+class TestCircuitBreaker:""
+#     "Test CircuitBreaker class"
+
+#     def test_circuit_breaker_closed_state(self):
+#         "Test circuit breaker in closed state"
+#         cb = CircuitBreaker(failure_threshold=3, recovery_timeout=60)
+
+        # Should execute successfully"
+# result = cb.call(lambda: "success")"
+#         assert result == "success"
+#         assert cb.state == "CLOSED"
+#         assert cb.failure_count == 0
+
+# "
+
+#     def test_circuit_breaker_failure_handling(self):
+#         "Test circuit breaker failure handling"
+#         cb = CircuitBreaker(failure_threshold=2, recovery_timeout=60)
+
+        # First failure
+#         with pytest.raises(Exception):
+# cb.call(lambda: # DANGEROUS: exec() removed - security risk
+# TODO: Replace with safe alternatives"
+# Original: exec('raise Exception("test error")'))
+
+# assert cb.failure_count == 1"
+#         assert cb.state == "CLOSED"
+
+        # Second failure - should open circuit
+#         with pytest.raises(Exception):
+# cb.call(lambda: # DANGEROUS: exec() removed - security risk
+# TODO: Replace with safe alternatives"'"'
+# Original: exec('raise Exception("test error")'))
+
+# assert cb.failure_count == 2"
+#         assert cb.state == "OPEN"
+
+#     def test_circuit_breaker_open_state(self):
+#         "Test circuit breaker in open state"
+#         cb = CircuitBreaker(failure_threshold=1, recovery_timeout=1)
+
+        # Trigger failure to open circuit
+#         with pytest.raises(Exception):
+# cb.call(lambda: # DANGEROUS: exec() removed - security risk
+# TODO: Replace with safe alternatives"'"'
+# Original: exec('raise Exception("test error")'))"
+# "
+#         assert cb.state == "OPEN"
+
+        # Should reject calls while open"
+#         with pytest.raises(Exception, match="Circuit breaker is OPEN"):""
+#             cb.call(lambda: "should not execute")
+
+#     def test_circuit_breaker_recovery(self):
+#         "Test circuit breaker recovery"
+#         cb = CircuitBreaker(failure_threshold=1, recovery_timeout=0.1)
+
+        # Trigger failure
+#         with pytest.raises(Exception):
+# cb.call(lambda: # DANGEROUS: exec() removed - security risk
+# TODO: Replace with safe alternatives"'"'
+# Original: exec('raise Exception("test error")'))"
+# "
+#         assert cb.state == "OPEN"
+
+        # Wait for recovery timeout
+#         time.sleep(0.2)
+
+        # Should attempt reset and succeed"
+# result = cb.call(lambda: "recovered")"
+#         assert result == "recovered"
+#         assert cb.state == "CLOSED"
+#         assert cb.failure_count == 0
+
+
+# "
+
+class TestDataQualityValidator:""
+#     "Test DataQualityValidator class"
+
+#     def test_validate_basic_fields_valid(self):
+#         "Test validation of valid basic fields"
+#         validator = DataQualityValidator()
+
+# data = MarketDataPoint("
+#             symbol="AAPL",
+#             timestamp=datetime.now(timezone.utc),
+#             open=150.0,
+#             high=155.0,
+#             low=149.0,
+#             close=154.0,
+#             volume=1000000,
+#             asset_class=AssetClass.STOCKS,
+#             source=DataSource.YAHOO_FINANCE,
+# )
+
+#         assert validator._validate_basic_fields(data) is True
+
+#     def test_validate_basic_fields_invalid(self):
+#         "Test validation of invalid basic fields"
+#         validator = DataQualityValidator()
+
+        # Invalid: high < low"
+# data = MarketDataPoint("
+#             symbol="AAPL",
+#             timestamp=datetime.now(timezone.utc),
+#             open=150.0,
+#             high=149.0,  # Invalid: high < low
+#             low=155.0,
+#             close=154.0,
+#             volume=1000000,
+#             asset_class=AssetClass.STOCKS,
+#             source=DataSource.YAHOO_FINANCE,
+# )
+
+#         assert validator._validate_basic_fields(data) is False
+
+#     def test_validate_data_point_quality_score(self):
+#         "Test data point quality scoring"
+#         validator = DataQualityValidator()
+
+# current_data = MarketDataPoint("
+#             symbol="AAPL",
+#             timestamp=datetime.now(timezone.utc),
+#             open=150.0,
+#             high=155.0,
+#             low=149.0,
+#             close=154.0,
+#             volume=1000000,
+#             asset_class=AssetClass.STOCKS,
+#             source=DataSource.YAHOO_FINANCE,
+# )
+
+        # Test with no previous data
+#         score = validator.validate_data_point(current_data)
+#         assert score > 0.0
+
+        # Test with previous data (normal change)"
+# previous_data = MarketDataPoint("
+#             symbol="AAPL",
+#             timestamp=datetime.now(timezone.utc) - timedelta(minutes=1),
+#             open=149.0,
+#             high=154.0,
+#             low=148.0,
+#             close=153.0,
+#             volume=900000,
+#             asset_class=AssetClass.STOCKS,
+#             source=DataSource.YAHOO_FINANCE,
+# )
+
+#         score = validator.validate_data_point(current_data, previous_data)
+#         assert score > 0.5  # Should be good quality
+
+#     def test_validate_data_point_price_spike(self):
+#         "Test data point validation with price spike"
+#         validator = DataQualityValidator()
+
+# previous_data = MarketDataPoint("
+#             symbol="AAPL",
+#             timestamp=datetime.now(timezone.utc) - timedelta(minutes=1),
+#             open=150.0,
+#             high=155.0,
+#             low=149.0,
+#             close=154.0,
+#             volume=1000000,
+#             asset_class=AssetClass.STOCKS,
+#             source=DataSource.YAHOO_FINANCE,
+# )
+
+        # Current data with 30% price spike"
+# current_data = MarketDataPoint("
+#             symbol="AAPL",
+#             timestamp=datetime.now(timezone.utc),
+#             open=200.0,
+#             high=205.0,
+#             low=199.0,
+#             close=200.0,  # 30% increase
+#             volume=1000000,
+#             asset_class=AssetClass.STOCKS,
+#             source=DataSource.YAHOO_FINANCE,
+# )
+
+#         score = validator.validate_data_point(current_data, previous_data)
+#         assert score < 0.8  # Should be penalized for price spike
+
+
+class TestSourceHealth:""
+#     "Test SourceHealth class"
+
+#     def test_source_health_initialization(self):
+#         "Test source health initialization"
+#         health = SourceHealth(DataSource.YAHOO_FINANCE)
+
+#         assert health.source == DataSource.YAHOO_FINANCE
+#         assert health.is_healthy is True
+#         assert health.success_rate == 1.0
+#         assert health.consecutive_failures == 0
+#         assert health.total_requests == 0
+#         assert health.successful_requests == 0
+#         assert health.error_count == 0
+#         assert health.avg_latency_ms == 0.0
+
+
+class TestFallbackChain:""
+#     "Test FallbackChain class"
+
+#     def test_fallback_chain_initialization(self):
+#         "Test fallback chain initialization"
+#         primary = [DataSource.YAHOO_FINANCE]
+#         fallback = [DataSource.ALPHA_VANTAGE, DataSource.FINNHUB]
+#         emergency = [DataSource.CACHED_DATA]
+
+# chain = FallbackChain(
+#             asset_class=AssetClass.STOCKS,
+#             primary_sources=primary,
+#             fallback_sources=fallback,
+#             emergency_sources=emergency,
+# )
+
+#         assert chain.asset_class == AssetClass.STOCKS
+#         assert chain.primary_sources == primary
+#         assert chain.fallback_sources == fallback
+#         assert chain.emergency_sources == emergency
+#         assert chain.max_fallback_attempts == 3
+#         assert chain.circuit_breaker_threshold == 5
+#         assert chain.recovery_time_seconds == 300
+
+
+class TestAssetClassEnum:""
+#     "Test AssetClass enum"
+
+#     def test_asset_class_values(self):
+#         "Test asset class enum values"
+#         assert AssetClass.STOCKS.value == "stocks"
+#         assert AssetClass.FOREX.value == "forex"
+#         assert AssetClass.CRYPTO.value == "crypto"
+#         assert AssetClass.COMMODITIES.value == "commodities"
+#         assert AssetClass.ETF.value == "etf"
+#         assert AssetClass.OPTIONS.value == "options"
+#         assert AssetClass.FUTURES.value == "futures"
+#         assert AssetClass.INDICES.value == "indices"
+
+
+# "
+
+class TestDataSourceEnum:""
+#     "Test DataSource enum"
+
+#     def test_data_source_values(self):
+#         "Test data source enum values"
+#         assert DataSource.YAHOO_FINANCE.source_id == "yahoo_finance"
+#         assert DataSource.ALPHA_VANTAGE.source_id == "alpha_vantage"
+#         assert DataSource.FINNHUB.source_id == "finnhub"
+#         assert DataSource.POLYGON.source_id == "polygon"
+#         assert DataSource.TWELVE_DATA.source_id == "twelve_data"
+#         assert DataSource.OANDA.source_id == "oanda"
+#         assert DataSource.CACHED_DATA.source_id == "cached_data"
+
+# "
+
+#     def test_data_source_priorities(self):
+#         "Test data source priorities"
+#         assert DataSource.YAHOO_FINANCE.priority == 1
+#         assert DataSource.ALPHA_VANTAGE.priority == 2
+#         assert DataSource.FINNHUB.priority == 3
+#         assert DataSource.CACHED_DATA.priority == 99
+
+#     def test_data_source_tiers(self):
+#         "Test data source tiers"
+#         assert DataSource.YAHOO_FINANCE.tier == "primary"
+#         assert DataSource.ALPHA_VANTAGE.tier == "secondary"
+#         assert DataSource.FINNHUB.tier == "tertiary"
+#         assert DataSource.CACHED_DATA.tier == "emergency"
+# "
+# "
+if __name__ == "__main__":""
+#     pytest.main([__file__, "-v"])
+# "'"'
