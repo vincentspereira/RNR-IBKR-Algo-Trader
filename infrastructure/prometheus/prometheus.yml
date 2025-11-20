@@ -1,0 +1,90 @@
+# Prometheus Configuration
+# Agentic AI Algorithmic Trading System v5.0
+
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+  external_labels:
+    cluster: "trading-system"
+    environment: "development"
+
+# Alertmanager configuration (optional)
+alerting:
+  alertmanagers:
+    - static_configs:
+        - targets: []
+          # - alertmanager:9093
+
+# Rule files
+rule_files:
+  # - "alerts/*.yml"
+
+# Scrape configurations
+scrape_configs:
+  # Prometheus itself
+  - job_name: "prometheus"
+    static_configs:
+      - targets: ["localhost:9090"]
+
+  # Databases
+  - job_name: "postgres"
+    static_configs:
+      - targets: ["postgres:5432"]
+        labels:
+          database: "trading"
+          role: "transactional"
+
+  - job_name: "clickhouse"
+    static_configs:
+      - targets: ["clickhouse:9363"]
+        labels:
+          database: "trading"
+          role: "analytics"
+
+  - job_name: "redis"
+    static_configs:
+      - targets: ["redis:6379"]
+        labels:
+          database: "trading"
+          role: "cache"
+
+  # Event Bus
+  - job_name: "kafka"
+    static_configs:
+      - targets: ["kafka:9092"]
+        labels:
+          component: "event-bus"
+
+  # Monitoring Stack
+  - job_name: "grafana"
+    static_configs:
+      - targets: ["grafana:3000"]
+
+  # Microservices (will be added as services are implemented)
+  # - job_name: 'trading-engine'
+  #   static_configs:
+  #     - targets: ['trading-engine:8001']
+  #       labels:
+  #         service: 'trading-engine'
+  #         domain: 'core-trading'
+
+  # - job_name: 'market-data'
+  #   static_configs:
+  #     - targets: ['market-data:8002']
+  #       labels:
+  #         service: 'market-data'
+  #         domain: 'core-trading'
+
+  # - job_name: 'fundamental-analysis'
+  #   static_configs:
+  #     - targets: ['fundamental-analysis:8003']
+  #       labels:
+  #         service: 'fundamental-analysis'
+  #         domain: 'analysis'
+
+  # - job_name: 'ai-assistant'
+  #   static_configs:
+  #     - targets: ['ai-assistant:8011']
+  #       labels:
+  #         service: 'ai-assistant'
+  #         domain: 'ai-ux'
