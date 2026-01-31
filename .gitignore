@@ -35,6 +35,8 @@ ENV/
 
 # Testing & Coverage
 .pytest_cache/
+**/__pycache__/
+**/.pytest_cache/
 htmlcov/
 .coverage
 .coverage.*
@@ -63,3 +65,4 @@ Thumbs.db
 # Project Specific
 config/secrets.yaml
 config/*.private.*
+.specify/
