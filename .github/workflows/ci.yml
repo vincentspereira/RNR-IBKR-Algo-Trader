@@ -1,0 +1,35 @@
+name: Automated CI/CD
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main, develop]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+    - name: Setup Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.11'
+    - name: Install Poetry
+      run: |
+        curl -sSL https://install.python-poetry.org | python3 -
+    - name: Install dependencies
+      run: poetry install
+    - name: Run linters
+      run: |
+        poetry run black --check libs/ services/
+        poetry run isort --check-only libs/ services/
+    - name: Run unit tests
+      run: |
+        poetry run pytest tests/unit/ -v --cov=libs --cov-report=xml --cov-report=html
+    - name: Upload coverage
+      uses: actions/upload-artifact@v4
+      with:
+        name: coverage
+        path: htmlcov/

@@ -1,0 +1,99 @@
+# CODEOWNERS File
+#
+# This file defines the code owners for each path in the repository.
+# Code owners are automatically requested for review on pull requests
+# that touch files they own.
+#
+# Format:
+#   <pattern> @username1 @username2 ...
+#
+# Patterns use gitignore-style globs.
+#
+
+# Default: All files
+* @openhands
+
+# Core trading engine - Critical path requiring careful review
+core_trading/ @openhands
+core_trading/engines/ @openhands
+core_trading/strategies/ @openhands
+core_trading/brokers/ @openhands
+
+# Shared libraries - Foundation for all services
+libs/common/ @openhands
+libs/core/ @openhands
+libs/database/ @openhands
+libs/messaging/ @openhands
+
+# Quantitative libraries - Financial calculations
+libs/quant/ @openhands
+libs/fundamental/ @openhands
+
+# Testing infrastructure
+libs/testing/ @openhands
+tests/ @openhands
+
+# Services - 28 microservices
+services/trading-engine/ @openhands
+services/market-data/ @openhands
+services/risk-manager/ @openhands
+services/backtesting-engine/ @openhands
+services/ai-assistant/ @openhands
+services/* @openhands
+
+# Infrastructure - Docker, Kubernetes, Helm
+infrastructure/ @openhands
+docker-compose.yml @openhands
+Dockerfile* @openhands
+
+# Databases - Schemas and migrations
+infrastructure/postgres/ @openhands
+infrastructure/clickhouse/ @openhands
+infrastructure/neo4j/ @openhands
+infrastructure/redis/ @openhands
+infrastructure/qdrant/ @openhands
+
+# Configuration
+config/ @openhands
+*.yml @openhands
+*.yaml @openhands
+
+# Documentation
+docs/ @openhands
+README.md @openhands
+AGENTS.md @openhands
+
+# CI/CD
+.github/ @openhands
+.pre-commit-config.yaml @openhands
+
+# Build and packaging
+pyproject.toml @openhands
+poetry.lock @openhands
+requirements.txt @openhands
+
+# Security - Critical files requiring security review
+**/auth* @openhands
+**/jwt* @openhands
+**/encryption* @openhands
+**/secrets* @openhands
+**/security* @openhands
+
+# AI/ML - Machine learning and AI features
+services/ai-assistant/ @openhands
+services/ml-strategy/ @openhands
+core_trading/ai/ @openhands
+core_trading/analysis/ @openhands
+
+# Frontend (when implemented)
+frontend/ @openhands
+
+# Deployment and DevOps
+docs/deployment/ @openhands
+infrastructure/ @openhands
+
+# Monitoring and observability
+infrastructure/grafana/ @openhands
+infrastructure/prometheus/ @openhands
+**/monitoring/ @openhands
+**/observability/ @openhands

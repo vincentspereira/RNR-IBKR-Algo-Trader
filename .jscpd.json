@@ -1,0 +1,24 @@
+# Duplicate Code Detection Configuration
+# Detects duplicate code across the project
+
+repos:
+  - repo: https://github.com/kucherenko/jscpd
+    rev: v3.5.3
+    hooks:
+      - id: jscpd
+        name: Detect duplicate code (jscpd)
+        description: Find duplicate code blocks
+        entry: jscpd
+        language: system
+        types: [python]
+        args:
+          - "--format"
+          - "json"
+          - "--min-lines"
+          - "5"
+          - "--reporters"
+          - "json"
+          - "threshold"
+          - "1"
+          - "--ignore"
+          - "**/__pycache__/**,**/tests/**,**/node_modules/**"

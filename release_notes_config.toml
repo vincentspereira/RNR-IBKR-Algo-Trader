@@ -1,0 +1,49 @@
+# Automated Release Notes Generator
+
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "trading-system"
+version = "1.0.0"
+description = "Automated Release Notes Generation"
+requires-python = ">=3.11"
+
+[tool.setuptools]
+packages = ["docs"]
+
+[tool.release-notes]
+# Configuration for automatic changelog generation
+format = "markdown"
+output_file = "CHANGELOG.md"
+conventional_commits = true
+
+# Sections for changelog
+[[sections]]
+name = "Features"
+labels = ["feat", "feature"]
+
+[[sections]]
+name = "Bug Fixes"
+labels = ["fix", "bugfix"]
+
+[[sections]]
+name = "Breaking Changes"
+labels = ["breaking", "BREAKING CHANGE"]
+
+[[sections]]
+name = "Documentation"
+labels = ["docs", "documentation"]
+
+[[sections]]
+name = "Performance"
+labels = ["perf", "performance"]
+
+[[sections]]
+name = "Testing"
+labels = ["test", "testing"]
+
+[[sections]]
+name = "Infrastructure"
+labels = ["ci", "cd", "infra", "chore"]
