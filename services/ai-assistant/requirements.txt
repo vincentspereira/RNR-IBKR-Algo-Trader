@@ -1,8 +1,27 @@
-langchain
-langgraph
-qdrant-client
-neo4j
-kafka-python
-pydantic
-transformers
-sentence-transformers
+# AI / LLM
+openai>=1.30.0
+langchain>=0.3.0
+langchain-openai>=0.2.0
+langgraph>=0.2.0
+
+# Vector Store & Embeddings
+qdrant-client>=1.9.0
+sentence-transformers>=3.0.0
+
+# Data & Serialization
+pydantic>=2.0
+pydantic-settings>=2.0
+numpy>=1.24.0
+
+# Messaging
+confluent-kafka>=2.3.0
+
+# Logging
+structlog>=24.0.0
+python-json-logger>=2.0.0
+
+# Database clients (shared libs)
+asyncpg>=0.29.0
+
+# Utilities
+python-dotenv>=1.0.0

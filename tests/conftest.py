@@ -37,6 +37,12 @@ def _load_module(name, path, package=None):
 _load_module("risk_engines", os.path.join(_rm_engines, "risk_engine.py"))
 _load_module("kill_switch", os.path.join(_rm_engines, "kill_switch.py"))
 
+# Load ai-assistant module via importlib
+_ai_src = os.path.join(_project_root, "services", "ai-assistant", "src")
+_ai_main_path = os.path.join(_ai_src, "main.py")
+if os.path.exists(_ai_main_path):
+    _load_module("ai_assistant_main", _ai_main_path, package="src")
+
 
 @pytest.fixture(scope="session")
 def event_loop():
@@ -137,3 +143,23 @@ def execution_engine(mock_broker_adapter, event_bus):
         risk_engine=None,
         order_store=None,
     )
+
+
+@pytest.fixture
+def ai_config():
+    if "ai_assistant_main" in sys.modules:
+        from ai_assistant_main import AIConfig
+        return AIConfig(
+            llm_api_key="test-key",
+            llm_model="gpt-4o-mini",
+            qdrant_url="http://localhost:6333",
+        )
+    return None
+
+
+@pytest.fixture
+def ai_assistant(ai_config):
+    if "ai_assistant_main" not in sys.modules:
+        pytest.skip("AI assistant module not loaded")
+    from ai_assistant_main import AIAssistantService
+    return AIAssistantService(config=ai_config)
