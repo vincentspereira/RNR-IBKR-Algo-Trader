@@ -1,58 +1,120 @@
+"""Stochastic Mean Reversion Strategy - Uses Stochastic Oscillator for mean reversion signals."""
+
 import logging
-from typing import Any, Dict, Optional
-from .stochasticmeanreversionstrategy_handlers.base_handler import StochasticMeanReversionStrategyBaseHandler
-from .stochasticmeanreversionstrategy_handlers.main_handler import StochasticMeanReversionStrategyMainHandler
-from .stochasticmeanreversionstrategy_handlers.config_handler import StochasticMeanReversionStrategyConfigHandler
-from .stochasticmeanreversionstrategy_handlers.state_handler import StochasticMeanReversionStrategyStateHandler
-from .stochasticmeanreversionstrategy_handlers.validation_handler import StochasticMeanReversionStrategyValidationHandler
+from dataclasses import dataclass, field
+from datetime import datetime, timezone
+from enum import Enum
+from typing import Any, Dict, List, Optional
 
-# StochasticMeanReversionStrategy - Refactored (Communication Pattern)
-# Based on successful communication_wrapper.py refactoring approach
-# Applied modular handler architecture"
-
-
-
+import numpy as np
+import pandas as pd
 
 logger = logging.getLogger(__name__)
 
-class StochasticMeanReversionStrategy:""
 
-# Refactored StochasticMeanReversionStrategy using communication pattern
-# Applied modular handler architecture"
+class StochasticSignal(Enum):
+    BUY = "buy"
+    SELL = "sell"
+    HOLD = "hold"
 
 
-#     def __init__(self, config: Optional[Dict[str, Any]] = None):
-#         self.config = config or {}
-#         self.logger = logger
+@dataclass
+class StochasticConfig:
+    k_period: int = 14
+    d_period: int = 3
+    oversold: float = 20.0
+    overbought: float = 80.0
 
-        # Initialize handlers
-#         self.base_handler = StochasticMeanReversionStrategyBaseHandler(config)
-#         self.main_handler = StochasticMeanReversionStrategyMainHandler(config)
-#         self.config_handler = StochasticMeanReversionStrategyConfigHandler(config)
-#         self.state_handler = StochasticMeanReversionStrategyStateHandler(config)
-#         self.validation_handler = StochasticMeanReversionStrategyValidationHandler(config)
 
-#     def process_request(self, request: Any):
-#         "Process request using appropriate handlers"
-#         self.logger.info(f"Processing request with {self.__class__.__name__}")
+@dataclass
+class StochasticResult:
+    signal: StochasticSignal
+    k_value: float
+    d_value: float
+    strength: float
+    confidence: float
+    timestamp: datetime
+    metadata: Dict[str, Any] = field(default_factory=dict)
 
-        # Use main handler by default
-#         if hasattr(self, 'main_handler'):
-#             return self.main_handler.handle(request)
-# "
-#         return {"status": "processed", "class": self.__class__.__name__}
 
-#     def get_status(self):
-# "Get status from all handlers
-# status = {"
-# "main_class": self.__class__.__name__,"
-# "handlers": {}
-# }
-# "
-#         for handler_name in handlers:
-#             if hasattr(self, handler_name):
-# handler = getattr(self, handler_name)"
-#                 status["handlers"][handler_name] = handler.get_handler_info()
-# "
-#         return status
-# "'"'
+class StochasticMeanReversionStrategy:
+    """Stochastic Oscillator mean reversion strategy.
+
+    Buys when %K crosses above %D in oversold zone.
+    Sells when %K crosses below %D in overbought zone.
+    """
+
+    def __init__(self, config: Optional[StochasticConfig] = None):
+        self.config = config or StochasticConfig()
+        self.logger = logging.getLogger(self.__class__.__name__)
+
+    def _calculate_stochastic(self, data: pd.DataFrame) -> Dict[str, pd.Series]:
+        """Calculate Stochastic Oscillator %K and %D."""
+        high = data["high"]
+        low = data["low"]
+        close = data["close"]
+
+        lowest_low = low.rolling(window=self.config.k_period).min()
+        highest_high = high.rolling(window=self.config.k_period).max()
+
+        k = 100 * (close - lowest_low) / (highest_high - lowest_low + 1e-10)
+        d = k.rolling(window=self.config.d_period).mean()
+
+        return {"k": k, "d": d}
+
+    def generate_signals(self, data: pd.DataFrame) -> List[StochasticResult]:
+        """Generate Stochastic mean reversion signals."""
+        if len(data) < self.config.k_period + self.config.d_period:
+            return []
+
+        stoch = self._calculate_stochastic(data)
+        curr_k = float(stoch["k"].iloc[-1])
+        prev_k = float(stoch["k"].iloc[-2])
+        curr_d = float(stoch["d"].iloc[-1])
+        prev_d = float(stoch["d"].iloc[-2])
+
+        if np.isnan(curr_k) or np.isnan(curr_d):
+            return []
+
+        signals = []
+
+        # Bullish crossover in oversold zone -> BUY
+        if prev_k <= prev_d and curr_k > curr_d and curr_k < self.config.oversold:
+            strength = min((self.config.oversold - curr_k) / self.config.oversold, 1.0)
+            signals.append(StochasticResult(
+                signal=StochasticSignal.BUY,
+                k_value=curr_k,
+                d_value=curr_d,
+                strength=strength,
+                confidence=min(strength * 1.2, 1.0),
+                timestamp=datetime.now(timezone.utc),
+                metadata={"crossover": "bullish_oversold"},
+            ))
+
+        # Bearish crossover in overbought zone -> SELL
+        elif prev_k >= prev_d and curr_k < curr_d and curr_k > self.config.overbought:
+            strength = min((curr_k - self.config.overbought) / (100 - self.config.overbought), 1.0)
+            signals.append(StochasticResult(
+                signal=StochasticSignal.SELL,
+                k_value=curr_k,
+                d_value=curr_d,
+                strength=strength,
+                confidence=min(strength * 1.2, 1.0),
+                timestamp=datetime.now(timezone.utc),
+                metadata={"crossover": "bearish_overbought"},
+            ))
+
+        return signals
+
+    def get_current_values(self, data: pd.DataFrame) -> Dict[str, float]:
+        """Return current Stochastic values."""
+        if len(data) < self.config.k_period:
+            return {"k": 50.0, "d": 50.0}
+
+        stoch = self._calculate_stochastic(data)
+        k = stoch["k"].iloc[-1]
+        d = stoch["d"].iloc[-1]
+        return {
+            "k": float(k) if not np.isnan(k) else 50.0,
+            "d": float(d) if not np.isnan(d) else 50.0,
+        }

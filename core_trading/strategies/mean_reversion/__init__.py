@@ -1,40 +1,74 @@
-from ..core.mean_reversion.rsi2_mean_reversion_strategy import MarketRegimeClassifier
-# from .rsi2_mean_reversion_strategy import ()
-from .rsi2_strategy import RSI2Config, RSI2Strategy
-from .rsi2_strategy import create_rsi2_strategy as create_rsi2_alt
-#!/usr/bin/env python3
+"""Mean Reversion Strategies Module."""
 
-# Mean Reversion Strategies Module
+from .bollinger_bands_mean_reversion_strategy import (
+    BollingerBandsMeanReversionStrategy,
+    BBConfig,
+    BBResult,
+    BBSignal,
+)
+from .rsi2_strategy import RSI2Strategy, RSI2Config, RSI2Result, RSI2Signal
+from .rsi2_mean_reversion_strategy import (
+    RSI2MeanReversionStrategy,
+    RSI2MRConfig,
+    RSI2MRResult,
+    RSI2MRSignal,
+    MarketRegime,
+)
+from .connors_rsi_mean_reversion_strategy import (
+    ConnorsRSIMeanReversionStrategy,
+    CRSIConfig,
+    CRSIResult,
+    CRSISignal,
+)
+from .stochastic_mean_reversion_strategy import (
+    StochasticMeanReversionStrategy,
+    StochasticConfig,
+    StochasticResult,
+    StochasticSignal,
+)
+from .williams_r_mean_reversion_strategy import (
+    WilliamsRMeanReversionStrategy,
+    WilliamsRConfig,
+    WilliamsRResult,
+    WilliamsRSignal,
+)
+from .vix_mean_reversion_strategy import (
+    VIXMeanReversionStrategy,
+    VIXConfig,
+    VIXResult,
+    VIXSignal,
+)
+from .gap_fill_strategy import GapFillStrategy, GapConfig, GapResult, GapSignal
+from .ibs_mean_reversion_strategy import (
+    IBSMeanReversionStrategy,
+    IBSConfig,
+    IBSResult,
+    IBSSignal,
+)
+from .ma_crossover_vwma_strategy import (
+    MovingAverageCrossoverVWMAStrategy,
+    VWMAConfig,
+    VWMAResult,
+    VWMASignal,
+)
+from .overnight_reversal_strategy import (
+    OvernightReversalStrategy,
+    OvernightConfig,
+    OvernightResult,
+    OvernightSignal,
+)
 
-# This module contains mean reversion trading strategies that capitalize on the tendency
-# of asset prices to revert to their historical mean or average value.
-
-# Strategies included:
-# - RSI(2) Mean Reversion Strategy: Uses 2-period RSI for short-term mean reversion signals
-# - Bollinger Band Mean Reversion: Uses Bollinger Band extremes for mean reversion
-# - Statistical Arbitrage: Pairs trading based on statistical relationships
-
-# Key Features:
-# - Advanced market regime detection
-# - Multi-factor signal generation
-# - Comprehensive risk management
-# - Performance analytics integration"
-
-
-#     RSI2MeanReversionStrategy,
-#     create_rsi2_strategy,
-# )
-
-# __all__ = ["
-# "RSI2Strategy","
-# "RSI2MeanReversionStrategy","
-# "MarketRegimeClassifier","
-# "create_rsi2_strategy","
-# "RSI2Config","
-#     "create_rsi2_alt",
-# ]
-# "
-__version__ = "1.0.0"
-# ""__author__ = "Algorithmic Trading System"
-# __description__ = "Mean reversion trading strategies with advanced analytics
-# "
+__all__ = [
+    "BollingerBandsMeanReversionStrategy",
+    "RSI2Strategy",
+    "RSI2MeanReversionStrategy",
+    "ConnorsRSIMeanReversionStrategy",
+    "StochasticMeanReversionStrategy",
+    "WilliamsRMeanReversionStrategy",
+    "VIXMeanReversionStrategy",
+    "GapFillStrategy",
+    "IBSMeanReversionStrategy",
+    "MovingAverageCrossoverVWMAStrategy",
+    "OvernightReversalStrategy",
+    "MarketRegime",
+]

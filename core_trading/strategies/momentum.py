@@ -1,58 +1,27 @@
-import logging
-from typing import Any, Dict, Optional
-from .momentumstrategy_handlers.base_handler import MomentumStrategyBaseHandler
-from .momentumstrategy_handlers.main_handler import MomentumStrategyMainHandler
-from .momentumstrategy_handlers.config_handler import MomentumStrategyConfigHandler
-from .momentumstrategy_handlers.state_handler import MomentumStrategyStateHandler
-from .momentumstrategy_handlers.validation_handler import MomentumStrategyValidationHandler
+"""Momentum strategy module - re-exports from momentum subpackage."""
 
-# MomentumStrategy - Refactored (Communication Pattern)
-# Based on successful communication_wrapper.py refactoring approach
-# Applied modular handler architecture"
+from .momentum.macd_crossover_strategy import MACDCrossoverStrategy
+from .momentum.supertrend_strategy import SupertrendStrategy
+from .momentum.adx_trend_following_strategy import ADXTrendFollowingStrategy
+from .momentum.roc_momentum_strategy import ROCMomentumStrategy
+from .momentum.ichimoku_cloud_strategy import IchimokuCloudStrategy
+from .momentum.parabolic_sar_strategy import ParabolicSARStrategy
+from .momentum.turtle_trading_strategy import TurtleTradingStrategy
+from .momentum.obv_trend_strategy import OBVTrendStrategy
+from .momentum.vortex_indicator_strategy import VortexIndicatorStrategy
+from .momentum.dual_momentum_strategy import DualMomentumStrategy
+from .momentum.augmented_ma_crossover import AugmentedMACrossover
 
-
-
-
-logger = logging.getLogger(__name__)
-
-class MomentumStrategy:""
-
-# Refactored MomentumStrategy using communication pattern
-# Applied modular handler architecture"
-
-
-#     def __init__(self, config: Optional[Dict[str, Any]] = None):
-#         self.config = config or {}
-#         self.logger = logger
-
-        # Initialize handlers
-#         self.base_handler = MomentumStrategyBaseHandler(config)
-#         self.main_handler = MomentumStrategyMainHandler(config)
-#         self.config_handler = MomentumStrategyConfigHandler(config)
-#         self.state_handler = MomentumStrategyStateHandler(config)
-#         self.validation_handler = MomentumStrategyValidationHandler(config)
-
-#     def process_request(self, request: Any):
-#         "Process request using appropriate handlers"
-#         self.logger.info(f"Processing request with {self.__class__.__name__}")
-
-        # Use main handler by default
-#         if hasattr(self, 'main_handler'):
-#             return self.main_handler.handle(request)
-# "
-#         return {"status": "processed", "class": self.__class__.__name__}
-
-#     def get_status(self):
-# "Get status from all handlers
-# status = {"
-# "main_class": self.__class__.__name__,"
-# "handlers": {}
-# }
-# "
-#         for handler_name in handlers:
-#             if hasattr(self, handler_name):
-# handler = getattr(self, handler_name)"
-#                 status["handlers"][handler_name] = handler.get_handler_info()
-# "
-#         return status
-# "'"'
+__all__ = [
+    "MACDCrossoverStrategy",
+    "SupertrendStrategy",
+    "ADXTrendFollowingStrategy",
+    "ROCMomentumStrategy",
+    "IchimokuCloudStrategy",
+    "ParabolicSARStrategy",
+    "TurtleTradingStrategy",
+    "OBVTrendStrategy",
+    "VortexIndicatorStrategy",
+    "DualMomentumStrategy",
+    "AugmentedMACrossover",
+]

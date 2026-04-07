@@ -1,58 +1,104 @@
+"""IBS (Internal Bar Strength) Mean Reversion Strategy - Uses IBS indicator for intraday mean reversion."""
+
 import logging
-from typing import Any, Dict, Optional
-from .ibsmeanreversionstrategy_handlers.base_handler import IBSMeanReversionStrategyBaseHandler
-from .ibsmeanreversionstrategy_handlers.main_handler import IBSMeanReversionStrategyMainHandler
-from .ibsmeanreversionstrategy_handlers.config_handler import IBSMeanReversionStrategyConfigHandler
-from .ibsmeanreversionstrategy_handlers.state_handler import IBSMeanReversionStrategyStateHandler
-from .ibsmeanreversionstrategy_handlers.validation_handler import IBSMeanReversionStrategyValidationHandler
+from dataclasses import dataclass, field
+from datetime import datetime, timezone
+from enum import Enum
+from typing import Any, Dict, List, Optional
 
-# IBSMeanReversionStrategy - Refactored (Communication Pattern)
-# Based on successful communication_wrapper.py refactoring approach
-# Applied modular handler architecture"
-
-
-
+import numpy as np
+import pandas as pd
 
 logger = logging.getLogger(__name__)
 
-class IBSMeanReversionStrategy:""
 
-# Refactored IBSMeanReversionStrategy using communication pattern
-# Applied modular handler architecture"
+class IBSSignal(Enum):
+    BUY = "buy"
+    SELL = "sell"
+    HOLD = "hold"
 
 
-#     def __init__(self, config: Optional[Dict[str, Any]] = None):
-#         self.config = config or {}
-#         self.logger = logger
+@dataclass
+class IBSConfig:
+    oversold_threshold: float = 0.2
+    overbought_threshold: float = 0.8
+    sma_period: int = 20
 
-        # Initialize handlers
-#         self.base_handler = IBSMeanReversionStrategyBaseHandler(config)
-#         self.main_handler = IBSMeanReversionStrategyMainHandler(config)
-#         self.config_handler = IBSMeanReversionStrategyConfigHandler(config)
-#         self.state_handler = IBSMeanReversionStrategyStateHandler(config)
-#         self.validation_handler = IBSMeanReversionStrategyValidationHandler(config)
 
-#     def process_request(self, request: Any):
-#         "Process request using appropriate handlers"
-#         self.logger.info(f"Processing request with {self.__class__.__name__}")
+@dataclass
+class IBSResult:
+    signal: IBSSignal
+    ibs_value: float
+    strength: float
+    confidence: float
+    timestamp: datetime
+    metadata: Dict[str, Any] = field(default_factory=dict)
 
-        # Use main handler by default
-#         if hasattr(self, 'main_handler'):
-#             return self.main_handler.handle(request)
-# "
-#         return {"status": "processed", "class": self.__class__.__name__}
 
-#     def get_status(self):
-# "Get status from all handlers
-# status = {"
-# "main_class": self.__class__.__name__,"
-# "handlers": {}
-# }
-# "
-#         for handler_name in handlers:
-#             if hasattr(self, handler_name):
-# handler = getattr(self, handler_name)"
-#                 status["handlers"][handler_name] = handler.get_handler_info()
-# "
-#         return status
-# "'"'
+class IBSMeanReversionStrategy:
+    """Internal Bar Strength mean reversion strategy.
+
+    IBS = (Close - Low) / (High - Low)
+    Measures where the close is relative to the bar's range.
+    Low IBS = price closed near the bar's low (oversold).
+    High IBS = price closed near the bar's high (overbought).
+    """
+
+    def __init__(self, config: Optional[IBSConfig] = None):
+        self.config = config or IBSConfig()
+        self.logger = logging.getLogger(self.__class__.__name__)
+
+    def _calculate_ibs(self, data: pd.DataFrame) -> pd.Series:
+        """Calculate Internal Bar Strength."""
+        high = data["high"]
+        low = data["low"]
+        close = data["close"]
+        return (close - low) / (high - low + 1e-10)
+
+    def generate_signals(self, data: pd.DataFrame) -> List[IBSResult]:
+        """Generate IBS mean reversion signals."""
+        if len(data) < 2:
+            return []
+
+        ibs = self._calculate_ibs(data)
+        curr_ibs = float(ibs.iloc[-1])
+
+        if np.isnan(curr_ibs):
+            return []
+
+        signals = []
+
+        # IBS below oversold -> BUY (price closed near bar's low, expect bounce)
+        if curr_ibs < self.config.oversold_threshold:
+            strength = min((self.config.oversold_threshold - curr_ibs) / self.config.oversold_threshold, 1.0)
+            signals.append(IBSResult(
+                signal=IBSSignal.BUY,
+                ibs_value=curr_ibs,
+                strength=strength,
+                confidence=min(strength * 1.2, 1.0),
+                timestamp=datetime.now(timezone.utc),
+                metadata={"condition": "ibs_oversold"},
+            ))
+
+        # IBS above overbought -> SELL (price closed near bar's high, expect reversal)
+        elif curr_ibs > self.config.overbought_threshold:
+            strength = min((curr_ibs - self.config.overbought_threshold) / (1.0 - self.config.overbought_threshold), 1.0)
+            signals.append(IBSResult(
+                signal=IBSSignal.SELL,
+                ibs_value=curr_ibs,
+                strength=strength,
+                confidence=min(strength * 1.2, 1.0),
+                timestamp=datetime.now(timezone.utc),
+                metadata={"condition": "ibs_overbought"},
+            ))
+
+        return signals
+
+    def get_current_values(self, data: pd.DataFrame) -> Dict[str, float]:
+        """Return current IBS value."""
+        if len(data) < 1:
+            return {"ibs": 0.5}
+
+        ibs = self._calculate_ibs(data)
+        val = ibs.iloc[-1]
+        return {"ibs": float(val) if not np.isnan(val) else 0.5}

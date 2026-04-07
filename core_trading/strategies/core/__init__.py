@@ -1,71 +1,29 @@
-from nautilus_trader_engine.strategies.core.mean_reversion import RSI2MeanReversionStrategy
-from nautilus_trader_engine.strategies.core.trend_following import MovingAverageCrossoverStrategy
-from nautilus_trader_engine.strategies.core.machine_learning import RLStrategy
-# from .base_strategy import ()
-"Core Strategy Implementations"
-# "
-# This module contains the core trading strategy implementations organized by category.
-# Each category represents a different trading approach with specialized strategies.
-# "
-# Categories:
-# ===========
-# - mean_reversion: Strategies that profit from price reversions to mean
-# - trend_following: Strategies that follow market trends and momentum
-# - volatility: Strategies based on volatility patterns and breakouts
-# - multi_asset: Strategies that trade across multiple asset classes
-# - machine_learning: AI/ML-powered trading strategies
+"""Core strategy components - base classes and types."""
 
-# Usage:
-# ======
+from .base_strategy import (
+    BaseStrategy,
+    SignalType,
+    Signal,
+    StrategyConfig,
+    Position,
+    PositionSide,
+    create_signal,
+    validate_ohlcv_data,
+)
+from .base_institutional_strategy import (
+    BaseInstitutionalStrategy,
+    InstitutionalConfig,
+)
 
-
-# Import base strategy components
-#     BaseStrategy,
-#     OrderType,
-#     Position,
-#     PositionSide,
-#     Signal,
-#     SignalType,
-#     SimpleMovingAverageStrategy,
-#     StrategyConfig,
-#     StrategyManager,
-#     create_signal,
-#     validate_ohlcv_data,
-# )
-
-# Import all strategy categories
-# try:
-#     from . import ()
-#         machine_learning,
-#         mean_reversion,
-#         multi_asset,
-#         trend_following,
-#         volatility,
-# )
-# except ImportError as e:
-    # Graceful handling during development
-#     import warnings
-# "
-#     warnings.warn(f"Some strategy modules could not be imported: {e}", ImportWarning)
-
-# __all__ = [
-    # Base strategy components"
-# "BaseStrategy","
-# "StrategyConfig","
-# "Signal","
-# "Position","
-# "SignalType","
-# "PositionSide","
-# "OrderType","
-# "StrategyManager","
-# "create_signal","
-# "validate_ohlcv_data","
-#     "SimpleMovingAverageStrategy",
-    # Strategy categories"
-# "mean_reversion","
-# "trend_following","
-# "volatility","
-# "multi_asset","
-#     "machine_learning",
-# ]
-# "
+__all__ = [
+    "BaseStrategy",
+    "SignalType",
+    "Signal",
+    "StrategyConfig",
+    "Position",
+    "PositionSide",
+    "create_signal",
+    "validate_ohlcv_data",
+    "BaseInstitutionalStrategy",
+    "InstitutionalConfig",
+]

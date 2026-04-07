@@ -1,58 +1,27 @@
-import logging
-from typing import Any, Dict, Optional
-from .meanreversionstrategy_handlers.base_handler import MeanReversionStrategyBaseHandler
-from .meanreversionstrategy_handlers.main_handler import MeanReversionStrategyMainHandler
-from .meanreversionstrategy_handlers.config_handler import MeanReversionStrategyConfigHandler
-from .meanreversionstrategy_handlers.state_handler import MeanReversionStrategyStateHandler
-from .meanreversionstrategy_handlers.validation_handler import MeanReversionStrategyValidationHandler
+"""Mean reversion strategy module - re-exports from mean_reversion subpackage."""
 
-# MeanReversionStrategy - Refactored (Communication Pattern)
-# Based on successful communication_wrapper.py refactoring approach
-# Applied modular handler architecture"
+from .mean_reversion.bollinger_bands_mean_reversion_strategy import BollingerBandsMeanReversionStrategy
+from .mean_reversion.rsi2_strategy import RSI2Strategy
+from .mean_reversion.rsi2_mean_reversion_strategy import RSI2MeanReversionStrategy
+from .mean_reversion.connors_rsi_mean_reversion_strategy import ConnorsRSIMeanReversionStrategy
+from .mean_reversion.stochastic_mean_reversion_strategy import StochasticMeanReversionStrategy
+from .mean_reversion.williams_r_mean_reversion_strategy import WilliamsRMeanReversionStrategy
+from .mean_reversion.vix_mean_reversion_strategy import VIXMeanReversionStrategy
+from .mean_reversion.gap_fill_strategy import GapFillStrategy
+from .mean_reversion.ibs_mean_reversion_strategy import IBSMeanReversionStrategy
+from .mean_reversion.ma_crossover_vwma_strategy import MovingAverageCrossoverVWMAStrategy
+from .mean_reversion.overnight_reversal_strategy import OvernightReversalStrategy
 
-
-
-
-logger = logging.getLogger(__name__)
-
-class MeanReversionStrategy:""
-
-# Refactored MeanReversionStrategy using communication pattern
-# Applied modular handler architecture"
-
-
-#     def __init__(self, config: Optional[Dict[str, Any]] = None):
-#         self.config = config or {}
-#         self.logger = logger
-
-        # Initialize handlers
-#         self.base_handler = MeanReversionStrategyBaseHandler(config)
-#         self.main_handler = MeanReversionStrategyMainHandler(config)
-#         self.config_handler = MeanReversionStrategyConfigHandler(config)
-#         self.state_handler = MeanReversionStrategyStateHandler(config)
-#         self.validation_handler = MeanReversionStrategyValidationHandler(config)
-
-#     def process_request(self, request: Any):
-#         "Process request using appropriate handlers"
-#         self.logger.info(f"Processing request with {self.__class__.__name__}")
-
-        # Use main handler by default
-#         if hasattr(self, 'main_handler'):
-#             return self.main_handler.handle(request)
-# "
-#         return {"status": "processed", "class": self.__class__.__name__}
-
-#     def get_status(self):
-# "Get status from all handlers
-# status = {"
-# "main_class": self.__class__.__name__,"
-# "handlers": {}
-# }
-# "
-#         for handler_name in handlers:
-#             if hasattr(self, handler_name):
-# handler = getattr(self, handler_name)"
-#                 status["handlers"][handler_name] = handler.get_handler_info()
-# "
-#         return status
-# "'"'
+__all__ = [
+    "BollingerBandsMeanReversionStrategy",
+    "RSI2Strategy",
+    "RSI2MeanReversionStrategy",
+    "ConnorsRSIMeanReversionStrategy",
+    "StochasticMeanReversionStrategy",
+    "WilliamsRMeanReversionStrategy",
+    "VIXMeanReversionStrategy",
+    "GapFillStrategy",
+    "IBSMeanReversionStrategy",
+    "MovingAverageCrossoverVWMAStrategy",
+    "OvernightReversalStrategy",
+]

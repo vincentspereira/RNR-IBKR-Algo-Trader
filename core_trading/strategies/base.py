@@ -1,58 +1,61 @@
+"""Base strategy class providing common interface for all strategies."""
+
 import logging
-from typing import Any, Dict, Optional
-from .basestrategy_handlers.base_handler import BaseStrategyBaseHandler
-from .basestrategy_handlers.main_handler import BaseStrategyMainHandler
-from .basestrategy_handlers.config_handler import BaseStrategyConfigHandler
-from .basestrategy_handlers.state_handler import BaseStrategyStateHandler
-from .basestrategy_handlers.validation_handler import BaseStrategyValidationHandler
+from abc import ABC, abstractmethod
+from dataclasses import dataclass, field
+from datetime import datetime, timezone
+from enum import Enum
+from typing import Any, Dict, List, Optional
 
-# BaseStrategy - Refactored (Communication Pattern)
-# Based on successful communication_wrapper.py refactoring approach
-# Applied modular handler architecture"
-
-
-
+import pandas as pd
 
 logger = logging.getLogger(__name__)
 
-class BaseStrategy:""
 
-# Refactored BaseStrategy using communication pattern
-# Applied modular handler architecture"
+class SignalType(Enum):
+    BUY = "buy"
+    SELL = "sell"
+    HOLD = "hold"
 
 
-#     def __init__(self, config: Optional[Dict[str, Any]] = None):
-#         self.config = config or {}
-#         self.logger = logger
+@dataclass
+class Signal:
+    """Trading signal."""
+    signal_type: SignalType
+    symbol: str = ""
+    price: float = 0.0
+    strength: float = 0.0
+    confidence: float = 0.0
+    timestamp: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
+    metadata: Dict[str, Any] = field(default_factory=dict)
 
-        # Initialize handlers
-#         self.base_handler = BaseStrategyBaseHandler(config)
-#         self.main_handler = BaseStrategyMainHandler(config)
-#         self.config_handler = BaseStrategyConfigHandler(config)
-#         self.state_handler = BaseStrategyStateHandler(config)
-#         self.validation_handler = BaseStrategyValidationHandler(config)
 
-#     def process_request(self, request: Any):
-#         "Process request using appropriate handlers"
-#         self.logger.info(f"Processing request with {self.__class__.__name__}")
+@dataclass
+class StrategyConfig:
+    """Base configuration for all strategies."""
+    name: str = "BaseStrategy"
+    symbol: str = ""
+    params: Dict[str, Any] = field(default_factory=dict)
 
-        # Use main handler by default
-#         if hasattr(self, 'main_handler'):
-#             return self.main_handler.handle(request)
-# "
-#         return {"status": "processed", "class": self.__class__.__name__}
 
-#     def get_status(self):
-# "Get status from all handlers
-# status = {"
-# "main_class": self.__class__.__name__,"
-# "handlers": {}
-# }
-# "
-#         for handler_name in handlers:
-#             if hasattr(self, handler_name):
-# handler = getattr(self, handler_name)"
-#                 status["handlers"][handler_name] = handler.get_handler_info()
-# "
-#         return status
-# "'"'
+class BaseStrategy(ABC):
+    """Abstract base class for all trading strategies."""
+
+    def __init__(self, config: Optional[StrategyConfig] = None):
+        self.config = config or StrategyConfig()
+        self.logger = logging.getLogger(self.__class__.__name__)
+
+    @abstractmethod
+    def generate_signals(self, data: pd.DataFrame) -> List[Signal]:
+        """Generate trading signals from market data."""
+        ...
+
+    def get_current_values(self, data: pd.DataFrame) -> Dict[str, float]:
+        """Return current indicator values."""
+        return {}
+
+    @staticmethod
+    def validate_ohlcv_data(data: pd.DataFrame) -> bool:
+        """Validate that data has required OHLCV columns."""
+        required = {"open", "high", "low", "close", "volume"}
+        return required.issubset(data.columns) and len(data) > 0

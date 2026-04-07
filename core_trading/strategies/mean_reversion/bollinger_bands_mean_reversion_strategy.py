@@ -1,58 +1,117 @@
+"""Bollinger Bands Mean Reversion Strategy - Uses Bollinger Bands for mean reversion trading."""
+
 import logging
-from typing import Any, Dict, Optional
-from .bollingerbandsmeanreversionstrategy_handlers.base_handler import BollingerBandsMeanReversionStrategyBaseHandler
-from .bollingerbandsmeanreversionstrategy_handlers.main_handler import BollingerBandsMeanReversionStrategyMainHandler
-from .bollingerbandsmeanreversionstrategy_handlers.config_handler import BollingerBandsMeanReversionStrategyConfigHandler
-from .bollingerbandsmeanreversionstrategy_handlers.state_handler import BollingerBandsMeanReversionStrategyStateHandler
-from .bollingerbandsmeanreversionstrategy_handlers.validation_handler import BollingerBandsMeanReversionStrategyValidationHandler
+from dataclasses import dataclass, field
+from datetime import datetime, timezone
+from enum import Enum
+from typing import Any, Dict, List, Optional
 
-# BollingerBandsMeanReversionStrategy - Refactored (Communication Pattern)
-# Based on successful communication_wrapper.py refactoring approach
-# Applied modular handler architecture"
-
-
-
+import numpy as np
+import pandas as pd
 
 logger = logging.getLogger(__name__)
 
-class BollingerBandsMeanReversionStrategy:""
 
-# Refactored BollingerBandsMeanReversionStrategy using communication pattern
-# Applied modular handler architecture"
+class BBSignal(Enum):
+    BUY = "buy"
+    SELL = "sell"
+    HOLD = "hold"
 
 
-#     def __init__(self, config: Optional[Dict[str, Any]] = None):
-#         self.config = config or {}
-#         self.logger = logger
+@dataclass
+class BBConfig:
+    period: int = 20
+    std_dev: float = 2.0
+    oversold_threshold: float = 0.0
+    overbought_threshold: float = 100.0
 
-        # Initialize handlers
-#         self.base_handler = BollingerBandsMeanReversionStrategyBaseHandler(config)
-#         self.main_handler = BollingerBandsMeanReversionStrategyMainHandler(config)
-#         self.config_handler = BollingerBandsMeanReversionStrategyConfigHandler(config)
-#         self.state_handler = BollingerBandsMeanReversionStrategyStateHandler(config)
-#         self.validation_handler = BollingerBandsMeanReversionStrategyValidationHandler(config)
 
-#     def process_request(self, request: Any):
-#         "Process request using appropriate handlers"
-#         self.logger.info(f"Processing request with {self.__class__.__name__}")
+@dataclass
+class BBResult:
+    signal: BBSignal
+    bb_value: float
+    lower_band: float
+    upper_band: float
+    strength: float
+    confidence: float
+    timestamp: datetime
+    metadata: Dict[str, Any] = field(default_factory=dict)
 
-        # Use main handler by default
-#         if hasattr(self, 'main_handler'):
-#             return self.main_handler.handle(request)
-# "
-#         return {"status": "processed", "class": self.__class__.__name__}
 
-#     def get_status(self):
-# "Get status from all handlers
-# status = {"
-# "main_class": self.__class__.__name__,"
-# "handlers": {}
-# }
-# "
-#         for handler_name in handlers:
-#             if hasattr(self, handler_name):
-# handler = getattr(self, handler_name)"
-#                 status["handlers"][handler_name] = handler.get_handler_info()
-# "
-#         return status
-# "'"'
+class BollingerBandsMeanReversionStrategy:
+    """Bollinger Bands mean reversion strategy trading band extremes."""
+
+    def __init__(self, config: Optional[BBConfig] = None):
+        self.config = config or BBConfig()
+        self.logger = logging.getLogger(self.__class__.__name__)
+
+    def _calculate_bollinger_bands(self, data: pd.DataFrame) -> Dict[str, pd.Series]:
+        """Calculate Bollinger Bands."""
+        close = data["close"]
+        sma = close.rolling(window=self.config.period).mean()
+        std = close.rolling(window=self.config.period).std()
+        upper = sma + (std * self.config.std_dev)
+        lower = sma - (std * self.config.std_dev)
+        bb_value = (close - lower) / (upper - lower) * 100
+        return {"sma": sma, "upper": upper, "lower": lower, "bb_value": bb_value}
+
+    def generate_signals(self, data: pd.DataFrame) -> List[BBResult]:
+        """Generate Bollinger Bands mean reversion signals."""
+        if len(data) < self.config.period + 1:
+            return []
+
+        bb = self._calculate_bollinger_bands(data)
+        close = data["close"]
+
+        curr_bb = float(bb["bb_value"].iloc[-1])
+        prev_bb = float(bb["bb_value"].iloc[-2])
+        curr_price = float(close.iloc[-1])
+        curr_lower = float(bb["lower"].iloc[-1])
+        curr_upper = float(bb["upper"].iloc[-1])
+
+        if np.isnan(curr_bb) or np.isnan(prev_bb):
+            return []
+
+        signals = []
+
+        # Price touches/crosses below lower band then moves up -> BUY
+        if prev_bb <= 0 and curr_bb > 0:
+            strength = min(abs(curr_lower - curr_price) / (curr_price + 1e-10) * 20, 1.0)
+            signals.append(BBResult(
+                signal=BBSignal.BUY,
+                bb_value=curr_bb,
+                lower_band=curr_lower,
+                upper_band=curr_upper,
+                strength=strength,
+                confidence=min(strength * 1.2, 1.0),
+                timestamp=datetime.now(timezone.utc),
+                metadata={"reversal": "oversold_bounce"},
+            ))
+
+        # Price touches/crosses above upper band then moves down -> SELL
+        elif prev_bb >= 100 and curr_bb < 100:
+            strength = min(abs(curr_upper - curr_price) / (curr_price + 1e-10) * 20, 1.0)
+            signals.append(BBResult(
+                signal=BBSignal.SELL,
+                bb_value=curr_bb,
+                lower_band=curr_lower,
+                upper_band=curr_upper,
+                strength=strength,
+                confidence=min(strength * 1.2, 1.0),
+                timestamp=datetime.now(timezone.utc),
+                metadata={"reversal": "overbought_rejection"},
+            ))
+
+        return signals
+
+    def get_current_values(self, data: pd.DataFrame) -> Dict[str, float]:
+        """Return current Bollinger Bands values."""
+        if len(data) < self.config.period:
+            return {}
+        bb = self._calculate_bollinger_bands(data)
+        return {
+            "bb_value": float(bb["bb_value"].iloc[-1]),
+            "upper_band": float(bb["upper"].iloc[-1]),
+            "lower_band": float(bb["lower"].iloc[-1]),
+            "sma": float(bb["sma"].iloc[-1]),
+        }

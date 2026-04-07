@@ -1,108 +1,118 @@
-from __future__ import annotations
+"""Augmented Momentum Strategy - Multi-factor momentum with trend and volume confirmation."""
 
-from datetime import datetime
+import logging
+from dataclasses import dataclass, field
+from datetime import datetime, timezone
+from enum import Enum
+from typing import Any, Dict, List, Optional
 
 import numpy as np
-# from nautilus_trader_engine.strategies.core.augmented_base_institutional_strategy import ()
-#     AugmentedBaseInstitutionalStrategy,
-#     AugmentedPillar,
-#     AugmentedSignalData,
-#     MarketRegime,
-#     SignalData,
-#     SignalType,
-# )
+import pandas as pd
+
+logger = logging.getLogger(__name__)
 
 
-# class AugmentedMomentumStrategy(AugmentedBaseInstitutionalStrategy):
-#     "Example momentum strategy using the augmented architecture."
+class AugMomentumSignal(Enum):
+    BUY = "buy"
+    SELL = "sell"
+    HOLD = "hold"
 
-#     def __init__(self, **kwargs):
-# super().__init__("
-# strategy_name="Augmented Momentum Strategy","
-#             symbols=["AAPL", "MSFT", "GOOGL"],
-# **kwargs,
-# )
-#         self.lookback_period = 20
 
-#     def generate_augmented_signals(
-# self, market_data: dict[str, any]
-# ) -> dict[str, AugmentedSignalData]:
-#         signals = {}
-#         for symbol in self.symbols:
-#             if (
-#                 symbol in self.price_history
-# and len(self.price_history[symbol]) >= self.lookback_period
-# ):
-#                 prices = np.array(self.price_history[symbol][-self.lookback_period :])
-#                 momentum = (prices[-1] - prices[0]) / prices[0]
+@dataclass
+class AugMomentumConfig:
+    lookback_period: int = 20
+    roc_period: int = 10
+    volume_ma_period: int = 20
+    volume_threshold: float = 1.2
 
-                # Pillar 1: Signal Generation Score
-#                 signal_score = min(1.0, abs(momentum) * 10)
 
-                # Pillar 2: Risk Management Score
-#                 volatility = np.std(prices) / np.mean(prices)
-#                 risk_score = max(0.0, 1.0 - volatility * 10)
+@dataclass
+class AugMomentumResult:
+    signal: AugMomentumSignal
+    momentum_score: float
+    trend_alignment: bool
+    volume_confirmation: bool
+    strength: float
+    confidence: float
+    timestamp: datetime
+    metadata: Dict[str, Any] = field(default_factory=dict)
 
-                # Pillar 3: Market Regime Adaptation Score
-# regime_alignment = self.get_regime_alignment_score(
-# SignalData(
-#                         signal_type=self._get_signal_type(momentum),
-#                         confidence=0,
-#                         strength=0,
-#                         timestamp=datetime.now(),
-#                         metadata={},
-# )
-# )
 
-# pillar_scores = {
-# AugmentedPillar.SIGNAL_GENERATION: signal_score,
-# AugmentedPillar.RISK_MANAGEMENT: risk_score,
-# AugmentedPillar.MARKET_REGIME_ADAPTATION: regime_alignment,
-# }
+class AugmentedMomentumStrategy:
+    """Augmented momentum strategy combining rate of change with trend and volume confirmation."""
 
-# confidence = np.average(
-#                     [pillar_scores[p] for p in pillar_scores],
-#                     weights=[self.pillar_weights[p] for p in pillar_scores],
-# )
+    def __init__(self, config: Optional[AugMomentumConfig] = None):
+        self.config = config or AugMomentumConfig()
+        self.logger = logging.getLogger(self.__class__.__name__)
 
-# signals[symbol] = AugmentedSignalData(
-#                     signal_type=self._get_signal_type(momentum),
-#                     confidence=confidence,
-#                     strength=signal_score,
-# timestamp=datetime.now(),"
-#                     metadata={"momentum": momentum},
-#                     pillar_scores=pillar_scores,
-# )
-#         return signals
+    def generate_signals(self, data: pd.DataFrame) -> List[AugMomentumResult]:
+        """Generate augmented momentum signals."""
+        min_required = max(self.config.lookback_period, self.config.roc_period, self.config.volume_ma_period) + 1
+        if len(data) < min_required:
+            return []
 
-#     def _get_signal_type(self, momentum: float) -> SignalType:
-#         if momentum > 0.05:
-#             return SignalType.BUY
-#         elif momentum < -0.05:
-#             return SignalType.SELL
-#         else:
-#             return SignalType.HOLD
+        close = data["close"]
+        volume = data["volume"]
 
-#     def detect_market_regime(self, market_data: dict[str, any]) -> MarketRegime:
-#         "symbol = self.symbols[0]"
-#         if (
-#             symbol in self.price_history
-# and len(self.price_history[symbol]) >= self.lookback_period
-# ):
-#             prices = np.array(self.price_history[symbol][-self.lookback_period :])
-#             volatility = np.std(prices) / np.mean(prices)
+        # Rate of change
+        roc = close.pct_change(periods=self.config.roc_period) * 100
+        curr_roc = float(roc.iloc[-1])
 
-#             if volatility > 0.03:
-#                 return MarketRegime.HIGH_VOLATILITY
-#             elif volatility < 0.01:
-#                 return MarketRegime.LOW_VOLATILITY
-#             else:
-#                 trend = (prices[-1] - prices[0]) / prices[0]
-#                 if trend > 0.02:
-#                     return MarketRegime.TRENDING_UP
-#                 elif trend < -0.02:
-#                     return MarketRegime.TRENDING_DOWN
-#                 else:
-#                     return MarketRegime.SIDEWAYS
-#         return MarketRegime.SIDEWAYS
-# "
+        # Trend alignment: short MA vs long MA
+        short_ma = close.rolling(window=self.config.lookback_period // 2).mean()
+        long_ma = close.rolling(window=self.config.lookback_period).mean()
+        trend_up = float(short_ma.iloc[-1]) > float(long_ma.iloc[-1])
+
+        # Volume confirmation
+        vol_ma = volume.rolling(window=self.config.volume_ma_period).mean()
+        vol_confirmed = float(volume.iloc[-1]) > float(vol_ma.iloc[-1]) * self.config.volume_threshold
+
+        if np.isnan(curr_roc):
+            return []
+
+        signals = []
+
+        # Strong positive momentum with trend alignment -> BUY
+        if curr_roc > 0 and trend_up:
+            momentum_score = curr_roc
+            strength = min(abs(curr_roc) / 10.0, 1.0)
+            confidence = strength * (1.2 if vol_confirmed else 0.9)
+
+            signals.append(AugMomentumResult(
+                signal=AugMomentumSignal.BUY,
+                momentum_score=momentum_score,
+                trend_alignment=trend_up,
+                volume_confirmation=vol_confirmed,
+                strength=min(strength, 1.0),
+                confidence=min(confidence, 1.0),
+                timestamp=datetime.now(timezone.utc),
+                metadata={"roc": curr_roc},
+            ))
+
+        # Strong negative momentum against trend -> SELL
+        elif curr_roc < 0 and not trend_up:
+            momentum_score = curr_roc
+            strength = min(abs(curr_roc) / 10.0, 1.0)
+            confidence = strength * (1.2 if vol_confirmed else 0.9)
+
+            signals.append(AugMomentumResult(
+                signal=AugMomentumSignal.SELL,
+                momentum_score=momentum_score,
+                trend_alignment=not trend_up,
+                volume_confirmation=vol_confirmed,
+                strength=min(strength, 1.0),
+                confidence=min(confidence, 1.0),
+                timestamp=datetime.now(timezone.utc),
+                metadata={"roc": curr_roc},
+            ))
+
+        return signals
+
+    def get_current_values(self, data: pd.DataFrame) -> Dict[str, float]:
+        """Return current momentum values."""
+        if len(data) < self.config.roc_period + 1:
+            return {"roc": 0.0}
+
+        roc = data["close"].pct_change(periods=self.config.roc_period) * 100
+        val = roc.iloc[-1]
+        return {"roc": float(val) if not np.isnan(val) else 0.0}
