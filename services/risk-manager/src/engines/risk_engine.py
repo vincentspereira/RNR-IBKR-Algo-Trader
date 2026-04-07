@@ -817,10 +817,10 @@ class RiskEngine:
             min_length = min(len(r) for r in returns_data)
             returns_matrix = np.array([r[-min_length:] for r in returns_data]).T
 
-            total_value = sum(
+            total_value = sum([
                 abs(positions[inst]) * await self._get_current_price(inst)
                 for inst in instruments
-            )
+            ])
             if total_value == 0:
                 return 0.0
 
@@ -892,20 +892,20 @@ class RiskEngine:
             if not positions:
                 return
 
-            total_value = sum(
+            total_value = sum([
                 abs(pos) * await self._get_current_price(inst)
                 for inst, pos in positions.items()
-            )
+            ])
             if total_value == 0:
                 return
 
             portfolio_var = await self._calculate_portfolio_var()
             diversification_ratio = self._calculate_diversification_ratio(positions)
 
-            concentration_index = sum(
+            concentration_index = sum([
                 (abs(pos * await self._get_current_price(inst)) / total_value) ** 2
                 for inst, pos in positions.items()
-            )
+            ])
 
             sector_exposures = await self._calculate_sector_exposures(positions)
             max_sector_exposure = max(sector_exposures.values()) if sector_exposures else 0.0
@@ -1162,10 +1162,10 @@ class RiskEngine:
             if not positions:
                 return 0.0
 
-            total_exposure = sum(
+            total_exposure = sum([
                 abs(pos) * await self._get_current_price(inst)
                 for inst, pos in positions.items()
-            )
+            ])
             equity = await self._get_total_equity()
             return total_exposure / equity if equity > 0 else 0.0
         except Exception:

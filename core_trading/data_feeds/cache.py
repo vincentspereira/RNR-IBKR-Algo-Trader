@@ -42,6 +42,7 @@ class InMemoryFallback:
             if time.time() > expiry:
                 del self._store[key]
                 return True
+            return False
         return True
 
     async def get(self, key: str) -> Optional[str]:

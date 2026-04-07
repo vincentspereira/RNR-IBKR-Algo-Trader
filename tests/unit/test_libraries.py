@@ -235,5 +235,52 @@ class TestBaseEvent(unittest.TestCase):
         self.assertEqual(event.event_type, "risk.limit.breached")
 
 
+@unittest.skipIf(not LIBS_AVAILABLE, "libs modules not available")
+class TestJSONSerializer(unittest.TestCase):
+    """Tests for JSONSerializer."""
+
+    def test_serialize_event(self):
+        from libs.common.events.serializers import JSONSerializer
+        event = MarketDataEvent(
+            symbol="AAPL",
+            exchange="SMART",
+        )
+        result = JSONSerializer.serialize(event)
+        self.assertIsInstance(result, bytes)
+        self.assertIn(b"AAPL", result)
+
+    def test_deserialize_event(self):
+        import json
+        from libs.common.events.serializers import JSONSerializer
+        data = json.dumps({
+            "symbol": "AAPL",
+            "exchange": "SMART",
+            "event_type": "market_data",
+        }).encode("utf-8")
+        result = JSONSerializer.deserialize(data, MarketDataEvent)
+        self.assertEqual(result.symbol, "AAPL")
+        self.assertEqual(result.exchange, "SMART")
+
+    def test_serialize_deserialize_roundtrip(self):
+        from libs.common.events.serializers import JSONSerializer
+        event = MarketDataEvent(
+            symbol="GOOG",
+            exchange="NASDAQ",
+        )
+        serialized = JSONSerializer.serialize(event)
+        deserialized = JSONSerializer.deserialize(serialized, MarketDataEvent)
+        self.assertEqual(deserialized.symbol, event.symbol)
+        self.assertEqual(deserialized.exchange, event.exchange)
+
+    def test_avro_serializer_not_implemented(self):
+        from libs.common.events.serializers import AvroSerializer
+        serializer = AvroSerializer(schema_registry_url="http://localhost:8081")
+        event = MarketDataEvent(symbol="AAPL", exchange="SMART")
+        with self.assertRaises(NotImplementedError):
+            serializer.serialize(event, schema_id=1)
+        with self.assertRaises(NotImplementedError):
+            serializer.deserialize(b"data", MarketDataEvent)
+
+
 if __name__ == '__main__':
     unittest.main()
