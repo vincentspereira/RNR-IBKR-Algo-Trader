@@ -1,0 +1,139 @@
+"""Shared pytest fixtures for the IBKR Algo Trader test suite.
+
+Import strategy:
+- Project root is on sys.path for `core_trading` imports.
+- `services/trading-engine` on sys.path lets us import as `src.core.*`,
+  `src.engines.*` etc. with relative imports working correctly.
+- `services/risk-manager` modules are loaded via importlib under unique names
+  to avoid colliding with trading-engine's `engines` package.
+"""
+
+import asyncio
+import importlib.util
+import sys
+import os
+from unittest.mock import AsyncMock
+
+import pytest
+
+_project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
+sys.path.insert(0, _project_root)
+sys.path.insert(0, os.path.join(_project_root, "services", "trading-engine"))
+
+# Load risk-manager modules via importlib (unique names to avoid collisions)
+_rm_engines = os.path.join(_project_root, "services", "risk-manager", "src", "engines")
+
+
+def _load_module(name, path, package=None):
+    spec = importlib.util.spec_from_file_location(name, path)
+    mod = importlib.util.module_from_spec(spec)
+    sys.modules[name] = mod
+    if package:
+        mod.__package__ = package
+    spec.loader.exec_module(mod)
+    return mod
+
+
+_load_module("risk_engines", os.path.join(_rm_engines, "risk_engine.py"))
+_load_module("kill_switch", os.path.join(_rm_engines, "kill_switch.py"))
+
+
+@pytest.fixture(scope="session")
+def event_loop():
+    loop = asyncio.new_event_loop()
+    yield loop
+    loop.close()
+
+
+@pytest.fixture
+def event_bus():
+    from src.core.event_system import EventBus
+    return EventBus()
+
+
+@pytest.fixture
+def mock_broker_adapter():
+    adapter = AsyncMock()
+    adapter.connect = AsyncMock(return_value=True)
+    adapter.disconnect = AsyncMock(return_value=True)
+    adapter.get_positions = AsyncMock(return_value=[])
+    adapter.get_account_info = AsyncMock(return_value={
+        "account_id": "DUK221396",
+        "balance": 100000.0,
+        "buying_power": 200000.0,
+        "net_liquidation": 100000.0,
+        "currency": "USD",
+    })
+    adapter.get_portfolio_value = AsyncMock(return_value=100000.0)
+    adapter.get_quote = AsyncMock(return_value={"last": 150.0, "bid": 149.99, "ask": 150.01})
+    adapter.get_historical_data = AsyncMock(return_value=[])
+    adapter.place_order = AsyncMock(return_value={
+        "order_id": "1",
+        "status": "submitted",
+        "broker_order_id": "1001",
+    })
+    adapter.cancel_order = AsyncMock(return_value=True)
+    adapter.get_order_status = AsyncMock(return_value={"status": "submitted"})
+    adapter.get_open_orders = AsyncMock(return_value=[])
+    return adapter
+
+
+@pytest.fixture
+def sample_order():
+    from src.engines.execution_engine import Order, OrderSide, OrderType
+    return Order(
+        instrument="AAPL",
+        side=OrderSide.BUY,
+        order_type=OrderType.LIMIT,
+        quantity=100,
+        price=150.0,
+    )
+
+
+@pytest.fixture
+def sample_order_data():
+    return {
+        "symbol": "AAPL",
+        "side": "buy",
+        "quantity": 10,
+        "order_type": "limit",
+        "price": 150.0,
+        "asset_class": "equities",
+    }
+
+
+@pytest.fixture
+def risk_config():
+    from risk_engines import RiskConfig
+    return RiskConfig(
+        max_position_size=10000.0,
+        max_portfolio_var=5000.0,
+        max_drawdown=0.05,
+        max_leverage=3.0,
+        max_sector_exposure=0.25,
+        daily_loss_limit_pct=0.02,
+        max_daily_trades=10,
+        max_concurrent_positions=5,
+        max_order_size=5000.0,
+    )
+
+
+@pytest.fixture
+def risk_engine(mock_broker_adapter, event_bus, risk_config):
+    from risk_engines import RiskEngine
+    return RiskEngine(
+        broker_adapter=mock_broker_adapter,
+        event_bus=event_bus,
+        config=risk_config,
+    )
+
+
+@pytest.fixture
+def execution_engine(mock_broker_adapter, event_bus):
+    from src.engines.execution_engine import ExecutionEngine
+    return ExecutionEngine(
+        broker_adapter=mock_broker_adapter,
+        event_bus=event_bus,
+        risk_engine=None,
+        order_store=None,
+    )

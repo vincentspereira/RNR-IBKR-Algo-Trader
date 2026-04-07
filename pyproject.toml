@@ -97,3 +97,6 @@ python_files = ["test_*.py"]
 python_classes = ["Test*"]
 python_functions = ["test_*"]
 addopts = "-v --cov=libs --cov-report=html --cov-report=term-missing"
+filterwarnings = [
+    "ignore::DeprecationWarning:pythonjsonlogger",
+]

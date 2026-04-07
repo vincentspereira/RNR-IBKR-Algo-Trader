@@ -2,273 +2,343 @@
 
 import sys
 import os
+import asyncio
+from unittest.mock import Mock, patch, MagicMock, AsyncMock
+from datetime import datetime
+
+import pytest
 
 # Add project root to path
-sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '../../')))
-
-import unittest
-from unittest.mock import Mock, patch, MagicMock
-from datetime import datetime
-from uuid import uuid4
-
-# Import from libs if available
-try:
-    from libs.database.postgres.client import PostgresClient
-    from libs.database.clickhouse.client import ClickHouseClient
-    from libs.database.redis.client import RedisClient
-    LIBS_AVAILABLE = True
-except ImportError:
-    LIBS_AVAILABLE = False
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "../../")))
 
 
-@unittest.skipIf(not LIBS_AVAILABLE, "libs.database not available")
-class TestPostgresClient(unittest.TestCase):
+def _mock_config():
+    """Create a mock config object with all required database settings."""
+    mock_db = Mock()
+    mock_db.postgres_async_url = "postgresql+asyncpg://user:pass@localhost:5432/test"
+    mock_db.postgres_pool_size = 5
+    mock_db.clickhouse_host = "localhost"
+    mock_db.clickhouse_port = 9000
+    mock_db.clickhouse_password = "test"
+    mock_db.clickhouse_db = "test_db"
+    mock_db.redis_host = "localhost"
+    mock_db.redis_port = 6379
+    mock_db.redis_password = "test"
+    mock_db.redis_pool_size = 10
+
+    mock = Mock()
+    mock.database = mock_db
+    mock.debug = False
+    return mock
+
+
+# ---------------------------------------------------------------------------
+# PostgreSQLClient tests
+# ---------------------------------------------------------------------------
+
+
+class TestPostgreSQLClient:
     """Test PostgreSQL client."""
-    
-    def setUp(self):
-        """Set up test fixtures."""
-        self.connection_string = "postgresql://user:pass@localhost:5432/test"
-    
-    def test_initialization(self):
-        """Test client initialization."""
-        try:
-            client = PostgresClient(connection_string=self.connection_string)
-            self.assertIsNotNone(client)
-            self.assertEqual(client.connection_string, self.connection_string)
-        except Exception:
-            pass  # Skip if implementation differs
-    
-    def test_connect(self):
-        """Test database connection."""
-        try:
-            client = PostgresClient(connection_string=self.connection_string)
-            # Use mock to avoid actual connection
-            with patch.object(client, '_connect'):
-                result = client.connect()
-                self.assertIsNotNone(result)
-        except Exception:
-            pass
-    
-    def test_disconnect(self):
-        """Test database disconnection."""
-        try:
-            client = PostgresClient(connection_string=self.connection_string)
-            with patch.object(client, '_disconnect'):
-                client.disconnect()
-        except Exception:
-            pass
-    
-    def test_execute_query(self):
-        """Test query execution."""
-        try:
-            client = PostgresClient(connection_string=self.connection_string)
-            query = "SELECT * FROM users WHERE id = %s"
-            params = [1]
-            
-            # Mock execute method
-            with patch.object(client, 'execute_query', return_value=[]):
-                result = client.execute_query(query, params)
-                self.assertIsNotNone(result)
-        except Exception:
-            pass
+
+    @patch("libs.database.postgres.client.get_config")
+    def test_initialization(self, mock_get_config):
+        mock_get_config.return_value = _mock_config()
+        from libs.database.postgres.client import PostgreSQLClient
+
+        client = PostgreSQLClient(connection_url="postgresql+asyncpg://user:pass@localhost:5432/test")
+        assert client is not None
+        assert client.connection_url == "postgresql+asyncpg://user:pass@localhost:5432/test"
+
+    @patch("libs.database.postgres.client.get_config")
+    def test_session_context_manager(self, mock_get_config):
+        mock_get_config.return_value = _mock_config()
+        from libs.database.postgres.client import PostgreSQLClient
+
+        client = PostgreSQLClient(connection_url="postgresql+asyncpg://user:pass@localhost:5432/test")
+        assert hasattr(client, "session")
+        assert hasattr(client, "async_session_factory")
+
+    @patch("libs.database.postgres.client.get_config")
+    def test_has_query_method(self, mock_get_config):
+        mock_get_config.return_value = _mock_config()
+        from libs.database.postgres.client import PostgreSQLClient
+
+        client = PostgreSQLClient(connection_url="postgresql+asyncpg://user:pass@localhost:5432/test")
+        assert hasattr(client, "execute_query")
+        assert hasattr(client, "health_check")
+        assert hasattr(client, "close")
+
+    @pytest.mark.asyncio
+    @patch("libs.database.postgres.client.get_config")
+    async def test_close(self, mock_get_config):
+        mock_get_config.return_value = _mock_config()
+        from libs.database.postgres.client import PostgreSQLClient
+
+        client = PostgreSQLClient(connection_url="postgresql+asyncpg://user:pass@localhost:5432/test")
+        client.engine = MagicMock()
+        client.engine.dispose = AsyncMock()
+
+        await client.close()
+        client.engine.dispose.assert_awaited_once()
+
+    @patch("libs.database.postgres.client.get_config")
+    def test_get_postgres_client_singleton(self, mock_get_config):
+        mock_get_config.return_value = _mock_config()
+        import libs.database.postgres.client as mod
+
+        mod._pg_client = None
+        client1 = mod.get_postgres_client()
+        client2 = mod.get_postgres_client()
+        assert client1 is client2
+        mod._pg_client = None  # cleanup
 
 
-@unittest.skipIf(not LIBS_AVAILABLE, "libs.database not available")
-class TestClickHouseClient(unittest.TestCase):
+# ---------------------------------------------------------------------------
+# ClickHouseClient tests
+# ---------------------------------------------------------------------------
+
+
+class TestClickHouseClient:
     """Test ClickHouse client."""
-    
-    def setUp(self):
-        """Set up test fixtures."""
-        self.host = "localhost"
-        self.port = 8123
-        self.database = "trading_analytics"
-    
-    def test_initialization(self):
-        """Test client initialization."""
-        try:
-            client = ClickHouseClient(
-                host=self.host,
-                port=self.port,
-                database=self.database
-            )
-            self.assertIsNotNone(client)
-            self.assertEqual(client.host, self.host)
-            self.assertEqual(client.port, self.port)
-            self.assertEqual(client.database, self.database)
-        except Exception:
-            pass
-    
-    def test_insert_time_series_data(self):
-        """Test inserting time series data."""
-        try:
-            client = ClickHouseClient(
-                host=self.host,
-                port=self.port,
-                database=self.database
-            )
-            
-            table = "market_data"
-            data = {
-                "symbol": "AAPL",
-                "timestamp": datetime.now(),
-                "price": 150.50,
-                "volume": 10000
-            }
-            
-            # Mock insert
-            with patch.object(client, 'insert', return_value=True):
-                result = client.insert(table, data)
-                self.assertTrue(result)
-        except Exception:
-            pass
-    
-    def test_query_time_series(self):
-        """Test querying time series data."""
-        try:
-            client = ClickHouseClient(
-                host=self.host,
-                port=self.port,
-                database=self.database
-            )
-            
-            query = """
-            SELECT symbol, AVG(price) as avg_price
-            FROM market_data
-            WHERE timestamp >= now() - INTERVAL 1 DAY
-            GROUP BY symbol
-            """
-            
-            # Mock query method
-            with patch.object(client, 'query', return_value=[]):
-                result = client.query(query)
-                self.assertIsNotNone(result)
-        except Exception:
-            pass
+
+    @patch("libs.database.clickhouse.client.get_config")
+    @patch("libs.database.clickhouse.client.Client")
+    def test_initialization(self, mock_ch_client, mock_get_config):
+        mock_get_config.return_value = _mock_config()
+        from libs.database.clickhouse.client import ClickHouseClient
+
+        client = ClickHouseClient(host="localhost", port=9000)
+        assert client.host == "localhost"
+        assert client.port == 9000
+
+    @patch("libs.database.clickhouse.client.get_config")
+    @patch("libs.database.clickhouse.client.Client")
+    def test_execute(self, mock_ch_client_cls, mock_get_config):
+        mock_get_config.return_value = _mock_config()
+        mock_instance = MagicMock()
+        mock_instance.execute.return_value = [("AAPL", 150.5)]
+        mock_ch_client_cls.return_value = mock_instance
+
+        from libs.database.clickhouse.client import ClickHouseClient
+
+        client = ClickHouseClient(host="localhost", port=9000)
+        result = client.execute("SELECT symbol, price FROM market_data")
+        assert result == [("AAPL", 150.5)]
+
+    @patch("libs.database.clickhouse.client.get_config")
+    @patch("libs.database.clickhouse.client.Client")
+    def test_insert_batch(self, mock_ch_client_cls, mock_get_config):
+        mock_get_config.return_value = _mock_config()
+        mock_instance = MagicMock()
+        mock_ch_client_cls.return_value = mock_instance
+
+        from libs.database.clickhouse.client import ClickHouseClient
+
+        client = ClickHouseClient(host="localhost", port=9000)
+        data = [("AAPL", datetime.now(), 150.5, 10000)]
+        client.insert_batch("market_data", data, ["symbol", "timestamp", "price", "volume"])
+        mock_instance.execute.assert_called_once()
+
+    @patch("libs.database.clickhouse.client.get_config")
+    @patch("libs.database.clickhouse.client.Client")
+    def test_health_check(self, mock_ch_client_cls, mock_get_config):
+        mock_get_config.return_value = _mock_config()
+        mock_instance = MagicMock()
+        mock_instance.execute.return_value = [(1,)]
+        mock_ch_client_cls.return_value = mock_instance
+
+        from libs.database.clickhouse.client import ClickHouseClient
+
+        client = ClickHouseClient(host="localhost", port=9000)
+        assert client.health_check() is True
+
+    @patch("libs.database.clickhouse.client.get_config")
+    @patch("libs.database.clickhouse.client.Client")
+    def test_disconnect(self, mock_ch_client_cls, mock_get_config):
+        mock_get_config.return_value = _mock_config()
+        mock_instance = MagicMock()
+        mock_ch_client_cls.return_value = mock_instance
+
+        from libs.database.clickhouse.client import ClickHouseClient
+
+        client = ClickHouseClient(host="localhost", port=9000)
+        client.disconnect()
+        mock_instance.disconnect.assert_called_once()
 
 
-@unittest.skipIf(not LIBS_AVAILABLE, "libs.database not available")
-class TestRedisClient(unittest.TestCase):
+# ---------------------------------------------------------------------------
+# RedisClient tests
+# ---------------------------------------------------------------------------
+
+
+class TestRedisClient:
     """Test Redis client."""
-    
-    def setUp(self):
-        """Set up test fixtures."""
-        self.connection_string = "redis://localhost:6379/0"
-    
-    def test_initialization(self):
-        """Test client initialization."""
-        try:
-            client = RedisClient(connection_string=self.connection_string)
-            self.assertIsNotNone(client)
-            self.assertEqual(client.connection_string, self.connection_string)
-        except Exception:
-            pass
-    
-    def test_set_get(self):
-        """Test set and get operations."""
-        try:
-            client = RedisClient(connection_string=self.connection_string)
-            key = "test_key"
-            value = "test_value"
-            
-            # Mock operations
-            with patch.object(client, 'set', return_value=True):
-                result = client.set(key, value)
-                self.assertTrue(result)
-            
-            with patch.object(client, 'get', return_value=value):
-                result = client.get(key)
-                self.assertEqual(result, value)
-        except Exception:
-            pass
-    
-    def test_delete(self):
-        """Test delete operation."""
-        try:
-            client = RedisClient(connection_string=self.connection_string)
-            key = "test_key"
-            
-            with patch.object(client, 'delete', return_value=True):
-                result = client.delete(key)
-                self.assertTrue(result)
-        except Exception:
-            pass
-    
-    def test_cache_with_expiry(self):
-        """Test cache with TTL."""
-        try:
-            client = RedisClient(connection_string=self.connection_string)
-            key = "cache_key"
-            value = "cached_value"
-            ttl = 300  # 5 minutes
-            
-            with patch.object(client, 'setex', return_value=True):
-                result = client.set(key, value, ttl)
-                self.assertTrue(result)
-        except Exception:
-            pass
+
+    @patch("libs.database.redis.client.get_config")
+    def test_initialization(self, mock_get_config):
+        mock_get_config.return_value = _mock_config()
+        from libs.database.redis.client import RedisClient
+
+        client = RedisClient(redis_url="redis://localhost:6379/0")
+        assert client is not None
+        assert client.redis_url == "redis://localhost:6379/0"
+        assert client.client is None
+
+    @pytest.mark.asyncio
+    @patch("libs.database.redis.client.get_config")
+    async def test_set_and_get(self, mock_get_config):
+        mock_get_config.return_value = _mock_config()
+        from libs.database.redis.client import RedisClient
+
+        client = RedisClient(redis_url="redis://localhost:6379/0")
+        mock_redis = AsyncMock()
+        mock_redis.get.return_value = "test_value"
+        mock_redis.set.return_value = True
+        client.client = mock_redis
+
+        await client.set("test_key", "test_value")
+        mock_redis.set.assert_called_once_with("test_key", "test_value")
+
+        result = await client.get("test_key")
+        assert result == "test_value"
+
+    @pytest.mark.asyncio
+    @patch("libs.database.redis.client.get_config")
+    async def test_delete(self, mock_get_config):
+        mock_get_config.return_value = _mock_config()
+        from libs.database.redis.client import RedisClient
+
+        client = RedisClient(redis_url="redis://localhost:6379/0")
+        mock_redis = AsyncMock()
+        client.client = mock_redis
+
+        await client.delete("test_key")
+        mock_redis.delete.assert_called_once_with("test_key")
+
+    @pytest.mark.asyncio
+    @patch("libs.database.redis.client.get_config")
+    async def test_set_with_ttl(self, mock_get_config):
+        mock_get_config.return_value = _mock_config()
+        from libs.database.redis.client import RedisClient
+
+        client = RedisClient(redis_url="redis://localhost:6379/0")
+        mock_redis = AsyncMock()
+        client.client = mock_redis
+
+        await client.set("cache_key", "cached_value", ttl=300)
+        mock_redis.setex.assert_called_once_with("cache_key", 300, "cached_value")
+
+    @pytest.mark.asyncio
+    @patch("libs.database.redis.client.get_config")
+    async def test_health_check(self, mock_get_config):
+        mock_get_config.return_value = _mock_config()
+        from libs.database.redis.client import RedisClient
+
+        client = RedisClient(redis_url="redis://localhost:6379/0")
+        mock_redis = AsyncMock()
+        mock_redis.ping.return_value = True
+        client.client = mock_redis
+
+        result = await client.health_check()
+        assert result is True
+
+    @pytest.mark.asyncio
+    @patch("libs.database.redis.client.get_config")
+    async def test_connect_creates_client(self, mock_get_config):
+        mock_get_config.return_value = _mock_config()
+        from libs.database.redis.client import RedisClient
+
+        client = RedisClient(redis_url="redis://localhost:6379/0")
+        assert client.client is None
+
+        with patch("libs.database.redis.client.aioredis") as mock_aioredis:
+            mock_redis = AsyncMock()
+            mock_aioredis.from_url = AsyncMock(return_value=mock_redis)
+            await client.connect()
+            assert client.client is not None
+
+    @pytest.mark.asyncio
+    @patch("libs.database.redis.client.get_config")
+    async def test_disconnect(self, mock_get_config):
+        mock_get_config.return_value = _mock_config()
+        from libs.database.redis.client import RedisClient
+
+        client = RedisClient(redis_url="redis://localhost:6379/0")
+        mock_redis = AsyncMock()
+        client.client = mock_redis
+
+        await client.disconnect()
+        mock_redis.close.assert_awaited_once()
+        assert client.client is None
+
+    @pytest.mark.asyncio
+    @patch("libs.database.redis.client.get_config")
+    async def test_get_json(self, mock_get_config):
+        mock_get_config.return_value = _mock_config()
+        from libs.database.redis.client import RedisClient
+
+        client = RedisClient(redis_url="redis://localhost:6379/0")
+        mock_redis = AsyncMock()
+        mock_redis.get.return_value = '{"symbol": "AAPL", "price": 150.5}'
+        client.client = mock_redis
+
+        result = await client.get_json("market:AAPL")
+        assert result == {"symbol": "AAPL", "price": 150.5}
+
+    @pytest.mark.asyncio
+    @patch("libs.database.redis.client.get_config")
+    async def test_set_json(self, mock_get_config):
+        mock_get_config.return_value = _mock_config()
+        from libs.database.redis.client import RedisClient
+
+        client = RedisClient(redis_url="redis://localhost:6379/0")
+        mock_redis = AsyncMock()
+        client.client = mock_redis
+
+        await client.set_json("market:AAPL", {"symbol": "AAPL", "price": 150.5}, ttl=60)
+        mock_redis.setex.assert_called_once()
 
 
-class TestRedisCachingStrategies(unittest.TestCase):
+# ---------------------------------------------------------------------------
+# Caching strategies (conceptual tests)
+# ---------------------------------------------------------------------------
+
+
+class TestRedisCachingStrategies:
     """Test different caching strategies using Redis."""
-    
+
     def test_write_through_cache(self):
-        """Test write-through caching pattern."""
-        # Conceptual test for write-through cache
         key = "write_through_key"
         value = "write_through_value"
-        
-        # In write-through, data is written to both cache and persistent storage
-        self.assertIsNotNone(key)
-        self.assertIsNotNone(value)
-    
+        assert key is not None
+        assert value is not None
+
     def test_write_back_cache(self):
-        """Test write-back caching pattern."""
-        # Conceptual test for write-back cache
         key = "write_back_key"
         value = "write_back_value"
-        
-        # In write-back, data is written to cache and lazily to persistent storage
-        self.assertIsNotNone(key)
-        self.assertIsNotNone(value)
-    
+        assert key is not None
+        assert value is not None
+
     def test_cache_aside_pattern(self):
-        """Test cache-aside pattern."""
-        # Conceptual test for cache-aside pattern
-        key = "cache_aside_key"
-        
-        # In cache-aside, application manages cache explicitly
-        cache_hit = True  # Simulated cache hit
-        self.assertTrue(cache_hit)
+        cache_hit = True
+        assert cache_hit is True
 
 
-class TestDatabaseConnectionPooling(unittest.TestCase):
-    """Test database connection pooling."""
-    
+class TestDatabaseConnectionPooling:
+    """Test database connection pooling concepts."""
+
     def test_pool_creation(self):
-        """Test connection pool creation."""
-        # Conceptual test for connection pool
         pool_size = 10
         max_overflow = 5
-        
-        self.assertGreater(pool_size, 0)
-        self.assertGreater(max_overflow, 0)
-    
+        assert pool_size > 0
+        assert max_overflow > 0
+
     def test_pool_connection_reuse(self):
-        """Test connection reuse from pool."""
-        # Conceptual test for connection reuse
         connections_used = 5
         pool_size = 10
-        
-        self.assertLessEqual(connections_used, pool_size)
-    
+        assert connections_used <= pool_size
+
     def test_pool_cleanup(self):
-        """Test connection pool cleanup."""
-        # Conceptual test for pool cleanup
         idle_connections = 3
         cleanup_threshold = 2
-        
-        self.assertGreaterEqual(idle_connections, cleanup_threshold)
-
-
-if __name__ == '__main__':
-    unittest.main()
+        assert idle_connections >= cleanup_threshold

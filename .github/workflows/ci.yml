@@ -2,9 +2,9 @@ name: Automated CI/CD
 
 on:
   push:
-    branches: [main, develop]
+    branches: [main, develop, master]
   pull_request:
-    branches: [main, develop]
+    branches: [main, develop, master]
 
 jobs:
   build:
@@ -12,24 +12,61 @@ jobs:
     steps:
     - name: Checkout code
       uses: actions/checkout@v4
+
     - name: Setup Python
       uses: actions/setup-python@v5
       with:
         python-version: '3.11'
+
     - name: Install Poetry
       run: |
         curl -sSL https://install.python-poetry.org | python3 -
+
     - name: Install dependencies
-      run: poetry install
-    - name: Run linters
       run: |
-        poetry run black --check libs/ services/
-        poetry run isort --check-only libs/ services/
+        poetry install
+        poetry add pytest-asyncio --group dev
+
+    - name: Lint with ruff
+      run: |
+        poetry run ruff check libs/ services/ core_trading/
+
+    - name: Lint with black
+      run: |
+        poetry run black --check libs/ services/ core_trading/
+
+    - name: Lint with isort
+      run: |
+        poetry run isort --check-only libs/ services/ core_trading/
+
+    - name: Type check with mypy
+      run: |
+        poetry run mypy libs/ services/ core_trading/ --ignore-missing-imports
+      continue-on-error: true
+
+    - name: Security scan with bandit
+      run: |
+        poetry run bandit -r libs/ services/ core_trading/ -f json -o bandit-report.json || true
+        poetry run bandit -r libs/ services/ core_trading/ -ll
+      continue-on-error: true
+
     - name: Run unit tests
       run: |
-        poetry run pytest tests/unit/ -v --cov=libs --cov-report=xml --cov-report=html
+        poetry run pytest tests/unit/ -v --cov=libs --cov=services --cov-report=xml --cov-report=html
+
+    - name: Run integration tests
+      run: |
+        poetry run pytest tests/integration/ -v --cov=libs --cov=services --cov-append --cov-report=xml
+
     - name: Upload coverage
       uses: actions/upload-artifact@v4
       with:
         name: coverage
         path: htmlcov/
+
+    - name: Upload security report
+      uses: actions/upload-artifact@v4
+      if: always()
+      with:
+        name: bandit-report
+        path: bandit-report.json
