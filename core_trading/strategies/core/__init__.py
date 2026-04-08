@@ -14,6 +14,12 @@ from .base_institutional_strategy import (
     BaseInstitutionalStrategy,
     InstitutionalConfig,
 )
+from .augmented_base_institutional_strategy import (
+    AugmentedBaseInstitutionalStrategy,
+    AugmentedConfig,
+    AugmentedSignal,
+    PillarScores,
+)
 
 __all__ = [
     "BaseStrategy",
@@ -26,4 +32,8 @@ __all__ = [
     "validate_ohlcv_data",
     "BaseInstitutionalStrategy",
     "InstitutionalConfig",
+    "AugmentedBaseInstitutionalStrategy",
+    "AugmentedConfig",
+    "AugmentedSignal",
+    "PillarScores",
 ]

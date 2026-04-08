@@ -1,112 +1,97 @@
+"""Augmented Momentum Strategy using the augmented architecture."""
+
 from __future__ import annotations
 
 import logging
 from datetime import datetime
-from typing import Any, Dict
+from enum import Enum
+from typing import Any, Dict, List, Optional
 
 import numpy as np
-# from nautilus_trader_engine.strategies.core.augmented_base_institutional_strategy import ()
-# from nautilus_trader_engine.strategies.core.base_institutional_strategy import ()
-#     AugmentedBaseInstitutionalStrategy,
-#     AugmentedPillar,
-#     AugmentedSignalData,
-# )
-#     MarketRegime,
-#     SignalData,
-#     SignalType,
-# )
+import pandas as pd
 
 
-# class AugmentedMomentumStrategy(AugmentedBaseInstitutionalStrategy):
-#     "Example momentum strategy using the augmented architecture."
+class SignalType(Enum):
+    BUY = "BUY"
+    SELL = "SELL"
+    HOLD = "HOLD"
 
-#     def __init__(self, **kwargs):
-# super().__init__("
-# strategy_name="Augmented Momentum Strategy","
-#             symbols=["AAPL", "MSFT", "GOOGL"],
-# **kwargs,
-# )
-#         self.lookback_period = 20
 
-#     def generate_augmented_signals(
-# self, market_data: Dict[str, Any]
-# ) -> Dict[str, AugmentedSignalData]:
-#         signals = {}
-#         for symbol in self.symbols:
-#             if (
-#                 symbol in self.price_history
-# and len(self.price_history[symbol]) >= self.lookback_period
-# ):
-#                 prices = np.array(self.price_history[symbol][-self.lookback_period :])
-#                 momentum = (prices[-1] - prices[0]) / prices[0]
+class MarketRegime(Enum):
+    TRENDING_UP = "TRENDING_UP"
+    TRENDING_DOWN = "TRENDING_DOWN"
+    SIDEWAYS = "SIDEWAYS"
+    HIGH_VOLATILITY = "HIGH_VOLATILITY"
+    LOW_VOLATILITY = "LOW_VOLATILITY"
 
-                # Pillar 1: Signal Generation Score
-#                 signal_score = min(1.0, abs(momentum) * 10)
 
-                # Pillar 2: Risk Management Score
-#                 volatility = np.std(prices) / np.mean(prices)
-#                 risk_score = max(0.0, 1.0 - volatility * 10)
+logger = logging.getLogger(__name__)
 
-                # Pillar 3: Market Regime Adaptation Score
-# regime_alignment = self.get_regime_alignment_score(
-# SignalData(
-#                         signal_type=self._get_signal_type(momentum),
-#                         confidence=0,
-#                         strength=0,
-#                         timestamp=datetime.now(),
-#                         metadata={},
-# )
-# )
 
-# pillar_scores = {
-# AugmentedPillar.SIGNAL_GENERATION: signal_score,
-# AugmentedPillar.RISK_MANAGEMENT: risk_score,
-# AugmentedPillar.MARKET_REGIME_ADAPTATION: regime_alignment,
-# }
+class AugmentedMomentumStrategy:
+    """Example momentum strategy using the augmented architecture."""
 
-# confidence = np.average(
-#                     [pillar_scores[p] for p in pillar_scores],
-#                     weights=[self.pillar_weights[p] for p in pillar_scores],
-# )
+    def __init__(self, lookback_period: int = 20, symbols: Optional[List[str]] = None, **kwargs):
+        self.strategy_name = "Augmented Momentum Strategy"
+        self.symbols = symbols or ["AAPL", "MSFT", "GOOGL"]
+        self.lookback_period = lookback_period
+        self.price_history: Dict[str, List[float]] = {s: [] for s in self.symbols}
 
-# signals[symbol] = AugmentedSignalData(
-#                     signal_type=self._get_signal_type(momentum),
-#                     confidence=confidence,
-#                     strength=signal_score,
-# timestamp=datetime.now(),"
-#                     metadata={"momentum": momentum},
-#                     pillar_scores=pillar_scores,
-# )
-#         return signals
+    def update_price(self, symbol: str, price: float) -> None:
+        """Record a new price for a symbol."""
+        if symbol in self.price_history:
+            self.price_history[symbol].append(price)
 
-#     def _get_signal_type(self, momentum: float) -> SignalType:
-#         if momentum > 0.05:
-#             return SignalType.BUY
-#         elif momentum < -0.05:
-#             return SignalType.SELL
-#         else:
-#             return SignalType.HOLD
+    def generate_augmented_signals(self, market_data: Optional[Dict[str, Any]] = None) -> Dict[str, Dict[str, Any]]:
+        """Generate momentum signals for all tracked symbols."""
+        signals = {}
+        for symbol in self.symbols:
+            prices = self.price_history.get(symbol, [])
+            if len(prices) >= self.lookback_period:
+                price_arr = np.array(prices[-self.lookback_period:])
+                momentum = (price_arr[-1] - price_arr[0]) / price_arr[0]
+                volatility = float(np.std(price_arr) / np.mean(price_arr)) if np.mean(price_arr) > 0 else 0.0
 
-#     def detect_market_regime(self, market_data: Dict[str, Any]) -> MarketRegime:
-#         "symbol = self.symbols[0]"
-#         if (
-#             symbol in self.price_history
-# and len(self.price_history[symbol]) >= self.lookback_period
-# ):
-#             prices = np.array(self.price_history[symbol][-self.lookback_period :])
-#             volatility = np.std(prices) / np.mean(prices)
+                signal_score = min(1.0, abs(momentum) * 10)
+                risk_score = max(0.0, 1.0 - volatility * 10)
+                confidence = (signal_score + risk_score) / 2.0
 
-#             if volatility > 0.03:
-#                 return MarketRegime.HIGH_VOLATILITY
-#             elif volatility < 0.01:
-#                 return MarketRegime.LOW_VOLATILITY
-#             else:
-#                 trend = (prices[-1] - prices[0]) / prices[0]
-#                 if trend > 0.02:
-#                     return MarketRegime.TRENDING_UP
-#                 elif trend < -0.02:
-#                     return MarketRegime.TRENDING_DOWN
-#                 else:
-#                     return MarketRegime.SIDEWAYS
-#         return MarketRegime.SIDEWAYS
-# "
+                signals[symbol] = {
+                    "signal_type": self._get_signal_type(momentum),
+                    "confidence": confidence,
+                    "strength": signal_score,
+                    "momentum": momentum,
+                    "timestamp": datetime.now(),
+                }
+        return signals
+
+    def _get_signal_type(self, momentum: float) -> SignalType:
+        """Convert momentum value to signal type."""
+        if momentum > 0.05:
+            return SignalType.BUY
+        elif momentum < -0.05:
+            return SignalType.SELL
+        return SignalType.HOLD
+
+    def detect_market_regime(self, market_data: Optional[Dict[str, Any]] = None) -> MarketRegime:
+        """Detect current market regime based on price history."""
+        if not self.symbols:
+            return MarketRegime.SIDEWAYS
+        symbol = self.symbols[0]
+        prices = self.price_history.get(symbol, [])
+        if len(prices) < self.lookback_period:
+            return MarketRegime.SIDEWAYS
+        price_arr = np.array(prices[-self.lookback_period:])
+        volatility = float(np.std(price_arr) / np.mean(price_arr)) if np.mean(price_arr) > 0 else 0.0
+
+        if volatility > 0.03:
+            return MarketRegime.HIGH_VOLATILITY
+        elif volatility < 0.01:
+            return MarketRegime.LOW_VOLATILITY
+
+        trend = (price_arr[-1] - price_arr[0]) / price_arr[0]
+        if trend > 0.02:
+            return MarketRegime.TRENDING_UP
+        elif trend < -0.02:
+            return MarketRegime.TRENDING_DOWN
+        return MarketRegime.SIDEWAYS
