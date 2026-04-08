@@ -37,6 +37,12 @@ def _load_module(name, path, package=None):
 _load_module("risk_engines", os.path.join(_rm_engines, "risk_engine.py"))
 _load_module("kill_switch", os.path.join(_rm_engines, "kill_switch.py"))
 
+# Load compliance module via importlib
+_compliance_src = os.path.join(_project_root, "services", "compliance", "src")
+_compliance_engine_path = os.path.join(_compliance_src, "compliance_engine.py")
+if os.path.exists(_compliance_engine_path):
+    _load_module("compliance_engine", _compliance_engine_path)
+
 # Load ai-assistant module via importlib
 _ai_src = os.path.join(_project_root, "services", "ai-assistant", "src")
 _ai_main_path = os.path.join(_ai_src, "main.py")
