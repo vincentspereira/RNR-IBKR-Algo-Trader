@@ -66,9 +66,6 @@ config/*.private.*
 graphify-out/
 .graphify_*
 
-# Obsidian vault (bloated, not needed in repo)
-**/obsidian/
-
 # Logs
 *.log
 logs/
