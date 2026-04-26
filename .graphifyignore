@@ -1,0 +1,85 @@
+# Git
+.git/
+
+# Python caches
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+*.pyc
+*.pyo
+
+# Virtual environments
+.venv/
+venv/
+env/
+ENV/
+
+# Build artifacts
+build/
+dist/
+*.egg-info/
+*.egg
+.eggs/
+
+# Binary / non-text files
+*.pkl
+*.pickle
+*.db
+*.sqlite
+*.sqlite3
+*.bin
+*.exe
+*.dll
+*.so
+*.dylib
+
+# Coverage data (binary)
+.coverage
+.coverage.*
+
+# Caches
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.tox/
+.nox/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Secrets
+.env
+.env.*
+!.env.example
+config/secrets.yaml
+config/*.private.*
+
+# Graphify output (avoid re-processing previous runs)
+graphify-out/
+.graphify_*
+
+# Logs
+*.log
+logs/
+
+# Docker
+.docker/
+
+# Project internals
+.archive/
+.claude/
+backups/
+.specify/
+
+# Office files (need graphifyy[office])
+*.docx
+*.xlsx
+*.pptx

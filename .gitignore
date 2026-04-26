@@ -62,6 +62,14 @@ Thumbs.db
 # Docker
 .docker/
 
+# Graphify generated artifacts (keep graph.json, GRAPH_REPORT.md, manifest.json)
+**/graphify-out/cache/
+**/graphify-out/obsidian/
+**/graphify-out/*.html
+**/graphify-out/*.svg
+**/graphify-out/*.graphml
+**/graphify-out/cypher.txt
+
 # Project Specific
 config/secrets.yaml
 config/*.private.*
