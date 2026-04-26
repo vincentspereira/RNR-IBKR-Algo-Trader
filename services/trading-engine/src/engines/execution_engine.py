@@ -618,6 +618,7 @@ class ExecutionEngine:
             return True
 
         except Exception as e:
+            self._circuit_breaker.record_failure()
             logger.error(f"Error submitting order {order.order_id}: {e}")
             return False
 
