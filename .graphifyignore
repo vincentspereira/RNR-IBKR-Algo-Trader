@@ -62,8 +62,7 @@ Thumbs.db
 config/secrets.yaml
 config/*.private.*
 
-# Graphify output (avoid re-processing previous runs)
-graphify-out/
+# Graphify temp files
 .graphify_*
 
 # Logs
