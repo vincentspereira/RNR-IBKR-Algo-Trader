@@ -79,3 +79,7 @@ config/*.private.*
 .archive/
 .claude/
 backups/
+
+# Agent tool artifacts
+.agent/
+.graphify_python/
