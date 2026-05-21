@@ -77,6 +77,15 @@ config/*.private.*
 
 # Local and backup directories
 .archive/
+
+# Shadow / backup files that should never be tracked
+# (these proliferated during automated refactoring attempts)
+*.backup
+*.bak
+*.old
+*.orig
+*.fixed_attempt
+*.py.fixed_attempt
 .claude/
 backups/
 
