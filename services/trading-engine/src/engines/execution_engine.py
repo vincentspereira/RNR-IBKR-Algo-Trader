@@ -23,7 +23,8 @@ from typing import Any, Callable, Dict, List, Optional, Set, Tuple
 
 import numpy as np
 import pandas as pd
-from loguru import logger
+
+logger = logging.getLogger(__name__)
 
 from ..core.event_system import Event, EventBus, EventPriority, EventType, get_event_bus
 from ..core.fault_tolerance import CircuitBreaker, HealthMonitor
@@ -492,7 +493,7 @@ class ExecutionEngine:
             self._load_default_venues()
             self._load_slippage_models()
 
-            await self._event_bus.subscribe(
+            self._event_bus.subscribe(
                 EventType.ORDER, self._handle_order_request
             )
 
@@ -700,6 +701,65 @@ class ExecutionEngine:
             f"Fill processed: {order_id} qty={fill_quantity} @ {fill_price} "
             f"(total filled: {order.filled_quantity}/{order.quantity})"
         )
+
+    def _find_order_by_broker_id(self, broker_order_id: str) -> Optional["Order"]:
+        """Return the local Order whose broker_order_id matches, else None."""
+        with self._lock:
+            for order in self._orders.values():
+                if order.broker_order_id is not None and \
+                        str(order.broker_order_id) == str(broker_order_id):
+                    return order
+        return None
+
+    async def handle_fill_by_broker_id(
+        self,
+        broker_order_id: str,
+        fill_quantity: float,
+        fill_price: float,
+    ) -> None:
+        """Process a fill keyed by broker_order_id (e.g. IBKR execDetailsEvent)."""
+        order = self._find_order_by_broker_id(broker_order_id)
+        if order is None:
+            logger.warning(
+                f"Fill received for unknown broker_order_id={broker_order_id} "
+                f"(local order map has {len(self._orders)} orders)"
+            )
+            return
+        await self.handle_fill(order.order_id, fill_quantity, fill_price)
+
+    async def handle_status_by_broker_id(
+        self,
+        broker_order_id: str,
+        broker_status: str,
+    ) -> None:
+        """Process a broker status update keyed by broker_order_id.
+
+        Maps ib_insync OrderStatus strings to OrderStateMachine transitions.
+        Filled is handled by handle_fill_by_broker_id (via execDetailsEvent),
+        so we only act on terminal cancel/reject/inactive transitions here.
+        """
+        status_norm = broker_status.lower()
+        # ib_insync statuses: PendingSubmit, PreSubmitted, Submitted,
+        # Filled, Cancelled, ApiCancelled, Inactive
+        if status_norm in ("cancelled", "apicancelled"):
+            new_status = OrderStatus.CANCELLED
+        elif status_norm == "inactive":
+            new_status = OrderStatus.REJECTED
+        else:
+            return  # informational only
+
+        order = self._find_order_by_broker_id(broker_order_id)
+        if order is None:
+            return
+        if self._state_machine.is_terminal(order.status):
+            return
+        try:
+            self._state_machine.transition(order, new_status)
+        except ValueError as e:
+            logger.warning(
+                f"Refused status transition for {order.order_id} "
+                f"({order.status.value} -> {new_status.value}): {e}"
+            )
 
     async def reconcile_positions(self) -> None:
         """Sync local state with broker positions."""

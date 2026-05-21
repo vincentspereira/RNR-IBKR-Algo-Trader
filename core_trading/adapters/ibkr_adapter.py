@@ -18,14 +18,22 @@ import uuid
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from enum import Enum
-from typing import Any, Callable, Dict, List, Optional
+from typing import Any, Awaitable, Callable, Dict, List, Optional
 
 try:
     from ib_insync import IB, Contract, Order, Stock, Option, Future, Forex, Trade, util
     IBKR_AVAILABLE = True
 except ImportError:
+    IB = None
+    Contract = None
+    Order = None
+    Stock = None
+    Option = None
+    Future = None
+    Forex = None
+    Trade = None
+    util = None
     IBKR_AVAILABLE = False
-    logging.warning("ib_insync not available - IBKR adapter will be simulated")
 
 from .base import (
     AdapterConfig,
@@ -126,6 +134,10 @@ class IBKRAdapter(BaseBrokerAdapter):
         # Market data subscriptions
         self._market_data_callbacks: Dict[str, List[Callable]] = {}
 
+        # Fill / order status routing (set by bootstrap via on_fill / on_order_status)
+        self._fill_callback: Optional[Callable[[str, float, float], Awaitable[None]]] = None
+        self._status_callback: Optional[Callable[[str, str], Awaitable[None]]] = None
+
         # Reconnection state
         self._reconnect_task: Optional[asyncio.Task] = None
         self._heartbeat_task: Optional[asyncio.Task] = None
@@ -153,28 +165,29 @@ class IBKRAdapter(BaseBrokerAdapter):
 
     async def connect(self) -> bool:
         """Connect to Interactive Brokers TWS/Gateway."""
-        self._set_status(ConnectionStatus.CONNECTING)
-
         if not IBKR_AVAILABLE:
-            logger.info("IBKR integration not available - using simulation mode")
-            self._set_status(ConnectionStatus.CONNECTED)
-            self.connection_start_time = datetime.now(timezone.utc)
-            return True
+            self._set_status(ConnectionStatus.ERROR)
+            raise RuntimeError(
+                "ib_insync is not installed - cannot connect to IBKR. "
+                "Install with: pip install ib_insync>=0.9.86"
+            )
+
+        self._set_status(ConnectionStatus.CONNECTING)
 
         try:
             self.ib = IB()
-            port = 7497 if self.paper_trading else 7496
-            await self.ib.connectAsync(self.host, port, clientId=self.client_id)
+            await self.ib.connectAsync(self.host, self.port, clientId=self.client_id)
             self._set_status(ConnectionStatus.CONNECTED)
             self.connection_start_time = datetime.now(timezone.utc)
             self._register_ib_callbacks()
             logger.info(
-                f"Connected to IBKR {'paper' if self.paper_trading else 'live'} trading"
+                f"Connected to IBKR {'paper' if self.paper_trading else 'live'} "
+                f"trading at {self.host}:{self.port} clientId={self.client_id}"
             )
             return True
         except Exception as e:
             self._set_status(ConnectionStatus.ERROR)
-            logger.error(f"Failed to connect to IBKR: {e}")
+            logger.error(f"Failed to connect to IBKR at {self.host}:{self.port}: {e}")
             return False
 
     async def disconnect(self) -> bool:
@@ -185,7 +198,7 @@ class IBKRAdapter(BaseBrokerAdapter):
             if self._reconnect_task:
                 self._reconnect_task.cancel()
 
-            if self.ib and IBKR_AVAILABLE:
+            if self.ib is not None and self.ib.isConnected():
                 self.ib.disconnect()
 
             self._set_status(ConnectionStatus.DISCONNECTED)
@@ -197,32 +210,43 @@ class IBKRAdapter(BaseBrokerAdapter):
 
     async def health_check(self) -> HealthCheck:
         """Check connection health."""
-        if not IBKR_AVAILABLE:
+        if self.ib is not None and self.ib.isConnected():
             return HealthCheck(
                 status=ConnectionStatus.CONNECTED,
                 timestamp=datetime.now(timezone.utc),
-                metadata={"mode": "simulation"},
             )
+        return HealthCheck(
+            status=ConnectionStatus.DISCONNECTED,
+            timestamp=datetime.now(timezone.utc),
+            error_message="Not connected to IBKR",
+        )
 
-        if self.ib and self.ib.isConnected():
-            return HealthCheck(
-                status=ConnectionStatus.CONNECTED,
-                timestamp=datetime.now(timezone.utc),
-            )
-        else:
-            return HealthCheck(
-                status=ConnectionStatus.DISCONNECTED,
-                timestamp=datetime.now(timezone.utc),
-                error_message="Not connected to IBKR",
-            )
+    def on_fill(
+        self, callback: Callable[[str, float, float], Awaitable[None]]
+    ) -> None:
+        """Register a coroutine to handle fills. Signature: (broker_order_id, qty, price)."""
+        self._fill_callback = callback
+
+    def on_order_status(
+        self, callback: Callable[[str, str], Awaitable[None]]
+    ) -> None:
+        """Register a coroutine to handle order status changes.
+
+        Signature: (broker_order_id, ib_status). Statuses follow ib_insync
+        OrderStatus.status: 'PendingSubmit', 'PreSubmitted', 'Submitted',
+        'Filled', 'Cancelled', 'ApiCancelled', 'Inactive'.
+        """
+        self._status_callback = callback
 
     def _register_ib_callbacks(self):
         """Register IBKR event callbacks."""
-        if not self.ib or not IBKR_AVAILABLE:
+        if self.ib is None:
             return
 
         self.ib.disconnectedEvent += self._on_disconnected
         self.ib.errorEvent += self._on_error
+        self.ib.execDetailsEvent += self._on_exec_details
+        self.ib.orderStatusEvent += self._on_order_status
 
     def _on_disconnected(self, *_args):
         """Handle IBKR disconnection."""
@@ -240,24 +264,66 @@ class IBKRAdapter(BaseBrokerAdapter):
             "contract": str(contract) if contract else None,
         })
 
+    def _on_exec_details(self, trade, fill):
+        """Route IBKR execution-detail (fill) to the registered fill callback."""
+        try:
+            broker_order_id = str(fill.execution.orderId)
+            qty = float(fill.execution.shares)
+            price = float(fill.execution.price)
+            logger.info(
+                f"IBKR fill: broker_order_id={broker_order_id} qty={qty} price={price}"
+            )
+        except Exception as e:
+            logger.error(f"Failed to parse IBKR exec details: {e}")
+            return
+
+        if self._fill_callback is None:
+            logger.warning(
+                f"IBKR fill received but no fill_callback registered "
+                f"(broker_order_id={broker_order_id})"
+            )
+            return
+
+        try:
+            asyncio.create_task(self._fill_callback(broker_order_id, qty, price))
+        except RuntimeError as e:
+            logger.error(f"Cannot schedule fill callback (no running loop?): {e}")
+
+    def _on_order_status(self, trade):
+        """Route IBKR orderStatus updates to the registered status callback."""
+        try:
+            broker_order_id = str(trade.order.orderId)
+            ib_status = str(trade.orderStatus.status)
+        except Exception as e:
+            logger.error(f"Failed to parse IBKR order status: {e}")
+            return
+
+        logger.debug(
+            f"IBKR order status: broker_order_id={broker_order_id} status={ib_status}"
+        )
+
+        if self._status_callback is None:
+            return
+
+        try:
+            asyncio.create_task(self._status_callback(broker_order_id, ib_status))
+        except RuntimeError as e:
+            logger.error(f"Cannot schedule status callback (no running loop?): {e}")
+
     async def _heartbeat_loop(self):
         """Monitor connection health periodically."""
         while self.is_connected:
             await asyncio.sleep(self.config.heartbeat_interval.total_seconds())
             try:
-                if IBKR_AVAILABLE and self.ib:
-                    if not self.ib.isConnected():
-                        self._set_status(ConnectionStatus.DISCONNECTED)
-                        logger.warning("IBKR heartbeat: connection lost")
-                        self._emit_event("connection_lost")
+                if self.ib is not None and not self.ib.isConnected():
+                    self._set_status(ConnectionStatus.DISCONNECTED)
+                    logger.warning("IBKR heartbeat: connection lost")
+                    self._emit_event("connection_lost")
             except Exception as e:
                 logger.error(f"Heartbeat error: {e}")
 
     def _create_contract(self, symbol: str, asset_class: AssetClass = AssetClass.EQUITIES, **kwargs) -> Any:
         """Create an IBKR Contract for the given symbol and asset class."""
-        if not IBKR_AVAILABLE:
-            return None
-
         if asset_class == AssetClass.EQUITIES:
             return Stock(symbol, "SMART", "USD")
         elif asset_class == AssetClass.OPTIONS:
@@ -339,29 +405,15 @@ class IBKRAdapter(BaseBrokerAdapter):
                 "order_id": None,
             }
 
+        if self.ib is None:
+            raise RuntimeError("IBKR adapter not connected; call connect() before placing orders")
+
         order_id = str(self._next_order_id)
         self._next_order_id += 1
         asset_class = order_data.get("asset_class", AssetClass.EQUITIES)
         if isinstance(asset_class, str):
             asset_class = AssetClass(asset_class)
 
-        if not IBKR_AVAILABLE or not self.ib:
-            # Simulation mode
-            self._orders[order_id] = {
-                "order_data": order_data,
-                "status": "submitted",
-                "timestamp": datetime.now(timezone.utc),
-                "broker_order_id": order_id,
-            }
-            self._daily_trades.append(order_data)
-            logger.info(f"Simulated order: {order_id} - {order_data.get('symbol')}")
-            return {
-                "order_id": order_id,
-                "status": "submitted",
-                "broker_order_id": order_id,
-            }
-
-        # Real IBKR execution
         contract = self._create_contract(order_data["symbol"], asset_class)
 
         ib_order = Order()
@@ -423,13 +475,9 @@ class IBKRAdapter(BaseBrokerAdapter):
             logger.warning(f"Order not found for cancellation: {order_id}")
             return False
 
-        if not IBKR_AVAILABLE or not self.ib:
-            # Simulation mode
-            order_record["status"] = "cancelled"
-            logger.info(f"Simulated order cancellation: {order_id}")
-            return True
+        if self.ib is None:
+            raise RuntimeError("IBKR adapter not connected; cannot cancel order")
 
-        # Real IBKR cancellation
         try:
             trade = order_record.get("trade")
             if trade:
@@ -450,10 +498,6 @@ class IBKRAdapter(BaseBrokerAdapter):
         if not order_record:
             return {"status": "unknown", "error": "Order not found"}
 
-        if not IBKR_AVAILABLE or not self.ib:
-            return {"status": order_record["status"]}
-
-        # Real IBKR status
         try:
             trade = order_record.get("trade")
             if trade:
@@ -469,11 +513,8 @@ class IBKRAdapter(BaseBrokerAdapter):
 
     async def get_positions(self) -> List[Dict[str, Any]]:
         """Get current positions."""
-        if not self.is_connected:
+        if not self.is_connected or self.ib is None:
             raise RuntimeError("Not connected to IBKR")
-
-        if not IBKR_AVAILABLE or not self.ib:
-            return list(self._positions.values())
 
         try:
             positions = self.ib.positions()
@@ -492,17 +533,8 @@ class IBKRAdapter(BaseBrokerAdapter):
 
     async def get_account_info(self) -> Dict[str, Any]:
         """Get account information."""
-        if not self.is_connected:
+        if not self.is_connected or self.ib is None:
             raise RuntimeError("Not connected to IBKR")
-
-        if not IBKR_AVAILABLE or not self.ib:
-            return {
-                "account_id": self.account_id,
-                "balance": self._account_balance,
-                "buying_power": self._account_balance * 2,
-                "net_liquidation": self._account_balance,
-                "currency": "USD",
-            }
 
         try:
             account_values = {v.tag: v.value for v in self.ib.accountValues()}
@@ -525,17 +557,16 @@ class IBKRAdapter(BaseBrokerAdapter):
 
     async def subscribe_market_data(self, symbol: str, callback: Callable):
         """Subscribe to real-time market data for a symbol."""
-        if not self.is_connected:
+        if not self.is_connected or self.ib is None:
             raise RuntimeError("Not connected to IBKR")
 
         if symbol not in self._market_data_callbacks:
             self._market_data_callbacks[symbol] = []
         self._market_data_callbacks[symbol].append(callback)
 
-        if IBKR_AVAILABLE and self.ib:
-            contract = self._create_contract(symbol)
-            ticker = self.ib.reqMktData(contract, "", False, False)
-            ticker.updateEvent += lambda t: self._on_market_data(symbol, t)
+        contract = self._create_contract(symbol)
+        ticker = self.ib.reqMktData(contract, "", False, False)
+        ticker.updateEvent += lambda t: self._on_market_data(symbol, t)
 
         logger.info(f"Subscribed to market data: {symbol}")
 
@@ -562,11 +593,8 @@ class IBKRAdapter(BaseBrokerAdapter):
         bar_size: str = "1 min",
     ) -> List[Dict[str, Any]]:
         """Get historical OHLCV data via IBKR."""
-        if not self.is_connected:
+        if not self.is_connected or self.ib is None:
             raise RuntimeError("Not connected to IBKR")
-
-        if not IBKR_AVAILABLE or not self.ib:
-            return []
 
         try:
             contract = self._create_contract(symbol)
