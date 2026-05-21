@@ -10,8 +10,8 @@ networks:
 volumes:
   postgres_data:
   clickhouse_data:
-  neo4j_data:
-  redis_data:
+  arcadedb_data:
+  valkey_data:
   qdrant_data:
   kafka_data:
   prometheus_data:
@@ -85,26 +85,28 @@ services:
           memory: 8G
     restart: unless-stopped
 
-  neo4j:
-    image: neo4j:5.25-community
-    container_name: trading-neo4j
-    hostname: neo4j
+  # Knowledge graph — Apache-2.0 ArcadeDB replaces GPL-3.0 Neo4j Community.
+  # Supports Cypher, Gremlin, and SQL. Default port 2480 (HTTP), 2424 (binary).
+  # Migration note: Python clients need updating (see arcadedb-python).
+  arcadedb:
+    image: arcadedata/arcadedb:24.11.1
+    container_name: trading-arcadedb
+    hostname: arcadedb
     networks:
       - trading_network
     ports:
-      - "7474:7474" # HTTP
-      - "7687:7687" # Bolt
+      - "2480:2480" # HTTP/Studio UI
+      - "2424:2424" # Binary protocol
     environment:
-      NEO4J_AUTH: neo4j/${NEO4J_PASSWORD:-ChangeMeInProduction123!}
-      NEO4J_PLUGINS: '["apoc", "graph-data-science"]'
-      NEO4J_dbms_memory_heap_max__size: 8G
-      NEO4J_dbms_memory_pagecache_size: 4G
-      NEO4J_dbms_security_procedures_unrestricted: apoc.*,gds.*
+      JAVA_OPTS: >-
+        -Darcadedb.server.rootPassword=${ARCADEDB_PASSWORD:-ChangeMeInProduction123!}
+        -Darcadedb.server.defaultDatabases=trading[root]
+        -Darcadedb.server.mode=production
+        -Xms4G -Xmx8G
     volumes:
-      - neo4j_data:/data
-      - ./infrastructure/neo4j/init:/import
+      - arcadedb_data:/home/arcadedb/databases
     healthcheck:
-      test: [ "CMD-SHELL", "cypher-shell -u neo4j -p ${NEO4J_PASSWORD:-ChangeMeInProduction123!} 'RETURN 1'" ]
+      test: [ "CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:2480/api/v1/ready" ]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -117,20 +119,22 @@ services:
           memory: 8G
     restart: unless-stopped
 
-  redis:
-    image: redis:7.4-alpine
-    container_name: trading-redis
-    hostname: redis
+  # Cache + pub/sub — Valkey (BSD-3-Clause) replaces source-available Redis 7.4 (SSPL/RSALv2).
+  # Wire-compatible drop-in for Redis clients. No application code changes needed.
+  valkey:
+    image: valkey/valkey:8-alpine
+    container_name: trading-valkey
+    hostname: valkey
     networks:
       - trading_network
     ports:
       - "6379:6379"
     command: >
-      redis-server --requirepass ${REDIS_PASSWORD:-ChangeMeInProduction123!} --maxmemory 8gb --maxmemory-policy allkeys-lru --appendonly yes --appendfsync everysec
+      valkey-server --requirepass ${VALKEY_PASSWORD:-ChangeMeInProduction123!} --maxmemory 8gb --maxmemory-policy allkeys-lru --appendonly yes --appendfsync everysec
     volumes:
-      - redis_data:/data
+      - valkey_data:/data
     healthcheck:
-      test: [ "CMD", "redis-cli", "--raw", "incr", "ping" ]
+      test: [ "CMD", "valkey-cli", "--raw", "incr", "ping" ]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -264,8 +268,11 @@ services:
           memory: 1G
     restart: unless-stopped
 
+  # Grafana pinned at 9.5.x — last Apache-2.0 release. 10.x moved to AGPL-3.0.
+  # Future migration: Perses (Apache-2.0, CNCF) when its Prometheus + ClickHouse data
+  # source maturity reaches feature parity with Grafana dashboards.
   grafana:
-    image: grafana/grafana:10.2.3
+    image: grafana/grafana:9.5.21
     container_name: trading-grafana
     hostname: grafana
     networks:
@@ -290,8 +297,11 @@ services:
       retries: 5
     restart: unless-stopped
 
+  # Loki pinned at 2.9.x — last Apache-2.0 release. 3.x moved to AGPL-3.0.
+  # Future migration: Vector (MPL-2.0) shipping logs into the existing ClickHouse
+  # cluster removes the dedicated log store entirely.
   loki:
-    image: grafana/loki:2.9.3
+    image: grafana/loki:2.9.10
     container_name: trading-loki
     hostname: loki
     networks:
@@ -309,8 +319,10 @@ services:
       retries: 5
     restart: unless-stopped
 
+  # Promtail pinned at 2.9.x — Apache-2.0. 3.x moved to AGPL-3.0.
+  # Future migration: replace with Vector (MPL-2.0).
   promtail:
-    image: grafana/promtail:2.9.3
+    image: grafana/promtail:2.9.10
     container_name: trading-promtail
     hostname: promtail
     networks:

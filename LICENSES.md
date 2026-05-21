@@ -9,6 +9,31 @@
 
 ---
 
+## 0. Changes Applied After Audit (2026-05-21)
+
+The following docker-compose changes were applied in this session to address commercial-merge risks identified in section 3. Sections 3.6, 3.7, 3.20, 3.21 below are now partially stale; this section is the new source of truth.
+
+| Service | Before | After | Why |
+|---|---|---|---|
+| Graph DB | `neo4j:5.25-community` (GPL-3.0) | `arcadedata/arcadedb:24.11.1` (Apache-2.0) | ArcadeDB is multi-model (graph + document + KV + time-series), supports Cypher/Gremlin/SQL, single service. Apache-2.0 is fully MAS-merge-safe. |
+| Cache / pub-sub | `redis:7.4-alpine` (SSPL-1.0 + RSALv2) | `valkey/valkey:8-alpine` (BSD-3-Clause) | Valkey is the Linux Foundation fork of Redis 7.2. Wire-compatible — Python `redis` package works unchanged. |
+| Grafana | `grafana/grafana:10.2.3` (AGPL-3.0) | `grafana/grafana:9.5.21` (Apache-2.0) | Pinned at last Apache-2.0 release. Future migration target: **Perses** (Apache-2.0, CNCF) when its data-source maturity matches. |
+| Loki | `grafana/loki:2.9.3` (Apache-2.0) | `grafana/loki:2.9.10` (Apache-2.0) | Stayed on 2.9.x, latest patch. v3+ moved to AGPL-3.0. Future migration target: **Vector (MPL-2.0) → ClickHouse** to remove a service entirely. |
+| Promtail | `grafana/promtail:2.9.3` (Apache-2.0) | `grafana/promtail:2.9.10` (Apache-2.0) | Same reasoning as Loki. |
+
+Code paths affected (not changed in this session, tracked in HANDOVER.md):
+
+- `libs/database/neo4j/client.py` — uses Neo4j Bolt driver. Must rewrite to use ArcadeDB HTTP API or `arcadedb-python` client. Not on the paper-trading critical path.
+- `libs/database/redis/client.py`, `core_trading/data_feeds/institutional_data_feed_manager.py`, `tests/unit/test_database.py` — these use the `redis` Python package. No changes needed; Valkey is wire-compatible.
+- `infrastructure/neo4j/init/` directory needs to be renamed to `infrastructure/arcadedb/init/` and its Cypher scripts adapted to ArcadeDB's slightly different Cypher dialect (most syntax is identical).
+
+Still pending (called out in section 3, will be addressed in future sessions if needed):
+
+- `confluentinc/cp-kafka:7.7.0` and `confluentinc/cp-schema-registry:7.7.0` use **Confluent Community License** — fine for internal use, restricts SaaS resale. Migration target: `apache/kafka:3.9.0` (Apache-2.0) and `apicurio/apicurio-registry` (Apache-2.0).
+- `yfinance` (Apache-2.0 code, but Yahoo ToS prohibits commercial scraping) — must swap to Polygon / Tiingo / IEX Cloud / Finnhub before any commercial MAS deployment.
+
+---
+
 ## 1. License Glossary
 
 ### MIT

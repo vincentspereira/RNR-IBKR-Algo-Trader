@@ -70,7 +70,7 @@ def mock_broker_adapter():
     adapter.disconnect = AsyncMock(return_value=True)
     adapter.get_positions = AsyncMock(return_value=[])
     adapter.get_account_info = AsyncMock(return_value={
-        "account_id": "DUK221396",
+        "account_id": "DU_TEST_ACCOUNT",
         "balance": 100000.0,
         "buying_power": 200000.0,
         "net_liquidation": 100000.0,

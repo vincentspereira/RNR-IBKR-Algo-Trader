@@ -98,7 +98,12 @@ class IBKRAdapter(BaseBrokerAdapter):
         self.host = host
         self.port = port
         self.client_id = client_id
-        self.account_id = account_id or os.getenv("IBKR_ACCOUNT_ID", "DUK221396")
+        self.account_id = account_id or os.getenv("IBKR_ACCOUNT_ID")
+        if not self.account_id:
+            raise ValueError(
+                "IBKR_ACCOUNT_ID is required: pass account_id to IBKRAdapter() "
+                "or set the IBKR_ACCOUNT_ID environment variable."
+            )
         self.paper_trading = paper_trading
         self.ib: Optional[IB] = None
 
