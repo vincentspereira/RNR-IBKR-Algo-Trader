@@ -1,58 +1,31 @@
-import logging
-from typing import Any, Dict, Optional
-from .alpacaadapter_handlers.base_handler import AlpacaAdapterBaseHandler
-from .alpacaadapter_handlers.main_handler import AlpacaAdapterMainHandler
-from .alpacaadapter_handlers.config_handler import AlpacaAdapterConfigHandler
-from .alpacaadapter_handlers.state_handler import AlpacaAdapterStateHandler
-from .alpacaadapter_handlers.validation_handler import AlpacaAdapterValidationHandler
+"""Alpaca broker adapter -- ROADMAP MARKER (not implemented).
 
-# AlpacaAdapter - Refactored (Communication Pattern)
-# Based on successful communication_wrapper.py refactoring approach
-# Applied modular handler architecture"
+The canonical broker for paper and live trading is
+``core_trading.adapters.ibkr_adapter.IBKRAdapter``. This module exists only
+to signal aspirational multi-broker scope; it raises ``NotImplementedError``
+on use so that accidental references fail loudly instead of silently.
+
+Plan for future implementation:
+    - SDK: ``alpaca-py`` (Apache-2.0; MAS-safe)
+    - Asset classes: US equities, crypto
+    - Priority: HIGH (complements IBKR for US equities)
+    - Reference: project-broker-roadmap memory and PRODUCTION_PUNCH_LIST.md
+
+A working pre-refactor implementation is archived at
+``.archive/2026-05-21_dead_adapters/brokers/alpaca.py.backup``.
+"""
+
+from __future__ import annotations
+
+__all__ = ["AlpacaAdapter"]
 
 
+class AlpacaAdapter:
+    """Roadmap marker for Alpaca broker support. Not implemented."""
 
-
-logger = logging.getLogger(__name__)
-
-class AlpacaAdapter:""
-
-# Refactored AlpacaAdapter using communication pattern
-# Applied modular handler architecture"
-
-
-#     def __init__(self, config: Optional[Dict[str, Any]] = None):
-#         self.config = config or {}
-#         self.logger = logger
-
-        # Initialize handlers
-#         self.base_handler = AlpacaAdapterBaseHandler(config)
-#         self.main_handler = AlpacaAdapterMainHandler(config)
-#         self.config_handler = AlpacaAdapterConfigHandler(config)
-#         self.state_handler = AlpacaAdapterStateHandler(config)
-#         self.validation_handler = AlpacaAdapterValidationHandler(config)
-
-#     def process_request(self, request: Any):
-#         "Process request using appropriate handlers"
-#         self.logger.info(f"Processing request with {self.__class__.__name__}")
-
-        # Use main handler by default
-#         if hasattr(self, 'main_handler'):
-#             return self.main_handler.handle(request)
-# "
-#         return {"status": "processed", "class": self.__class__.__name__}
-
-#     def get_status(self):
-# "Get status from all handlers
-# status = {"
-# "main_class": self.__class__.__name__,"
-# "handlers": {}
-# }
-# "
-#         for handler_name in handlers:
-#             if hasattr(self, handler_name):
-# handler = getattr(self, handler_name)"
-#                 status["handlers"][handler_name] = handler.get_handler_info()
-# "
-#         return status
-# "'"'
+    def __init__(self, *args, **kwargs):
+        raise NotImplementedError(
+            "AlpacaAdapter is a roadmap marker. Use "
+            "core_trading.adapters.ibkr_adapter.IBKRAdapter for paper and "
+            "live trading. See project-broker-roadmap memory for plans."
+        )

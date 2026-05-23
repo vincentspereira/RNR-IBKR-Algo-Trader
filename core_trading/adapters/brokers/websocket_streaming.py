@@ -1,58 +1,24 @@
-import logging
-from typing import Any, Dict, Optional
-from .websocketstream_handlers.base_handler import WebSocketStreamBaseHandler
-from .websocketstream_handlers.main_handler import WebSocketStreamMainHandler
-from .websocketstream_handlers.config_handler import WebSocketStreamConfigHandler
-from .websocketstream_handlers.state_handler import WebSocketStreamStateHandler
-from .websocketstream_handlers.validation_handler import WebSocketStreamValidationHandler
+"""Broker WebSocket streaming -- ROADMAP MARKER (not implemented).
 
-# WebSocketStream - Refactored (Communication Pattern)
-# Based on successful communication_wrapper.py refactoring approach
-# Applied modular handler architecture"
+A shared WebSocket streaming layer for broker market-data feeds was planned
+here. The canonical IBKR data feed (``core_trading.data_feeds.ibkr_data_feed``)
+uses ``ib_insync`` event streams directly and does not need this abstraction.
 
+When multiple brokers are added (see project-broker-roadmap memory), this
+module can be revived as a shared streaming layer.
+"""
 
+from __future__ import annotations
 
-
-logger = logging.getLogger(__name__)
-
-class WebSocketStream:""
-
-# Refactored WebSocketStream using communication pattern
-# Applied modular handler architecture"
+__all__ = ["WebSocketStream"]
 
 
-#     def __init__(self, config: Optional[Dict[str, Any]] = None):
-#         self.config = config or {}
-#         self.logger = logger
+class WebSocketStream:
+    """Placeholder for shared broker WebSocket streaming. Not implemented."""
 
-        # Initialize handlers
-#         self.base_handler = WebSocketStreamBaseHandler(config)
-#         self.main_handler = WebSocketStreamMainHandler(config)
-#         self.config_handler = WebSocketStreamConfigHandler(config)
-#         self.state_handler = WebSocketStreamStateHandler(config)
-#         self.validation_handler = WebSocketStreamValidationHandler(config)
-
-#     def process_request(self, request: Any):
-#         "Process request using appropriate handlers"
-#         self.logger.info(f"Processing request with {self.__class__.__name__}")
-
-        # Use main handler by default
-#         if hasattr(self, 'main_handler'):
-#             return self.main_handler.handle(request)
-# "
-#         return {"status": "processed", "class": self.__class__.__name__}
-
-#     def get_status(self):
-# "Get status from all handlers
-# status = {"
-# "main_class": self.__class__.__name__,"
-# "handlers": {}
-# }
-# "
-#         for handler_name in handlers:
-#             if hasattr(self, handler_name):
-# handler = getattr(self, handler_name)"
-#                 status["handlers"][handler_name] = handler.get_handler_info()
-# "
-#         return status
-# "'"'
+    def __init__(self, *args, **kwargs):
+        raise NotImplementedError(
+            "WebSocketStream is a roadmap marker. Use "
+            "core_trading.data_feeds.ibkr_data_feed for the canonical "
+            "IBKR data feed."
+        )

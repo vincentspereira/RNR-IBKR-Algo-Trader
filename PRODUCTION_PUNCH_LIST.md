@@ -114,11 +114,13 @@ async def main():
 
 **Effort:** 4-6 hours
 
-### B4 — Duplicate Adapter Architecture
+### B4 — Duplicate Adapter Architecture [RESOLVED 2026-05-23]
 
 **Severity:** Critical (import errors, developer confusion)
 
-| Canonical (keep) | Broken duplicate (delete) |
+**Original state:**
+
+| Canonical (keep) | Broken duplicate |
 |---|---|
 | `core_trading/adapters/ibkr_adapter.py` (634 lines, real ib_insync) | `core_trading/adapters/brokers/interactive_brokers.py` (58 lines, syntax error) |
 | `core_trading/adapters/base.py` (284 lines, real ABCs) | `core_trading/adapters/broker_adapter.py` (60 lines, all commented out) |
@@ -126,9 +128,18 @@ async def main():
 
 Plus the 7 sibling gutted broker stubs (alpaca, binance, coinbase, oanda, fxcm, trading212, websocket_streaming) — see SKELETON_INVENTORY.md.
 
-**Fix:** Archive then delete. `git mv` to `.archive/2026-05-21_dead_adapters/` before removing from tracking.
+**Resolution:**
 
-**Effort:** 1 hour
+- Top-level duplicates (`broker_adapter.py`, `broker_factory.py`, `ibkr_adapter.py.fixed_attempt`) were archived in commit `d5ecaf5` (2026-05-21) under `.archive/2026-05-21_dead_adapters/top_level/`.
+- The 7 sibling broker stubs and 5 broken helper modules under `core_trading/adapters/brokers/` were rewritten as honest ~25-line roadmap-marker modules. Each raises `NotImplementedError` on instantiation and documents the planned SDK, license, asset classes, and priority. Per user decision (see `project-broker-roadmap` memory), the stubs are kept in-place rather than archived so the directory tree reflects planned multi-broker scope.
+- The try/except spaghetti in `brokers/__init__.py` (which silently swallowed every ImportError) was replaced with a clean package docstring.
+- `brokers/README.md` was rewritten to remove the "Production Ready" claims and reflect actual status.
+
+**What remains importable** from `core_trading.adapters.brokers`:
+- `rate_limiting` (real implementation, used by `core_trading/data_feeds/ibkr_data_feed.py`)
+- The roadmap-marker classes (instantiation raises NotImplementedError)
+
+**Effort spent:** ~1 hour
 
 ### B5 — IBKR Fill Callback Not Wired
 
@@ -227,15 +238,15 @@ To balance: significant good work exists.
 
 ## 8. Summary
 
-| Blocker | Severity | Effort |
-|---------|----------|--------|
-| B1: Silent simulation fallback | Blocker | 2-4h |
-| B2: `await` against sync `subscribe` | Blocker | 5min |
-| B3: No adapter-to-engine wiring | Blocker | 4-6h |
-| B4: Broken stub files | Critical | 1h |
-| B5: Fill callback not wired | Critical | 2-3h |
-| B6: `IBKR_PORT` ignored | High | 5min |
-| Credential hygiene | Critical Security | 1h |
+| Blocker | Severity | Effort | Status |
+|---------|----------|--------|--------|
+| B1: Silent simulation fallback | Blocker | 2-4h | RESOLVED (commit `e21d891`) |
+| B2: `await` against sync `subscribe` | Blocker | 5min | RESOLVED (commit `e21d891`) |
+| B3: No adapter-to-engine wiring | Blocker | 4-6h | RESOLVED (commit `e21d891`) |
+| B4: Broken stub files | Critical | 1h | RESOLVED (2026-05-23) |
+| B5: Fill callback not wired | Critical | 2-3h | RESOLVED (commit `e21d891`) |
+| B6: `IBKR_PORT` ignored | High | 5min | RESOLVED (commit `e21d891`) |
+| Credential hygiene | Critical Security | 1h | RESOLVED (commit `dad70a9`) |
 
 **Total minimum work for a working paper trading loop: 9-12 focused hours.**
 
