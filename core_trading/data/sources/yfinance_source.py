@@ -17,20 +17,13 @@ blocking call in a thread to avoid stalling the event loop.
 from __future__ import annotations
 
 import asyncio
-from datetime import timedelta
-from typing import AsyncIterator
+from collections.abc import AsyncIterator
+from datetime import UTC, date, datetime, timedelta
 
 import pandas as pd
 import yfinance as yf
 
-from core_trading.data.bars import (
-    Bar,
-    BarRequest,
-    BarResolution,
-    BarSource,
-    BarSourceCapabilities,
-)
-
+from core_trading.data.bars import Bar, BarRequest, BarResolution, BarSource, BarSourceCapabilities
 
 _RES_TO_YF: dict[BarResolution, str] = {
     BarResolution.MINUTE_1: "1m",
@@ -101,12 +94,16 @@ class YFinanceBarSource(BarSource):
                 "yfinance limits 1-minute history to ~60 days; "
                 "split the request or use a coarser resolution."
             )
-        if request.resolution in {
-            BarResolution.MINUTE_5,
-            BarResolution.MINUTE_15,
-            BarResolution.MINUTE_30,
-            BarResolution.HOUR_1,
-        } and span_days > 730:
+        if (
+            request.resolution
+            in {
+                BarResolution.MINUTE_5,
+                BarResolution.MINUTE_15,
+                BarResolution.MINUTE_30,
+                BarResolution.HOUR_1,
+            }
+            and span_days > 730
+        ):
             raise ValueError(
                 f"yfinance limits {request.resolution.value} history to ~730 days; "
                 "split the request or use 1d."
@@ -116,7 +113,7 @@ class YFinanceBarSource(BarSource):
         self,
         raw: pd.DataFrame,
         symbols: tuple[str, ...],
-        resolution: BarResolution,
+        resolution: BarResolution,  # noqa: ARG002 - kept for signature symmetry with adapters
     ) -> pd.DataFrame:
         if raw is None or raw.empty:
             return BarSource.bars_to_dataframe([])
@@ -168,11 +165,17 @@ class YFinanceBarSource(BarSource):
             )
 
         cols = [
-            "open", "high", "low", "close", "volume",
-            "adjusted_close", "vwap", "trade_count", "source",
+            "open",
+            "high",
+            "low",
+            "close",
+            "volume",
+            "adjusted_close",
+            "vwap",
+            "trade_count",
+            "source",
         ]
-        stacked = stacked[cols].sort_index()
-        return stacked
+        return stacked[cols].sort_index()
 
     async def fetch_bars(self, request: BarRequest) -> pd.DataFrame:
         self._validate_history_window(request)
@@ -203,7 +206,9 @@ class YFinanceBarSource(BarSource):
         for (symbol, timestamp), row in df.iterrows():
             yield Bar(
                 symbol=str(symbol),
-                timestamp=timestamp.to_pydatetime() if isinstance(timestamp, pd.Timestamp) else timestamp,
+                timestamp=timestamp.to_pydatetime()
+                if isinstance(timestamp, pd.Timestamp)
+                else timestamp,
                 resolution=request.resolution,
                 open=float(row["open"]),
                 high=float(row["high"]),
@@ -224,8 +229,8 @@ class YFinanceBarSource(BarSource):
 
 def fetch_bars_sync(
     symbols: tuple[str, ...] | list[str],
-    start,
-    end,
+    start: datetime | date,
+    end: datetime | date,
     resolution: BarResolution = BarResolution.DAY_1,
 ) -> pd.DataFrame:
     """Synchronous convenience wrapper for research notebooks.
@@ -234,12 +239,11 @@ def fetch_bars_sync(
     sensible defaults. Use the async :class:`YFinanceBarSource` API directly
     from production code.
     """
-    from datetime import datetime, timezone
 
-    def _to_utc(d):
+    def _to_utc(d: datetime | date) -> datetime:
         if isinstance(d, datetime):
-            return d if d.tzinfo else d.replace(tzinfo=timezone.utc)
-        return datetime(d.year, d.month, d.day, tzinfo=timezone.utc)
+            return d if d.tzinfo else d.replace(tzinfo=UTC)
+        return datetime(d.year, d.month, d.day, tzinfo=UTC)
 
     request = BarRequest(
         symbols=tuple(symbols),

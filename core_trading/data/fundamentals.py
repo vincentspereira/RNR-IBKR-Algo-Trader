@@ -15,10 +15,10 @@ Restated values are tracked via :attr:`revision_id` so a vendor that pushes
 from __future__ import annotations
 
 import abc
+from collections.abc import Sequence
 from dataclasses import dataclass
 from datetime import date
 from enum import Enum
-from typing import Sequence
 
 import pandas as pd
 
@@ -75,9 +75,7 @@ class FundamentalRequest:
         if not self.statements:
             raise ValueError("FundamentalRequest.statements cannot be empty")
         if self.start_period >= self.end_period:
-            raise ValueError(
-                "FundamentalRequest.start_period must precede end_period"
-            )
+            raise ValueError("FundamentalRequest.start_period must precede end_period")
 
 
 class FundamentalSource(abc.ABC):
@@ -114,9 +112,15 @@ class FundamentalSource(abc.ABC):
         if not records:
             return pd.DataFrame(
                 columns=[
-                    "symbol", "statement", "metric", "value",
-                    "period_end", "filing_date", "fiscal_period",
-                    "revision_id", "source",
+                    "symbol",
+                    "statement",
+                    "metric",
+                    "value",
+                    "period_end",
+                    "filing_date",
+                    "fiscal_period",
+                    "revision_id",
+                    "source",
                 ]
             )
         return pd.DataFrame(

@@ -215,7 +215,7 @@ def _sharpe_columns(matrix: np.ndarray) -> np.ndarray:
     """Per-period Sharpe of each column; zero where a column has no dispersion."""
     mean = matrix.mean(axis=0)
     sd = matrix.std(axis=0, ddof=1)
-    out = np.zeros_like(mean)
+    out: np.ndarray = np.zeros_like(mean)
     nz = sd > 0
     out[nz] = mean[nz] / sd[nz]
     return out
@@ -455,7 +455,8 @@ class OutOfSampleLockbox:
 
     def _read_ledger(self) -> dict:
         if self.ledger_path.exists():
-            return json.loads(self.ledger_path.read_text(encoding="utf-8"))
+            data: dict = json.loads(self.ledger_path.read_text(encoding="utf-8"))
+            return data
         return {}
 
     def _write_ledger(self, ledger: dict) -> None:

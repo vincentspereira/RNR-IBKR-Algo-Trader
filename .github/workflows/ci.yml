@@ -28,7 +28,7 @@ jobs:
 
     - name: No-stubs policy gate
       run: |
-        poetry run python tools/check_no_stubs.py core_trading/data core_trading/research libs/common/events tools/check_no_stubs.py
+        poetry run python tools/check_no_stubs.py core_trading/data core_trading/research core_trading/backtest libs/common/events tools/check_no_stubs.py
 
     - name: Lint with ruff
       run: |
@@ -97,16 +97,18 @@ jobs:
 
     - name: No-stubs policy gate (quant layer)
       run: |
-        poetry run python tools/check_no_stubs.py core_trading/data core_trading/research
+        poetry run python tools/check_no_stubs.py core_trading/data core_trading/research core_trading/backtest
 
     - name: Type check quant layer (strict)
+      # Package mode (-p) because core_trading is a namespace package; a path
+      # form resolves the same file under two module names.
       run: |
-        poetry run mypy core_trading/data core_trading/research --ignore-missing-imports
+        poetry run mypy -p core_trading.data -p core_trading.research -p core_trading.backtest --ignore-missing-imports
 
     - name: Test quant layer (90% coverage, no warnings, no skips)
       run: |
-        poetry run pytest tests/data tests/research \
-          --cov=core_trading.data --cov=core_trading.research \
+        poetry run pytest tests/data tests/research tests/backtest \
+          --cov=core_trading.data --cov=core_trading.research --cov=core_trading.backtest \
           --cov-report=term-missing --cov-fail-under=90 \
           -W error -p no:cacheprovider \
           --override-ini="addopts="

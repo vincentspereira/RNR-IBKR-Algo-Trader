@@ -24,12 +24,13 @@ Design:
 from __future__ import annotations
 
 import logging
-from datetime import datetime, timezone
+from collections.abc import AsyncIterator
+from datetime import UTC, datetime
 from typing import Any
 
 import pandas as pd
 
-from core_trading.data.bars import BarRequest, BarResolution, BarSource
+from core_trading.data.bars import Bar, BarRequest, BarResolution, BarSource, BarSourceCapabilities
 
 logger = logging.getLogger(__name__)
 
@@ -185,8 +186,8 @@ class BarStore:
             {
                 "symbols": list(request.symbols),
                 "resolution": request.resolution.value,
-                "start": request.start.astimezone(timezone.utc).strftime("%Y-%m-%d %H:%M:%S"),
-                "end": request.end.astimezone(timezone.utc).strftime("%Y-%m-%d %H:%M:%S"),
+                "start": request.start.astimezone(UTC).strftime("%Y-%m-%d %H:%M:%S"),
+                "end": request.end.astimezone(UTC).strftime("%Y-%m-%d %H:%M:%S"),
             },
         )
         if not results:
@@ -196,7 +197,7 @@ class BarStore:
         for r in results:
             ts = r[1]
             if isinstance(ts, datetime) and ts.tzinfo is None:
-                ts = ts.replace(tzinfo=timezone.utc)
+                ts = ts.replace(tzinfo=UTC)
             records.append(
                 {
                     "symbol": r[0],
@@ -212,8 +213,7 @@ class BarStore:
                     "source": r[10],
                 }
             )
-        df = pd.DataFrame.from_records(records).set_index(["symbol", "timestamp"]).sort_index()
-        return df
+        return pd.DataFrame.from_records(records).set_index(["symbol", "timestamp"]).sort_index()
 
 
 _bar_store: BarStore | None = None
@@ -241,7 +241,7 @@ class CachingBarSource(BarSource):
         self._store = store if store is not None else get_bar_store()
 
     @property
-    def capabilities(self):  # type: ignore[override]
+    def capabilities(self) -> BarSourceCapabilities:
         return self._upstream.capabilities
 
     async def fetch_bars(self, request: BarRequest) -> pd.DataFrame:
@@ -255,14 +255,14 @@ class CachingBarSource(BarSource):
             self._store.store_bars(fresh, request.resolution)
         return fresh
 
-    async def stream_bars(self, request: BarRequest):  # type: ignore[override]
+    async def stream_bars(self, request: BarRequest) -> AsyncIterator[Bar]:
         df = await self.fetch_bars(request)
         for (symbol, timestamp), row in df.iterrows():
-            from core_trading.data.bars import Bar
-
             yield Bar(
                 symbol=str(symbol),
-                timestamp=timestamp.to_pydatetime() if isinstance(timestamp, pd.Timestamp) else timestamp,
+                timestamp=timestamp.to_pydatetime()
+                if isinstance(timestamp, pd.Timestamp)
+                else timestamp,
                 resolution=request.resolution,
                 open=float(row["open"]),
                 high=float(row["high"]),
@@ -270,7 +270,9 @@ class CachingBarSource(BarSource):
                 close=float(row["close"]),
                 volume=float(row["volume"]) if not pd.isna(row["volume"]) else 0.0,
                 source=str(row.get("source", "")),
-                adjusted_close=None if pd.isna(row.get("adjusted_close")) else float(row["adjusted_close"]),
+                adjusted_close=None
+                if pd.isna(row.get("adjusted_close"))
+                else float(row["adjusted_close"]),
                 vwap=None if pd.isna(row.get("vwap")) else float(row["vwap"]),
                 trade_count=None if pd.isna(row.get("trade_count")) else int(row["trade_count"]),
             )

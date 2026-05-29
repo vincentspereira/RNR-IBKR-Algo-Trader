@@ -31,9 +31,7 @@ class SectorAssignment:
     def covers(self, as_of: date) -> bool:
         if as_of < self.effective_from:
             return False
-        if self.effective_to is not None and as_of >= self.effective_to:
-            return False
-        return True
+        return not (self.effective_to is not None and as_of >= self.effective_to)
 
 
 @dataclass(frozen=True, slots=True)

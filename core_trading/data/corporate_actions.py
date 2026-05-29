@@ -19,10 +19,10 @@ the latest price.
 from __future__ import annotations
 
 import abc
+from collections.abc import Sequence
 from dataclasses import dataclass
 from datetime import date
 from enum import Enum
-from typing import Sequence
 
 import numpy as np
 import pandas as pd
@@ -66,9 +66,7 @@ class CorporateAction:
 
     def __post_init__(self) -> None:
         if self.action_type == CorporateActionType.SPLIT and self.ratio <= 0:
-            raise ValueError(
-                f"split ratio must be positive; got {self.ratio} for {self.symbol}"
-            )
+            raise ValueError(f"split ratio must be positive; got {self.ratio} for {self.symbol}")
         if self.action_type == CorporateActionType.DIVIDEND and self.cash_amount < 0:
             raise ValueError(
                 f"dividend cash_amount cannot be negative; got {self.cash_amount} "

@@ -791,11 +791,29 @@ Hybrid vectorised + event-driven engine:
 
 #### Definition of Done — Phase 3
 
-- [ ] Vectorised and event-driven modes agree on a reference strategy within 1bp/day
-- [ ] All execution realism components implemented and unit-tested
-- [ ] CPCV produces distribution-of-Sharpe output
-- [ ] Backtest report generates without manual intervention
-- [ ] Replay test: re-run a backtest from saved snapshot, get byte-identical results
+- [x] Vectorised and event-driven modes agree on a reference strategy within 1bp/day
+      (`tests/backtest/test_engine.py::TestModeAgreement` — agree to ~1e-15 on
+      constant, long/short and time-varying weights, far inside 1bp/day)
+- [x] All execution realism components implemented and unit-tested
+      (`costs.py`: spread+volume slippage, Almgren-Chriss impact, commission
+      registry, SEC/FINRA fees, borrow/financing, FIFO/LIFO/HIFO tax lots;
+      `execution.py`: 8 order types + partial fills — `tests/backtest/test_costs.py`,
+      `test_execution.py`)
+- [x] CPCV produces distribution-of-Sharpe output
+      (`walkforward.py::cpcv_sharpe_distribution`, reusing the Phase 2
+      `research.cross_validation.CombinatorialPurgedCV` — `test_walkforward.py::TestCpcv`)
+- [x] Backtest report generates without manual intervention
+      (`report.py::BacktestReport` — equity/trade-ledger/daily-PnL/attribution,
+      deterministic JSON + headless PDF tear sheet — `test_report.py`)
+- [x] Replay test: re-run a backtest from saved snapshot, get byte-identical results
+      (`BacktestResult.fingerprint()`; `test_engine.py::TestDeterminism`)
+
+**Status: Phase 3 COMPLETE (2026-05-29).** Implementation in `core_trading/backtest/`
+(orders, costs, execution, portfolio, metrics, engine, montecarlo, walkforward,
+report). 209 tests, ~100% coverage, `-W error`, 0 skips / 0 warnings, mypy strict
+clean. Also includes Monte Carlo (iid/block/gaussian) and walk-forward
+optimisation with parameter-stability. Old `strategies/backtesting/` archived to
+`.archive/2026-05-29_backtesting/` (damaged scaffolding; metric set preserved).
 
 ---
 

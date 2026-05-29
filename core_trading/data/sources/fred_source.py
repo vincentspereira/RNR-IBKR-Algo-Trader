@@ -19,13 +19,12 @@ from __future__ import annotations
 
 import asyncio
 import os
-from datetime import date, datetime
+from datetime import date
 
 import pandas as pd
 from fredapi import Fred
 
 from core_trading.data.macro import MacroFrequency, MacroSeries, MacroSource
-
 
 _FREQ_MAP: dict[str, MacroFrequency] = {
     "D": MacroFrequency.DAILY,

@@ -20,21 +20,14 @@ Unit tests mock the ``IB`` client so they run offline.
 """
 from __future__ import annotations
 
-import asyncio
 import os
-from datetime import datetime, timezone
-from typing import Any, AsyncIterator
+from collections.abc import AsyncIterator
+from datetime import UTC, datetime
+from typing import Any
 
 import pandas as pd
 
-from core_trading.data.bars import (
-    Bar,
-    BarRequest,
-    BarResolution,
-    BarSource,
-    BarSourceCapabilities,
-)
-
+from core_trading.data.bars import Bar, BarRequest, BarResolution, BarSource, BarSourceCapabilities
 
 _RES_TO_IB_BARSIZE: dict[BarResolution, str] = {
     BarResolution.SECOND_1: "1 secs",
@@ -175,11 +168,7 @@ class IBKRBarSource(BarSource):
         else:
             ts = pd.Timestamp(raw_date)
             dt = ts.to_pydatetime()
-        if dt.tzinfo is None:
-            dt = dt.replace(tzinfo=timezone.utc)
-        else:
-            dt = dt.astimezone(timezone.utc)
-        return dt
+        return dt.replace(tzinfo=UTC) if dt.tzinfo is None else dt.astimezone(UTC)
 
     async def fetch_bars(self, request: BarRequest) -> pd.DataFrame:
         barsize = self._native_barsize(request.resolution)
@@ -188,7 +177,7 @@ class IBKRBarSource(BarSource):
 
         all_bars: list[Bar] = []
         duration = _ib_duration(request.start, request.end)
-        end_dt = request.end.astimezone(timezone.utc).strftime("%Y%m%d %H:%M:%S UTC")
+        end_dt = request.end.astimezone(UTC).strftime("%Y%m%d %H:%M:%S UTC")
         use_rth = not request.include_extended_hours and self._use_rth
 
         for symbol in request.symbols:
@@ -236,7 +225,9 @@ class IBKRBarSource(BarSource):
         for (symbol, timestamp), row in df.iterrows():
             yield Bar(
                 symbol=str(symbol),
-                timestamp=timestamp.to_pydatetime() if isinstance(timestamp, pd.Timestamp) else timestamp,
+                timestamp=timestamp.to_pydatetime()
+                if isinstance(timestamp, pd.Timestamp)
+                else timestamp,
                 resolution=request.resolution,
                 open=float(row["open"]),
                 high=float(row["high"]),

@@ -22,6 +22,7 @@ remain in the active tree on purpose.
 | Damaged `data_feeds/` (7 modules + 3 tests) | 10 | Archived NOT_WORTH_REWRITING — **rewritten** into `core_trading/data/` (160 tests, 98% cov) |
 | `engines/multi_timeframe_engine/` | 3 | Archived NOT_WORTH_REWRITING (rebuild in Phase 2 feature store) |
 | `adapters/fix_client.py` | 1 | Archived NOT_WORTH_REWRITING (IBKR uses native API) |
+| Damaged `strategies/backtesting/` (13 modules) | 13 | Archived NOT_WORTH literal rewrite (`.archive/2026-05-29_backtesting/`) — **rewritten** into `core_trading/backtest/` Phase 3 (209 tests, ~100% cov, mypy strict); metric set preserved |
 
 ## Remaining damaged files (91) — phase-deferred rewrites
 
@@ -32,11 +33,13 @@ before the Phase 2 feature store and Phase 3 backtest engine exist — would
 produce untested code, violating the tested-end-to-end principle. The archived/
 commented source is the logic reference for each rewrite.
 
-### → Phase 3 (Backtest Engine v2) — 11 files
+### → Phase 3 (Backtest Engine v2) — 11 files — DONE (2026-05-29)
 `strategies/backtesting/` : `__init__`, `backtest_engine`, `config`, `core`,
 `integration`, `metrics`, `performance_analyzer`, `portfolio_simulator`,
-`report_generator`, `risk_analyzer`, `visualization`
-**Replacement home:** `core_trading/backtest/` (new, per Appendix A).
+`report_generator`, `risk_analyzer`, `visualization` (+ `data_manager`, `results`)
+**Replacement home:** `core_trading/backtest/` (new, per Appendix A). **DONE** —
+rewritten and archived to `.archive/2026-05-29_backtesting/`. See master plan
+Phase 3 DOD (all items checked).
 
 ### → Phase 4 (Pairs-trading pilot) — 10 files
 `strategies/pair_trading/` : `__init__`, `convergence_strategy`,

@@ -27,6 +27,7 @@ from __future__ import annotations
 import warnings
 from collections.abc import Sequence
 from dataclasses import dataclass, field
+from typing import Literal, cast
 
 import numpy as np
 import pandas as pd
@@ -179,16 +180,18 @@ class JohansenResult:
 
     def hedge_ratios(self) -> np.ndarray:
         """First cointegrating vector, normalised so the first element is 1."""
-        vec = self.eigenvectors[:, 0]
+        vec: np.ndarray = self.eigenvectors[:, 0]
         if vec[0] == 0:
             return vec
-        return vec / vec[0]
+        normalised: np.ndarray = vec / vec[0]
+        return normalised
 
 
 def _clean(x: Sequence[float] | pd.Series) -> np.ndarray:
     """Coerce to a 1-D float array with NaNs/Infs removed."""
     arr = np.asarray(x, dtype=float).ravel()
-    return arr[np.isfinite(arr)]
+    finite: np.ndarray = arr[np.isfinite(arr)]
+    return finite
 
 
 def adf_test(
@@ -275,7 +278,7 @@ def phillips_perron_test(
     arr = _clean(series)
     if arr.size < 4:
         raise ValueError("phillips_perron_test needs at least 4 observations")
-    pp = PhillipsPerron(arr, trend=trend)
+    pp = PhillipsPerron(arr, trend=cast('Literal["n", "c", "ct"]', trend))
     return StatTestResult(
         name="Phillips-Perron",
         statistic=float(pp.stat),
@@ -449,7 +452,7 @@ def variance_ratio_test(
     arr = _clean(series)
     if arr.size < lags + 2:
         raise ValueError("variance_ratio_test needs more observations than lags")
-    vr = VarianceRatio(arr, lags=lags, trend=trend, overlap=overlap)
+    vr = VarianceRatio(arr, lags=lags, trend=cast('Literal["n", "c"]', trend), overlap=overlap)
     return StatTestResult(
         name="Variance Ratio (Lo-MacKinlay)",
         statistic=float(vr.stat),

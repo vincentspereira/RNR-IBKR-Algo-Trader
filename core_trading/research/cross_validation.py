@@ -299,13 +299,21 @@ class WalkForwardSplit:
 
         if self.test_size is not None:
             test_size = self.test_size
-            min_train = self.train_size if not self.anchored else test_size
+            if self.anchored:
+                min_train = test_size
+            else:
+                assert self.train_size is not None  # guaranteed by __init__
+                min_train = self.train_size
             if min_train + self.embargo + test_size > n:
                 raise ValueError("window sizes exceed the sample length")
             first_test_start = min_train + self.embargo
         else:
             # Reserve the first chunk for training, divide the rest evenly.
-            reserve = self.train_size if not self.anchored else max(n // (self.n_splits + 1), 1)
+            if self.anchored:
+                reserve = max(n // (self.n_splits + 1), 1)
+            else:
+                assert self.train_size is not None  # guaranteed by __init__
+                reserve = self.train_size
             usable = n - reserve - self.embargo
             if usable < self.n_splits:
                 raise ValueError("sample too small for the requested n_splits")
@@ -324,6 +332,7 @@ class WalkForwardSplit:
             if self.anchored:
                 train_pos = positions[0:train_end]
             else:
+                assert self.train_size is not None  # guaranteed by __init__
                 train_start = max(train_end - self.train_size, 0)
                 train_pos = positions[train_start:train_end]
             if train_pos.size == 0:

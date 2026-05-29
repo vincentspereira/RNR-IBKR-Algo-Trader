@@ -28,6 +28,7 @@ from __future__ import annotations
 
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass
+from typing import cast
 
 import numpy as np
 import pandas as pd
@@ -466,7 +467,13 @@ def default_feature_store() -> FeatureStore:
 
     # -- returns (8)
     for p in (1, 5, 10, 21, 63, 126, 252):
-        reg(f"ret_{p}", "returns", f"{p}-bar simple return", p + 1, lambda d, p=p: _returns(d, p))
+        reg(
+            f"ret_{p}",
+            "returns",
+            f"{p}-bar simple return",
+            p + 1,
+            cast(FeatureFunc, lambda d, p=p: _returns(d, p)),
+        )
     reg("logret_1", "returns", "1-bar log return", 2, lambda d: _log_returns(d, 1))
 
     # -- volatility (10)
@@ -476,7 +483,7 @@ def default_feature_store() -> FeatureStore:
             "volatility",
             f"{w}-bar realised volatility",
             w + 1,
-            lambda d, w=w: _realised_vol(d, w),
+            cast(FeatureFunc, lambda d, w=w: _realised_vol(d, w)),
         )
     reg("ewma_vol_21", "volatility", "EWMA volatility (span 21)", 21, lambda d: _ewma_vol(d, 21))
     reg(
@@ -503,7 +510,13 @@ def default_feature_store() -> FeatureStore:
 
     # -- trend / moving averages (11)
     for w in (5, 10, 20, 50, 100, 200):
-        reg(f"sma_{w}", "trend", f"{w}-bar simple moving average", w, lambda d, w=w: _sma(d, w))
+        reg(
+            f"sma_{w}",
+            "trend",
+            f"{w}-bar simple moving average",
+            w,
+            cast(FeatureFunc, lambda d, w=w: _sma(d, w)),
+        )
     reg("ema_12", "trend", "12-bar EMA", 12, lambda d: _ema(d, 12))
     reg("ema_26", "trend", "26-bar EMA", 26, lambda d: _ema(d, 26))
     for w in (20, 50, 200):
@@ -512,7 +525,7 @@ def default_feature_store() -> FeatureStore:
             "trend",
             f"close vs {w}-bar SMA (fraction)",
             w,
-            lambda d, w=w: _close_to_sma(d, w),
+            cast(FeatureFunc, lambda d, w=w: _close_to_sma(d, w)),
         )
 
     # -- momentum / oscillators (13)

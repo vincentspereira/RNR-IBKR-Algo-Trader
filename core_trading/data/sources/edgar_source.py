@@ -29,8 +29,9 @@ HTTP layer so they run offline.
 from __future__ import annotations
 
 import asyncio
-from datetime import date, datetime
-from typing import Any, Sequence
+from collections.abc import Sequence
+from datetime import date
+from typing import Any
 
 import httpx
 
@@ -40,7 +41,6 @@ from core_trading.data.fundamentals import (
     FundamentalSource,
     StatementType,
 )
-
 
 _SEC_TICKERS_URL = "https://www.sec.gov/files/company_tickers.json"
 _SEC_FACTS_URL = "https://data.sec.gov/api/xbrl/companyfacts/CIK{cik:010d}.json"

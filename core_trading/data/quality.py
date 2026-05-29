@@ -13,7 +13,6 @@ to ship to a backtest.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Sequence
 
 import numpy as np
 import pandas as pd
@@ -95,9 +94,7 @@ def validate_bar_frame(
         return report
 
     if df.empty:
-        report.issues.append(
-            QualityIssue("warn", "empty", None, "no rows in fetched frame")
-        )
+        report.issues.append(QualityIssue("warn", "empty", None, "no rows in fetched frame"))
         return report
 
     if df["volume"].lt(0).any():
@@ -208,7 +205,9 @@ def cross_source_compare(
         n_symbols=p_close.index.get_level_values("symbol").nunique() if len(p_close) else 0,
     )
     if p_close.empty:
-        report.issues.append(QualityIssue("warn", "no_overlap", None, "no overlapping (symbol, timestamp) rows"))
+        report.issues.append(
+            QualityIssue("warn", "no_overlap", None, "no overlapping (symbol, timestamp) rows")
+        )
         return report
 
     diff_bps = ((s_close - p_close).abs() / p_close.replace(0, np.nan)) * 1e4

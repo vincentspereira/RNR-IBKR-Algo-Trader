@@ -19,10 +19,10 @@ Design notes (per master plan Phase 1.2):
 from __future__ import annotations
 
 import abc
-from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from collections.abc import AsyncIterator, Sequence
+from dataclasses import dataclass
+from datetime import UTC, datetime
 from enum import Enum
-from typing import AsyncIterator, Sequence
 
 import pandas as pd
 
@@ -177,7 +177,7 @@ class BarSource(abc.ABC):
         """
 
     @abc.abstractmethod
-    async def stream_bars(self, request: BarRequest) -> AsyncIterator[Bar]:
+    def stream_bars(self, request: BarRequest) -> AsyncIterator[Bar]:
         """Stream bars one at a time.
 
         For batch/historical fetch this can simply iterate the DataFrame
@@ -196,8 +196,15 @@ class BarSource(abc.ABC):
         if not bars:
             return pd.DataFrame(
                 columns=[
-                    "open", "high", "low", "close", "volume",
-                    "adjusted_close", "vwap", "trade_count", "source",
+                    "open",
+                    "high",
+                    "low",
+                    "close",
+                    "volume",
+                    "adjusted_close",
+                    "vwap",
+                    "trade_count",
+                    "source",
                 ]
             )
         records = [
@@ -217,8 +224,7 @@ class BarSource(abc.ABC):
             for b in bars
         ]
         df = pd.DataFrame.from_records(records)
-        df = df.set_index(["symbol", "timestamp"]).sort_index()
-        return df
+        return df.set_index(["symbol", "timestamp"]).sort_index()
 
     @staticmethod
     def validate_dataframe(df: pd.DataFrame) -> None:
@@ -241,4 +247,4 @@ class BarSource(abc.ABC):
 
 def utc_now() -> datetime:
     """Return the current UTC time, timezone-aware."""
-    return datetime.now(timezone.utc)
+    return datetime.now(UTC)
