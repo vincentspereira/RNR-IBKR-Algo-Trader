@@ -7,7 +7,7 @@ readme = "README.md"
 packages = [{include = "libs"}]
 
 [tool.poetry.dependencies]
-python = "^3.11"
+python = "^3.12"
 
 # Core dependencies
 pydantic = "^2.5.0"
@@ -65,6 +65,76 @@ pytest-cov = "^4.1.0"
 pytest-asyncio = "^0.21.1"
 pytest-mock = "^3.12.0"
 faker = "^22.0.0"
+hypothesis = "^6.100"
+
+# Quantitative trading -- see docs/QUANT_TRADING_MASTER_PLAN.md Phase 0.3
+# Statistics & econometrics
+numpy = "^2.0"
+pandas = "^2.2"
+scipy = "^1.13"
+statsmodels = "^0.14"          # ADF, KPSS, cointegration, ARIMA, OLS, GLS
+arch = "^7.0"                  # GARCH family, EGARCH, GJR-GARCH, HAR-RV
+pingouin = "^0.5"              # robust statistical tests
+hmmlearn = "^0.3"              # Hidden Markov Models
+filterpy = "^1.4"              # Kalman filters, particle filters
+linearmodels = "^6.0"          # Fama-MacBeth, panel regressions
+
+# Optimisation
+# Note: PyPortfolioOpt currently segfaults under numpy 2 / scipy 1.17. Dropped
+# pending upstream fix; cvxpy covers the same MVO/HRP use cases for now.
+cvxpy = "^1.5"                 # convex optimisation (MVO, HRP, robust opt)
+
+# Machine learning
+scikit-learn = "^1.5"
+xgboost = "^2.1"
+lightgbm = "^4.5"
+catboost = "^1.2"
+
+# Reinforcement learning
+stable-baselines3 = "^2.3"
+gymnasium = "^0.29"
+
+# Time series, features, technicals
+# Note: tsfresh < 0.21 imports removed scipy.signal.cwt; pin newer.
+pandas-ta = ">=0.3.14b"
+tsfresh = "^0.21"
+featuretools = "^1.31"
+
+# Backtesting helpers / performance metrics
+# Note: empyrical is unmaintained and broken on Python 3.12+ (uses removed SafeConfigParser).
+# We use the maintained fork "empyrical-reloaded" -- import path is still "empyrical".
+# vectorbt < 0.27 imports removed numpy private API; pin newer.
+# vectorbt references removed plotly trace types ("heatmapgl"); pin plotly to 5.x.
+plotly = "^5.24"
+vectorbt = "^0.27"
+empyrical-reloaded = "^0.5.10"
+quantstats = "^0.0.62"
+
+# Data utilities
+polars = "^1.5"                # fast DataFrame for large data
+pyarrow = "^16.0"
+
+# NLP / alternative data (deferred but pinned for reproducibility)
+transformers = "^4.43"
+sentence-transformers = "^3.0"
+
+# Free data vendors (see docs/FREE_DATA_VENDORS.md)
+yfinance = "^0.2"                # Yahoo Finance OHLCV (no API key)
+fredapi = "^0.5"                 # FRED macro data (free API key)
+sec-edgar-downloader = "^5.0"    # SEC EDGAR filings (free, official)
+alpha_vantage = "^3.0"           # Alpha Vantage (free key, 25/day)
+finnhub-python = "^2.4"          # Finnhub (free key, 60/min)
+tiingo = "^0.16"                 # Tiingo (free tier with delisted names)
+ccxt = "^4.4"                    # crypto multi-exchange (free)
+
+# Experiment tracking
+mlflow = "^2.16"
+
+# Research notebooks
+jupyterlab = "^4.2"
+ipykernel = "^6.29"
+papermill = "^2.6"
+nbstripout = "^0.7"
 
 [tool.poetry.group.dev.dependencies]
 black = "^23.12.1"
@@ -72,6 +142,7 @@ isort = "^5.13.2"
 mypy = "^1.8.0"
 pylint = "^3.0.3"
 pre-commit = "^3.6.0"
+ruff = "^0.5"
 
 [build-system]
 requires = ["poetry-core"]
@@ -79,24 +150,42 @@ build-backend = "poetry.core.masonry.api"
 
 [tool.black]
 line-length = 100
-target-version = ['py311']
+target-version = ['py312']
 
 [tool.isort]
 profile = "black"
 line_length = 100
 
 [tool.mypy]
-python_version = "3.11"
+python_version = "3.12"
 warn_return_any = true
 warn_unused_configs = true
 disallow_untyped_defs = true
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP", "SIM", "RET", "ARG"]
+ignore = ["E501"]  # handled by black
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 python_files = ["test_*.py"]
 python_classes = ["Test*"]
 python_functions = ["test_*"]
-addopts = "-v --cov=libs --cov-report=html --cov-report=term-missing"
+asyncio_mode = "auto"
+addopts = "-v --cov=core_trading --cov=libs --cov-report=html --cov-report=term-missing --strict-markers"
 filterwarnings = [
     "ignore::DeprecationWarning:pythonjsonlogger",
+    # Third-party: ib_insync's eventkit calls asyncio.get_event_loop() at import,
+    # which warns on Python 3.12. Outside our control; the autouse
+    # _ensure_current_event_loop fixture handles the functional impact.
+    "ignore:There is no current event loop:DeprecationWarning:eventkit.util",
+    # Third-party: mlflow's internal Pydantic models emit V2/V2.12 deprecation
+    # warnings on import. Outside our control (mlflow is a pinned dependency).
+    "ignore::DeprecationWarning:mlflow",
+    "ignore:.*model_validator.*:DeprecationWarning",
+    "ignore:.*class-based.*config.*:DeprecationWarning",
 ]
