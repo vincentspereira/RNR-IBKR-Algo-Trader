@@ -93,3 +93,8 @@ backups/
 .agent/
 .graphify_python
 .graphify_python/
+mlruns/
+
+# Research lockbox ledgers (created by notebooks at runtime)
+lockbox_ledger.json
+**/lockbox_ledger.json

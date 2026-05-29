@@ -16,7 +16,7 @@ jobs:
     - name: Setup Python
       uses: actions/setup-python@v5
       with:
-        python-version: '3.11'
+        python-version: '3.12'
 
     - name: Install Poetry
       run: |
@@ -25,7 +25,10 @@ jobs:
     - name: Install dependencies
       run: |
         poetry install
-        poetry add pytest-asyncio --group dev
+
+    - name: No-stubs policy gate
+      run: |
+        poetry run python tools/check_no_stubs.py core_trading/data core_trading/research libs/common/events tools/check_no_stubs.py
 
     - name: Lint with ruff
       run: |
@@ -70,3 +73,50 @@ jobs:
       with:
         name: bandit-report
         path: bandit-report.json
+
+  # Strict gate for the new quant layer (Phase 0/0.5/1+): 90% coverage,
+  # zero warnings, zero skips. This job must stay green for every PR.
+  quant-layer:
+    runs-on: ubuntu-latest
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Setup Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.12'
+
+    - name: Install Poetry
+      run: |
+        curl -sSL https://install.python-poetry.org | python3 -
+
+    - name: Install dependencies
+      run: |
+        poetry install
+
+    - name: No-stubs policy gate (quant layer)
+      run: |
+        poetry run python tools/check_no_stubs.py core_trading/data core_trading/research
+
+    - name: Type check quant layer (strict)
+      run: |
+        poetry run mypy core_trading/data core_trading/research --ignore-missing-imports
+
+    - name: Test quant layer (90% coverage, no warnings, no skips)
+      run: |
+        poetry run pytest tests/data tests/research \
+          --cov=core_trading.data --cov=core_trading.research \
+          --cov-report=term-missing --cov-fail-under=90 \
+          -W error -p no:cacheprovider \
+          --override-ini="addopts="
+
+    - name: Smoke-execute research notebook templates (Phase 2.2)
+      env:
+        MPLBACKEND: Agg
+      run: |
+        for nb in notebooks/research/strategy_template/0*.ipynb; do
+          echo "executing $nb"
+          poetry run jupyter nbconvert --to notebook --execute --stdout \
+            "$nb" --ExecutePreprocessor.timeout=180 > /dev/null
+        done
