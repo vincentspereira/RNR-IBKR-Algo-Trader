@@ -162,6 +162,23 @@ warn_return_any = true
 warn_unused_configs = true
 disallow_untyped_defs = true
 
+# Third-party libraries without stub packages in this environment.
+# numpy ships its own py.typed marker so it does NOT need ignoring.
+[[tool.mypy.overrides]]
+module = [
+    "pandas",
+    "pandas.*",
+    "scipy",
+    "scipy.*",
+    "statsmodels",
+    "statsmodels.*",
+    "arch",
+    "arch.*",
+    "filterpy",
+    "filterpy.*",
+]
+ignore_missing_imports = true
+
 [tool.ruff]
 line-length = 100
 target-version = "py312"
