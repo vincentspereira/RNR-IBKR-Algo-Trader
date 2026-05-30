@@ -176,6 +176,8 @@ module = [
     "arch.*",
     "filterpy",
     "filterpy.*",
+    "hmmlearn",
+    "hmmlearn.*",
 ]
 ignore_missing_imports = true
 

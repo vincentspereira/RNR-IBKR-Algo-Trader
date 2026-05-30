@@ -1135,6 +1135,25 @@ Each signal module:
 - [ ] Either promoted to paper trading (Sharpe > threshold) or archived with rejection memo
 - [ ] No `.fixed_attempt` siblings, no commented-out blocks
 
+**Status: Phase 5 IN PROGRESS -- Batch 1 shipped (2026-05-30).** Phase 5 is an
+incremental, multi-month alpha factory; it is built one signal family at a time,
+each held to the per-module DOD above. Batch 1 (econometric foundation) is in:
+
+| Plan | Module | Tests | Notes |
+| ---- | ------ | ----- | ----- |
+| 5.A.1 | `core_trading/signals/regimes/hmm.py` | 48 | Gaussian HMM, 2/3/4-state, stable return-ordered labelling, look-ahead-free fit/predict + smoothing |
+| 5.A.5 | `core_trading/signals/volatility/garch.py` | 53 | GARCH(1,1)/EGARCH/GJR-GARCH via `arch` + HAR-RV; GARCH parameter recovery validated |
+| 5.A.4 | `core_trading/signals/timeseries/arima.py` | 76 | ARIMA/SARIMA via `statsmodels` + de Prado fixed-width fractional differencing (ARFIMA) |
+| 5.B.1 | `core_trading/signals/stochastic/ou.py` | 51 | Ornstein-Uhlenbeck simulate + OLS and exact-MLE estimators; parameter recovery validated |
+
+228 tests pass under `-W error`; mypy strict clean; ruff clean; ASCII-only; ~100%
+coverage per module; no regression in the Phase 4 pairs signals. Each module cites
+its mathematical reference and is validated by parameter recovery on simulated data
+with known truth (the Phase 5 DOD "textbook example" bar). Remaining Phase 5 batches
+(5.A.2/3 filters & state-space, 5.B.2-4 jump/Heston/GBM, 5.C factors, 5.D ML,
+5.E microstructure, 5.F alt-data) follow the same cadence and retire the
+corresponding legacy commented shells as they land.
+
 ---
 
 ### Phase 6 — Portfolio Construction Layer
