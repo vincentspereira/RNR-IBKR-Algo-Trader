@@ -1,0 +1,1 @@
+"""Strategy architecture sub-package."""

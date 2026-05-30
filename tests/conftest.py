@@ -57,6 +57,40 @@ def event_loop():
     loop.close()
 
 
+@pytest.fixture(autouse=True)
+def _ensure_current_event_loop():
+    """Guarantee a current event loop on the main thread for every test.
+
+    Python 3.12 removed implicit event-loop creation in
+    ``asyncio.get_event_loop()``. ib_insync's ``eventkit`` dependency calls
+    ``get_event_loop()`` lazily; after pytest-asyncio tears down a test's loop,
+    a subsequent (even synchronous) test that touches eventkit would otherwise
+    hit ``RuntimeError: There is no current event loop``. This autouse fixture
+    ensures a loop is always set, making the suite order-independent.
+
+    The probe is wrapped in ``catch_warnings`` so the fixture itself does not
+    emit the very DeprecationWarning it guards against, and any loop it creates
+    is closed on teardown to avoid leaking a ResourceWarning.
+    """
+    import warnings
+
+    created_loop = None
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore", DeprecationWarning)
+        try:
+            loop = asyncio.get_event_loop()
+            if loop.is_closed():
+                raise RuntimeError("event loop is closed")
+        except RuntimeError:
+            created_loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(created_loop)
+    yield
+    if created_loop is not None and not created_loop.is_running():
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", DeprecationWarning)
+            created_loop.close()
+
+
 @pytest.fixture
 def event_bus():
     from src.core.event_system import EventBus

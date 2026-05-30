@@ -502,20 +502,38 @@ class IBKRDataFeed(BaseDataFeedAdapter):
 
         logger.info("all_subscriptions_cancelled")
 
+    @staticmethod
+    def _finite_or_none(value):
+        """Return ``value`` if it is a finite number, else ``None``.
+
+        IBKR reports NaN for unset ticker fields. ``ib_insync.util`` historically
+        exposed ``isFinite`` but it was removed; we use ``math.isfinite`` which is
+        the stable, version-independent equivalent.
+        """
+        import math
+
+        try:
+            if value is None:
+                return None
+            return value if math.isfinite(float(value)) else None
+        except (TypeError, ValueError):
+            return None
+
     def _on_ticker_update(self, symbol: str, ticker):
         """Handle incoming ticker update from IBKR."""
+        f = self._finite_or_none
         data = {
             "symbol": symbol,
-            "bid": ticker.bid if IBKR_AVAILABLE and util.isFinite(ticker.bid) else None,
-            "ask": ticker.ask if IBKR_AVAILABLE and util.isFinite(ticker.ask) else None,
-            "last": ticker.last if IBKR_AVAILABLE and util.isFinite(ticker.last) else None,
+            "bid": f(ticker.bid),
+            "ask": f(ticker.ask),
+            "last": f(ticker.last),
             "bid_size": ticker.bidSize,
             "ask_size": ticker.askSize,
             "last_size": ticker.lastSize,
             "volume": ticker.volume,
-            "high": ticker.high if IBKR_AVAILABLE and util.isFinite(ticker.high) else None,
-            "low": ticker.low if IBKR_AVAILABLE and util.isFinite(ticker.low) else None,
-            "close": ticker.close if IBKR_AVAILABLE and util.isFinite(ticker.close) else None,
+            "high": f(ticker.high),
+            "low": f(ticker.low),
+            "close": f(ticker.close),
             "timestamp": datetime.now(timezone.utc),
         }
 

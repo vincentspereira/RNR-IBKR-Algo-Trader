@@ -39,7 +39,9 @@ class InMemoryFallback:
         import time
         if key in self._store:
             _, expiry = self._store[key]
-            if time.time() > expiry:
+            # Use >= so a ttl of 0 means "immediately expired" rather than
+            # depending on sub-tick clock resolution (coarse on Windows).
+            if time.time() >= expiry:
                 del self._store[key]
                 return True
             return False

@@ -37,6 +37,14 @@ repos:
         name: Fix mixed line endings
         args: ['--fix=lf']
 
+  # Strip Jupyter notebook outputs (keeps research notebook diffs clean)
+  - repo: https://github.com/kynan/nbstripout
+    rev: 0.7.1
+    hooks:
+      - id: nbstripout
+        name: Strip notebook outputs
+        files: \.ipynb$
+
   # Python code formatting with Black
   - repo: https://github.com/psf/black
     rev: 23.12.1
@@ -95,6 +103,14 @@ repos:
           - '--output-format=text'
         types: [python]
         exclude: ^tests/
+
+      - id: no-stubs
+        name: Enforce no-stubs / no-damaged-code policy
+        entry: python tools/check_no_stubs.py
+        language: system
+        pass_filenames: true
+        types: [file]
+        exclude: ^\.archive/
 
   # Python code quality with flake8
   - repo: https://github.com/pycqa/flake8

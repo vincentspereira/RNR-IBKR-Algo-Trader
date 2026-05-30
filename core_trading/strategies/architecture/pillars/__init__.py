@@ -1,74 +1,18 @@
-# from nautilus_trader_engine.strategies.architecture.pillars import ()
-from nautilus_trader_engine.strategies.architecture.coordinator import PillarCoordinator
-"5-Pillar Strategy Architecture - Individual Pillars"
-# "
-# This module contains the individual pillar implementations of the 5-Pillar Architecture.
-# Each pillar represents a specialized component of the comprehensive trading framework.
-# "
-# Pillars:
-# ========
-# 1. Signal Generation: Multi-timeframe technical analysis and signal generation
-# 2. Market Regime Detection: ML-powered market state classification
-# 3. Risk Management: Dynamic position sizing and portfolio risk management
-# 4. Execution Intent: Smart order execution algorithms (TWAP, VWAP, etc.)
-# 5. Performance Analytics: Comprehensive performance measurement and attribution
+"""Pillar architecture re-export shim.
 
-# Architecture Benefits:
-# =====================
-# - Modular design with clear separation of concerns
-# - Independent pillar development and testing
-# - Coordinated decision-making through PillarCoordinator
-# - Scalable and maintainable codebase
-# - Enterprise-grade strategy development framework
+The canonical implementation of the 5-pillar scoring framework lives at
+:mod:`core_trading.strategies.core.augmented_base_institutional_strategy`.
+This package previously held a set of damaged extracts from a failed
+god-class refactoring; those files were archived on 2026-05-28 (see
+``.archive/2026-05-28_remediation/misplaced_pillars/``).
 
-# Usage:
-# ======
-#     SignalGenerator,
-#     MarketRegimeDetector,
-#     RiskManager,
-#     ExecutionIntentManager,
-#     PerformanceAnalyticsManager
-# )
+This module re-exports the canonical types so any legacy import paths of
+the form ``from core_trading.strategies.architecture.pillars import PillarScores``
+continue to resolve.
+"""
+from core_trading.strategies.core.augmented_base_institutional_strategy import (
+    AugmentedConfig,
+    PillarScores,
+)
 
-# Initialize individual pillars
-signal_gen = SignalGenerator()
-regime_detector = MarketRegimeDetector()
-risk_manager = RiskManager()
-execution_manager = ExecutionIntentManager()
-performance_manager = PerformanceAnalyticsManager()
-
-# Use with PillarCoordinator for full integration
-# coordinator = PillarCoordinator(
-#     signal_generator=signal_gen,
-#     regime_detector=regime_detector,
-#     risk_manager=risk_manager,
-#     execution_manager=execution_manager,
-#     performance_manager=performance_manager
-# )"
-
-
-# try:
-#     from .execution_intent import ExecutionIntentManager
-#     from .market_regime_detection import MarketRegimeDetector
-#     from .performance_analytics import PerformanceAnalyticsManager
-#     from .risk_management import RiskManager
-#     from .signal_generation import SignalGenerator
-# except ImportError as e:
-    # Handle missing dependencies gracefully during development
-#     import warnings
-
-# warnings.warn("
-#         f"Some pillar modules could not be imported: {e}. "
-#         "This may be expected during development or if optional dependencies are not installed.",
-#         ImportWarning,
-#         stacklevel=2,
-# )
-# "
-# __all__ = ["
-# "SignalGenerator","
-# "MarketRegimeDetector","
-# "RiskManager","
-# "ExecutionIntentManager","
-#     "PerformanceAnalyticsManager",
-# ]
-# "
+__all__ = ["AugmentedConfig", "PillarScores"]

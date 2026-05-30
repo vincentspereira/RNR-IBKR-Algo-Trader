@@ -39,6 +39,7 @@ os.environ.setdefault("NEO4J_PASSWORD", "test_pass")
 os.environ.setdefault("REDIS_PASSWORD", "test_pass")
 os.environ.setdefault("JWT_SECRET", "test_jwt_secret_for_unit_tests")
 os.environ.setdefault("ALPHA_VANTAGE_API_KEY", "test_key")
+os.environ.setdefault("IBKR_ACCOUNT_ID", "DU0000000")
 
 # Ensure project root is importable
 _project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
@@ -61,7 +62,7 @@ def _make_connected_feed():
     from core_trading.data_feeds.ibkr_data_feed import IBKRDataFeed
     from core_trading.adapters.base import ConnectionStatus
 
-    adapter = IBKRAdapter()
+    adapter = IBKRAdapter(account_id="DU0000000")
     adapter._set_status(ConnectionStatus.CONNECTED)
     feed = IBKRDataFeed(adapter)
     feed._set_status(ConnectionStatus.CONNECTED)
@@ -100,7 +101,7 @@ class TestIBKRDataFeedSubscribeTicker:
     async def test_subscribe_ticker_not_connected_raises(self):
         from core_trading.adapters.ibkr_adapter import IBKRAdapter
         from core_trading.data_feeds.ibkr_data_feed import IBKRDataFeed
-        feed = IBKRDataFeed(IBKRAdapter())
+        feed = IBKRDataFeed(IBKRAdapter(account_id="DU0000000"))
         with pytest.raises(RuntimeError, match="not connected"):
             await feed.subscribe_ticker("AAPL", lambda d: None)
 
@@ -130,7 +131,7 @@ class TestIBKRDataFeedSubscribeLevel2:
     async def test_subscribe_level2_not_connected_raises(self):
         from core_trading.adapters.ibkr_adapter import IBKRAdapter
         from core_trading.data_feeds.ibkr_data_feed import IBKRDataFeed
-        feed = IBKRDataFeed(IBKRAdapter())
+        feed = IBKRDataFeed(IBKRAdapter(account_id="DU0000000"))
         with pytest.raises(RuntimeError, match="not connected"):
             await feed.subscribe_level2("AAPL", lambda d: None)
 
@@ -155,7 +156,7 @@ class TestIBKRDataFeedHistoricalData:
     async def test_get_historical_data_not_connected_raises(self):
         from core_trading.adapters.ibkr_adapter import IBKRAdapter
         from core_trading.data_feeds.ibkr_data_feed import IBKRDataFeed
-        feed = IBKRDataFeed(IBKRAdapter())
+        feed = IBKRDataFeed(IBKRAdapter(account_id="DU0000000"))
         now = datetime.now(timezone.utc)
         with pytest.raises(RuntimeError, match="not connected"):
             await feed.get_historical_data("AAPL", now - timedelta(days=1), now)
@@ -164,7 +165,7 @@ class TestIBKRDataFeedHistoricalData:
     async def test_get_historical_bars_not_connected_raises(self):
         from core_trading.adapters.ibkr_adapter import IBKRAdapter
         from core_trading.data_feeds.ibkr_data_feed import IBKRDataFeed
-        feed = IBKRDataFeed(IBKRAdapter())
+        feed = IBKRDataFeed(IBKRAdapter(account_id="DU0000000"))
         with pytest.raises(RuntimeError, match="not connected"):
             await feed.get_historical_bars("AAPL")
 
@@ -256,8 +257,13 @@ class TestIBKRDataFeedConnectDisconnect:
     @pytest.mark.asyncio
     async def test_connect_via_adapter(self):
         from core_trading.adapters.ibkr_adapter import IBKRAdapter
+        from core_trading.adapters.base import ConnectionStatus
         from core_trading.data_feeds.ibkr_data_feed import IBKRDataFeed
-        feed = IBKRDataFeed(IBKRAdapter())
+        # Mock the underlying adapter as already connected so we test the feed's
+        # delegation logic, not a live TWS socket.
+        adapter = IBKRAdapter(account_id="DU0000000")
+        adapter._set_status(ConnectionStatus.CONNECTED)
+        feed = IBKRDataFeed(adapter)
         result = await feed.connect()
         assert result is True
         assert feed.is_connected
@@ -283,7 +289,7 @@ class TestIBKRDataFeedConnectDisconnect:
         from core_trading.adapters.ibkr_adapter import IBKRAdapter
         from core_trading.data_feeds.ibkr_data_feed import IBKRDataFeed
         from core_trading.adapters.base import ConnectionStatus
-        feed = IBKRDataFeed(IBKRAdapter())
+        feed = IBKRDataFeed(IBKRAdapter(account_id="DU0000000"))
         hc = await feed.health_check()
         assert hc.status == ConnectionStatus.DISCONNECTED
         assert hc.error_message is not None
@@ -302,7 +308,7 @@ class TestIBKRDataFeedGetQuote:
     async def test_get_quote_not_connected_raises(self):
         from core_trading.adapters.ibkr_adapter import IBKRAdapter
         from core_trading.data_feeds.ibkr_data_feed import IBKRDataFeed
-        feed = IBKRDataFeed(IBKRAdapter())
+        feed = IBKRDataFeed(IBKRAdapter(account_id="DU0000000"))
         with pytest.raises(RuntimeError, match="not connected"):
             await feed.get_quote("AAPL")
 
@@ -320,7 +326,7 @@ class TestIBKRDataFeedSearchSymbols:
     async def test_search_symbols_not_connected_raises(self):
         from core_trading.adapters.ibkr_adapter import IBKRAdapter
         from core_trading.data_feeds.ibkr_data_feed import IBKRDataFeed
-        feed = IBKRDataFeed(IBKRAdapter())
+        feed = IBKRDataFeed(IBKRAdapter(account_id="DU0000000"))
         with pytest.raises(RuntimeError, match="not connected"):
             await feed.search_symbols("AAPL")
 
@@ -1329,11 +1335,32 @@ class TestJSONSerializer:
         with pytest.raises(Exception):
             JSONSerializer.deserialize(b"not valid json{}", MarketDataEvent)
 
-    def test_avro_serializer_not_implemented(self):
+    def test_avro_serializer_requires_registered_schema(self):
+        """AvroSerializer is now fully implemented (no longer a stub).
+
+        Serializing/deserializing an event whose class has no registered Avro
+        schema raises KeyError with a clear message, rather than the old
+        NotImplementedError stub behaviour.
+        """
         from libs.common.events.serializers import AvroSerializer
         from libs.common.events.base import MarketDataEvent
         s = AvroSerializer(schema_registry_url="http://localhost:8081")
-        with pytest.raises(NotImplementedError):
-            s.serialize(MarketDataEvent(symbol="AAPL", exchange="NASDAQ"), schema_id=1)
-        with pytest.raises(NotImplementedError):
-            s.deserialize(b"data", MarketDataEvent)
+        with pytest.raises(KeyError, match="No Avro schema registered"):
+            s.serialize(MarketDataEvent(symbol="AAPL", exchange="NASDAQ"), topic="md")
+        with pytest.raises(KeyError, match="No Avro schema registered"):
+            s.deserialize(b"data", MarketDataEvent, topic="md")
+
+    def test_avro_schema_derivation(self):
+        """schema_from_event_class derives a valid Avro record schema."""
+        import json as _json
+
+        from libs.common.events.serializers import AvroSerializer
+        from libs.common.events.base import MarketDataEvent
+
+        schema = AvroSerializer.schema_from_event_class(MarketDataEvent, namespace="trading")
+        parsed = _json.loads(schema)
+        assert parsed["type"] == "record"
+        assert parsed["name"] == "MarketDataEvent"
+        field_names = {f["name"] for f in parsed["fields"]}
+        assert "symbol" in field_names
+        assert "exchange" in field_names
