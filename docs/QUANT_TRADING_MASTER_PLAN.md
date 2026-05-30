@@ -572,15 +572,22 @@ Phase 0.5 does not need to complete before any other phase begins. Sequencing re
 
 #### 0.5.6 Definition of Done — Phase 0.5
 
-- [ ] Zero `.fixed_attempt` files in the active tree (only inside `.archive/`)
-- [ ] Zero `.backup` files in the active tree (only inside `.archive/`)
-- [ ] All files in `core_trading/strategies/architecture/pillars/` have <5% commented lines and pass mypy --strict
-- [ ] No duplicate implementations between `core_trading/` and `services/`
-- [ ] All TODO/FIXME/XXX markers in non-broker code resolved or converted to GitHub issues with rationale
-- [ ] Broker adapter roadmap markers documented as deferred (not as stubs) in `BROKER_ROADMAP.md`
-- [ ] `libs/common/errors/exceptions.py` ships a complete exception hierarchy
-- [ ] Graphify knowledge graph regenerated and committed
-- [ ] No file in the active tree has >20% commented lines (a `# normal docstring` comment is fine, but commented-out *code* is not)
+- [x] Zero `.fixed_attempt` files in the active tree (only inside `.archive/`) -- 175 removed, archived under `.archive/2026-05-28_remediation/cruft/` (commit `91664f4`)
+- [x] Zero `.backup` files in the active tree (only inside `.archive/`) -- 36 removed, archived alongside cruft (commit `91664f4`)
+- [x] All files in `core_trading/strategies/architecture/pillars/` have <5% commented lines and pass mypy --strict -- the damaged extracts were archived; `pillars/__init__.py` + `coordinator/__init__.py` are clean re-export shims to the canonical framework in `strategies/core/augmented_base_institutional_strategy.py`
+- [x] No duplicate implementations between `core_trading/` and `services/` -- 10 damaged engine shells archived; the one real file (`services/.../execution_engine.py`) kept and flagged as Phase 9 debt; `core_trading/` is canonical, `services/` is deployment glue
+- [ ] All TODO/FIXME/XXX markers in non-broker code resolved or converted to GitHub issues with rationale -- *53 markers remain, all in legacy `strategies/` files that Phases 1/5/8/9 replace (see C.1/C.3/C.4/D); cleared as those phases ship*
+- [x] Broker adapter roadmap markers documented as deferred (not as stubs) in `BROKER_ROADMAP.md` -- `docs/BROKER_ROADMAP.md` (2026-05-30)
+- [x] `libs/common/errors/exceptions.py` ships a complete exception hierarchy -- 22-class hierarchy rooted at `TradingSystemException`, zero stubs
+- [x] Graphify knowledge graph regenerated and committed -- `graphify-out/` refreshed (commit `91664f4`)
+- [ ] No file in the active tree has >20% commented lines -- *80 legacy files remain (down from baseline); these are the same legacy `strategies/` / `data_feeds/` files sequenced for REPLACE/REWRITE in Phases 1/5/8/9. No-stubs violations: 536 baseline -> 133 now (75% reduction). The no-stubs pre-commit gate prevents NEW violations; the residue retires as each replacement phase lands.*
+
+**Status: Phase 0.5 SUBSTANTIALLY COMPLETE (2026-05-30).** 7 of 9 DOD items closed.
+The 2 open items (residual high-comment-ratio legacy files and their TODO markers)
+are, by the plan's own triage (0.5.2 Categories C.1/C.3/C.4/D), deliberately retired
+**as their replacement phases ship** -- not rewritten up front. The no-stubs gate is
+live and prevents regressions. Net effect of remediation: -69k lines, 536 -> 133
+no-stubs violations.
 
 ---
 

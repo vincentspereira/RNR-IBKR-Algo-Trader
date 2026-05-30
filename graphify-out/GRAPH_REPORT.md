@@ -1,7 +1,7 @@
 # Graph Report - C:\Users\vince\Projects\Trading\IBKR - Algo Trader  (2026-05-30)
 
 ## Corpus Check
-- 385 files · ~4,951,834 words
+- 385 files · ~4,951,838 words
 - Verdict: corpus is large enough that graph structure adds value.
 
 ## Summary
@@ -2809,11 +2809,11 @@ Nodes (1): SDLC MCP Implementation Plan
 _Questions this graph is uniquely positioned to answer:_
 
 - **Why does `Broker adapter package.  The canonical broker adapter is ``core_trading.adapte` connect `Community 2` to `Community 0`, `Community 1`, `Community 3`, `Community 4`, `Community 6`, `Community 7`, `Community 8`, `Community 9`, `Community 10`, `Community 12`, `Community 13`, `Community 16`, `Community 18`, `Community 21`, `Community 22`, `Community 23`, `Community 24`, `Community 25`, `Community 26`, `Community 27`, `Community 30`, `Community 33`, `Community 37`, `Community 43`, `Community 44`, `Community 45`, `Community 46`, `Community 48`, `Community 49`, `Community 56`?**
-  _High betweenness centrality (0.316) - this node is a cross-community bridge._
-- **Why does `Trade` connect `Community 3` to `Community 8`, `Community 2`, `Community 10`, `Community 35`?**
-  _High betweenness centrality (0.031) - this node is a cross-community bridge._
+  _High betweenness centrality (0.322) - this node is a cross-community bridge._
 - **Why does `range()` connect `Community 7` to `Community 0`, `Community 1`, `Community 2`, `Community 3`, `Community 4`, `Community 37`, `Community 6`, `Community 8`, `Community 11`, `Community 12`, `Community 13`, `Community 15`, `Community 48`, `Community 18`, `Community 20`, `Community 27`, `Community 30`?**
-  _High betweenness centrality (0.031) - this node is a cross-community bridge._
+  _High betweenness centrality (0.045) - this node is a cross-community bridge._
+- **Why does `ConnectionStatus` connect `Community 1` to `Community 2`, `Community 5`?**
+  _High betweenness centrality (0.028) - this node is a cross-community bridge._
 - **Are the 324 inferred relationships involving `IBKRAdapter` (e.g. with `AdapterConfig` and `AdapterType`) actually correct?**
   _`IBKRAdapter` has 324 INFERRED edges - model-reasoned connections that need verification._
 - **Are the 277 inferred relationships involving `Broker adapter package.  The canonical broker adapter is ``core_trading.adapte` (e.g. with `AlmgrenChrissImpact` and `BorrowModel`) actually correct?**
