@@ -1184,6 +1184,32 @@ wall-clock, exactly like the pairs vertical; the harness closes the *in-framewor
 evaluation, not those operational gates. Remaining signals are wired through this
 gate as their batches land.
 
+**Signal adapters batch -- trend + ARIMA forecast wired through the gate, 2026-06-02.**
+The first signals after OU now run through the same gate, in a new
+`core_trading/research/signal_adapters/` subpackage (one module per signal, each
+reusing the "compute the look-ahead-free signal path once, sweep a cheap threshold
+grid" shape):
+- `trend.py` -- local-linear-trend trend-following (5.A.3's state-space slope). A
+  rolling re-fit of `fit_local_linear_trend` yields a look-ahead-free stochastic
+  slope, standardised and traded with a deadband. On a piecewise-trending series
+  the gate PROMOTES (deflated Sharpe ~1.0); on a driftless random walk it ARCHIVES
+  (deflated Sharpe ~0.0).
+- `forecast.py` -- ARIMA one-step-ahead direction (5.A.4). A rolling AR(p) fit's
+  coefficients are applied per bar to forecast the next return (look-ahead-free),
+  standardised and traded with an entry threshold; constrained to pure AR(p,0,0)
+  so the fast per-bar recursion is exact (a non-zero d/q raises). On AR(1)-momentum
+  returns the gate PROMOTES; on i.i.d. noise it ARCHIVES.
+Each adapter ships a mandatory truncation-invariance test (the signal at bar t is
+unchanged by appending future bars -- the definitive look-ahead check). 64 tests,
+100% coverage on all three new modules, warnings-as-errors clean. The harness now
+discriminates skill from noise across three structurally different signal families
+(mean-reversion, trend, linear forecast). Still pending the gate, each deferred for
+a documented reason rather than forced into a single-asset spot rule: HMM regime
+overlay and GARCH vol-management (no standalone directional edge for a spot-Sharpe
+gate), Kalman time-varying beta (a 2-asset pairs application -> belongs with the
+5.C cross-sectional work), and the volatility/options models (Heston,
+jump-diffusion).
+
 **Deferred within 5.A:** DCC-GARCH (multivariate time-varying correlation) -- the
 univariate GARCH family shipped in Batch 1; DCC is a later multivariate add-on.
 Remaining Phase 5 batches (5.C factor models, 5.D ML, 5.E microstructure, 5.F
