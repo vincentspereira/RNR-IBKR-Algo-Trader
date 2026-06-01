@@ -1166,6 +1166,24 @@ ASCII-only; no-stubs gate clean; ~100% coverage per module. Each module cites it
 mathematical reference and is validated by parameter recovery / textbook limits on
 simulated data with known truth (the Phase 5 DOD "textbook example" bar).
 
+**Evaluation harness (DOD items 3-5), 2026-06-01.** Unit validation is only half
+the per-module DOD; the other half -- "backtest run completes in the standard
+framework", "deflated Sharpe computed", "promoted to paper or archived with a
+rejection memo" -- is now supplied reusably by
+`core_trading/research/signal_evaluation.py`. It turns a signal into a
+look-ahead-free target-weight rule, runs it through the Phase 3 engine (both modes,
+checked for agreement), and scores the best of the configurations tried with the
+**deflated Sharpe**, so the PROMOTE/ARCHIVE verdict is honest about selection bias.
+First wired signal: the Ornstein-Uhlenbeck mean-reversion rule (5.B.1's trading
+application). On a genuinely mean-reverting textbook series the gate PROMOTES
+(deflated Sharpe ~1.0); on a random walk it ARCHIVES (deflated Sharpe ~0.92) even
+though the naive probabilistic Sharpe (~0.98) looks significant -- demonstrating
+that the gate accepts skill and rejects noise. 40 tests, 100% coverage, `-W error`
+clean. Real-data promotion to paper stays gated on Phase 1 data and the Phase 4.9
+wall-clock, exactly like the pairs vertical; the harness closes the *in-framework*
+evaluation, not those operational gates. Remaining signals are wired through this
+gate as their batches land.
+
 **Deferred within 5.A:** DCC-GARCH (multivariate time-varying correlation) -- the
 univariate GARCH family shipped in Batch 1; DCC is a later multivariate add-on.
 Remaining Phase 5 batches (5.C factor models, 5.D ML, 5.E microstructure, 5.F
