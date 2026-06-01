@@ -1135,9 +1135,13 @@ Each signal module:
 - [ ] Either promoted to paper trading (Sharpe > threshold) or archived with rejection memo
 - [ ] No `.fixed_attempt` siblings, no commented-out blocks
 
-**Status: Phase 5 IN PROGRESS -- Batch 1 shipped (2026-05-30).** Phase 5 is an
+**Status: Phase 5 IN PROGRESS -- Batches 1-2 shipped (2026-06-01).** Phase 5 is an
 incremental, multi-month alpha factory; it is built one signal family at a time,
-each held to the per-module DOD above. Batch 1 (econometric foundation) is in:
+each held to the per-module DOD above. Sub-phases **5.A (time-series statistical
+models)** and **5.B (stochastic process models)** are now complete (one deferral
+noted below).
+
+Batch 1 -- econometric foundation (commit `182475b`, 2026-05-30):
 
 | Plan | Module | Tests | Notes |
 | ---- | ------ | ----- | ----- |
@@ -1146,13 +1150,27 @@ each held to the per-module DOD above. Batch 1 (econometric foundation) is in:
 | 5.A.4 | `core_trading/signals/timeseries/arima.py` | 76 | ARIMA/SARIMA via `statsmodels` + de Prado fixed-width fractional differencing (ARFIMA) |
 | 5.B.1 | `core_trading/signals/stochastic/ou.py` | 51 | Ornstein-Uhlenbeck simulate + OLS and exact-MLE estimators; parameter recovery validated |
 
-228 tests pass under `-W error`; mypy strict clean; ruff clean; ASCII-only; ~100%
-coverage per module; no regression in the Phase 4 pairs signals. Each module cites
-its mathematical reference and is validated by parameter recovery on simulated data
-with known truth (the Phase 5 DOD "textbook example" bar). Remaining Phase 5 batches
-(5.A.2/3 filters & state-space, 5.B.2-4 jump/Heston/GBM, 5.C factors, 5.D ML,
-5.E microstructure, 5.F alt-data) follow the same cadence and retire the
-corresponding legacy commented shells as they land.
+Batch 2 -- filters + remaining stochastic processes (2026-06-01):
+
+| Plan | Module | Tests | Notes |
+| ---- | ------ | ----- | ----- |
+| 5.A.2 | `core_trading/signals/filters/kalman.py` | 44 | Pure-NumPy linear-Gaussian Kalman filter, predict/update + RTS smoother + time-varying-beta DLM; validated against `filterpy` to 1e-8 |
+| 5.A.3 | `core_trading/signals/filters/state_space.py` | 33 | Unobserved-components structural models (local level / linear trend / basic structural) via `statsmodels`; trend + seasonal recovery validated |
+| 5.B.4 | `core_trading/signals/stochastic/gbm.py` | 34 | Geometric Brownian Motion baseline; closed-form log-return MLE; parameter recovery validated |
+| 5.B.2 | `core_trading/signals/stochastic/jump_diffusion.py` | 50 | Merton jump-diffusion; finite-mixture MLE + model moments; jump params weakly identified (Honore 1998), validated by moment matching |
+| 5.B.3 | `core_trading/signals/stochastic/heston.py` | 69 | Heston stochastic vol; full-truncation Euler sim, char-function call pricing (Albrecher trap form), calibration; Black-Scholes limit to 0.01 bp, round-trip RMSE < 1e-6 |
+
+562 tests across `tests/signals` pass under `-W error` (228 Batch 1 + 230 Batch 2 +
+104 Phase 4 pairs, no regression); mypy strict clean (19 source files); ruff clean;
+ASCII-only; no-stubs gate clean; ~100% coverage per module. Each module cites its
+mathematical reference and is validated by parameter recovery / textbook limits on
+simulated data with known truth (the Phase 5 DOD "textbook example" bar).
+
+**Deferred within 5.A:** DCC-GARCH (multivariate time-varying correlation) -- the
+univariate GARCH family shipped in Batch 1; DCC is a later multivariate add-on.
+Remaining Phase 5 batches (5.C factor models, 5.D ML, 5.E microstructure, 5.F
+alt-data) follow the same cadence and retire the corresponding legacy commented
+shells as they land.
 
 ---
 

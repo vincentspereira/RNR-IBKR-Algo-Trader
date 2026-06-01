@@ -13,11 +13,15 @@ Sub-packages
   models (Phase 5.A.5).
 * :mod:`core_trading.signals.timeseries` -- ARIMA / SARIMA and fractional
   differencing / ARFIMA (Phase 5.A.4).
-* :mod:`core_trading.signals.stochastic` -- Ornstein-Uhlenbeck mean-reverting
-  process estimation (Phase 5.B.1).
+* :mod:`core_trading.signals.filters` -- Kalman filter and unobserved-components
+  structural time-series models (Phase 5.A.2-3).
+* :mod:`core_trading.signals.stochastic` -- stochastic-process models:
+  Ornstein-Uhlenbeck (Phase 5.B.1), Merton jump-diffusion (5.B.2), Heston
+  stochastic volatility (5.B.3), and Geometric Brownian Motion (5.B.4).
 
 Each sub-module lazily imports its heavy statistical dependency (``hmmlearn``,
-``arch``, ``statsmodels``) inside the call sites, so importing this package is
-cheap. Import the concrete API from the relevant sub-package, e.g.
+``arch``, ``statsmodels``, ``scipy``) inside the call sites, so importing this
+package is cheap. The Kalman filter is implemented in pure NumPy. Import the
+concrete API from the relevant sub-package, e.g.
 ``from core_trading.signals.regimes import RegimeDetector``.
 """
