@@ -1263,6 +1263,23 @@ exhausted, consistent with the guard's own tolerance. Any flip-heavy long/short
 strategy hit this in event-driven mode. Regression-tested in
 `tests/backtest/test_costs.py`.
 
+**PCA statistical-arbitrage gate-wiring (5.C.3 DOD items 3-5), 2026-06-02.** The
+second multi-asset adapter,
+`core_trading/research/signal_adapters/pca_stat_arb.py`, wires the PCA factor
+module through the gate as the Avellaneda-Lee residual-reversion stat-arb. At each
+refit a PCA is fitted on the trailing return window, the systematic component is
+regressed out, and the standardised cumulative residual gives a per-asset s-score
+(look-ahead-free; refreshed every `refit_every` bars and carried between). The
+portfolio **longs the most negative s-scores and shorts the most positive** (the
+reversion direction -- the sign-flipped image of momentum), reusing the same
+dollar-neutral long/short construction; the swept knob is again the `quantile`. On
+a panel with common factor structure and mean-reverting (OU) idiosyncratic
+residuals the gate PROMOTES (deflated Sharpe ~1.0, realistic annualised Sharpe
+~3, modes agree); with random-walk idiosyncratic residuals -- no reversion to
+trade -- it ARCHIVES. A truncation-invariance test proves the rolling s-score is
+look-ahead-free. 25 tests, 100% coverage. This is the last of the 5.C price/return
+factors to clear the gate; the remaining 5.C signals need fundamental data.
+
 ---
 
 ### Phase 6 — Portfolio Construction Layer

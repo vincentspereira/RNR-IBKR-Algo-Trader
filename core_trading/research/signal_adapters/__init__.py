@@ -20,6 +20,8 @@ Adapters
   directional forecast (single-asset).
 * :mod:`~core_trading.research.signal_adapters.cross_sectional_momentum` --
   cross-sectional momentum dollar-neutral long/short (multi-asset).
+* :mod:`~core_trading.research.signal_adapters.pca_stat_arb` -- PCA
+  residual-reversion (Avellaneda-Lee) dollar-neutral long/short (multi-asset).
 
 The single-asset adapters compute the expensive look-ahead-free signal path once
 in a ``build_*_weight_fn`` factory, then sweep a cheap threshold grid so each
@@ -45,6 +47,12 @@ from core_trading.research.signal_adapters.forecast import (
     forecast_positions,
     forecast_signal_series,
 )
+from core_trading.research.signal_adapters.pca_stat_arb import (
+    build_pca_statarb_weight_fn,
+    pca_sscore_panel,
+    pca_statarb_grid,
+    residual_reversion_weights,
+)
 from core_trading.research.signal_adapters.trend import (
     build_trend_weight_fn,
     trend_grid,
@@ -68,4 +76,9 @@ __all__ = [
     "momentum_weights",
     "build_momentum_weight_fn",
     "momentum_grid",
+    # PCA residual-reversion stat-arb (multi-asset long/short) adapter
+    "pca_sscore_panel",
+    "residual_reversion_weights",
+    "build_pca_statarb_weight_fn",
+    "pca_statarb_grid",
 ]
