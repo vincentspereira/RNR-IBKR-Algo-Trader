@@ -224,6 +224,28 @@ class TestTaxLotBook:
         with pytest.raises(ValueError, match="cannot close"):
             book.reduce(20, 10.0)
 
+    def test_reduce_tolerates_float_dust(self) -> None:
+        """Closing within the 1e-9 guard tolerance must not crash on an emptied book.
+
+        Fractional-share rebalancing can drift a position's running quantity a
+        few hundred picoshares above the sum of its open lots. reduce() admits
+        that sub-1e-9 dust and must drop it, not index an emptied deque (which
+        previously raised IndexError and crashed event-driven long/short runs).
+        """
+        for method in (LotMethod.FIFO, LotMethod.LIFO, LotMethod.HIFO):
+            book = TaxLotBook(method)
+            book.add(100.0, 10.0)
+            realised = book.reduce(100.0 + 5e-10, 12.0)  # half a nanoshare over
+            assert book.open_quantity == pytest.approx(0.0)
+            assert sum(r.quantity for r in realised) == pytest.approx(100.0)
+
+    def test_reduce_beyond_tolerance_still_rejected(self) -> None:
+        """Dust tolerance must not become a hole: a real over-close still raises."""
+        book = TaxLotBook()
+        book.add(100.0, 10.0)
+        with pytest.raises(ValueError, match="cannot close"):
+            book.reduce(100.0 + 1e-3, 12.0)
+
     def test_bad_add(self) -> None:
         with pytest.raises(ValueError):
             TaxLotBook().add(-1, 10.0)

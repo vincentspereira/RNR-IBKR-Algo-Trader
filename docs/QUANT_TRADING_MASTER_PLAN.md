@@ -1240,6 +1240,29 @@ and can extend this sub-package later. Cross-sectional gate-wiring (a multi-asse
 long/short adapter through `evaluate_signal`) follows as its own step, as it did
 for the single-asset signals.
 
+**Cross-sectional momentum gate-wiring (5.C.4 DOD items 3-5), 2026-06-02.** The
+first MULTI-ASSET adapter,
+`core_trading/research/signal_adapters/cross_sectional_momentum.py`, wires the
+momentum factor through the evaluation gate. Unlike the single-instrument trend /
+forecast / OU adapters (one `{-1,0,+1}` column), its weight rule emits a
+dollar-neutral long/short *panel* -- one column per symbol, each row summing to
+zero. The expensive look-ahead-free z-score panel is computed once; the swept knob
+is the long/short `quantile`. A new harness helper
+`price_panel_from_frame` builds the engine's `(symbol, timestamp)` OHLCV panel
+from a wide multi-asset price frame (the cross-sectional analogue of
+`price_panel_from_series`). On a panel with block-persistent per-asset drift the
+gate PROMOTES (deflated Sharpe ~1.0, vectorised and event-driven modes agree); on
+independent random walks it ARCHIVES. A truncation-invariance test proves the
+score panel is look-ahead-free for both raw and risk-adjusted paths. 28 adapter
+tests, 100% coverage. **This also surfaced and fixed a real backtest-engine
+correctness bug:** `TaxLotBook.reduce` raised `IndexError` (crashing the
+event-driven engine) when a fill flipped a position long<->short and float-dust
+drift between the position's running quantity and its lot book let the close
+quantity exceed the open lots by sub-1e-9; the lot loop now stops when the book is
+exhausted, consistent with the guard's own tolerance. Any flip-heavy long/short
+strategy hit this in event-driven mode. Regression-tested in
+`tests/backtest/test_costs.py`.
+
 ---
 
 ### Phase 6 — Portfolio Construction Layer

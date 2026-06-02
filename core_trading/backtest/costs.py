@@ -347,7 +347,14 @@ class TaxLotBook:
             raise ValueError(f"cannot close {quantity}; only {self.open_quantity} open")
         remaining = quantity
         realised: list[RealisedLot] = []
-        while remaining > 1e-12:
+        # Stop when the book is exhausted as well as when ``remaining`` is spent.
+        # The guard above admits up to 1e-9 of float dust (accumulated drift
+        # between a position's running quantity and the sum of its lot
+        # quantities under fractional-share rebalancing); without the
+        # ``self._lots`` check that dust would index an emptied deque and raise
+        # IndexError on the next iteration. Dropping the sub-1e-9 residual is
+        # consistent with the guard's own tolerance.
+        while remaining > 1e-12 and self._lots:
             idx = self._next_index()
             lot = self._lots[idx]
             matched = min(remaining, lot.quantity)

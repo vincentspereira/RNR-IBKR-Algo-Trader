@@ -75,6 +75,7 @@ if TYPE_CHECKING:
 __all__ = [
     "SignalEvaluation",
     "price_panel_from_series",
+    "price_panel_from_frame",
     "evaluate_signal",
     "ou_zscore_series",
     "mean_reversion_positions",
@@ -201,6 +202,75 @@ def price_panel_from_series(
         },
         index=pd.MultiIndex.from_product([[symbol], timestamps], names=["symbol", "timestamp"]),
     )
+
+
+def price_panel_from_frame(
+    prices: pd.DataFrame,
+    *,
+    volume: float = 1_000_000.0,
+) -> pd.DataFrame:
+    """Wrap a wide multi-asset close-price frame in the engine's OHLCV panel.
+
+    The cross-sectional analogue of :func:`price_panel_from_series`, for signals
+    that trade a whole cross-section (e.g. a dollar-neutral long/short factor).
+    ``prices`` is a *wide* frame -- one row per bar, one column per symbol -- and
+    each symbol's open/high/low/close are set equal to its close, so the
+    vectorised and event-driven engine modes agree exactly under a frictionless
+    cost model.
+
+    Parameters
+    ----------
+    prices:
+        Wide price frame: ascending index of timestamps, one column per symbol.
+        If the index is not a ``DatetimeIndex`` a business-day calendar is
+        synthesised. Every value must be finite and strictly positive (the gate
+        path requires a complete panel; the underlying factor functions tolerate
+        NaN for general use, but the engine does not price missing assets here).
+    volume:
+        Constant per-bar volume for every symbol.
+
+    Returns
+    -------
+    pd.DataFrame
+        OHLCV panel indexed by ``["symbol", "timestamp"]`` across all symbols.
+
+    Raises
+    ------
+    ValueError
+        If there are fewer than two rows or one column, or any price is not
+        finite and strictly positive.
+    """
+    if prices.shape[0] < 2:
+        raise ValueError("price_panel_from_frame needs at least 2 timestamps")
+    if prices.shape[1] < 1:
+        raise ValueError("price_panel_from_frame needs at least 1 symbol")
+    values = np.asarray(prices.to_numpy(), dtype=float)
+    if not np.all(np.isfinite(values)) or np.any(values <= 0.0):
+        raise ValueError("prices must be finite and strictly positive")
+
+    if isinstance(prices.index, pd.DatetimeIndex):
+        timestamps = prices.index
+    else:
+        timestamps = pd.date_range("2000-01-03", periods=prices.shape[0], freq="B", tz="UTC")
+
+    frames = []
+    for column in prices.columns:
+        series = np.asarray(prices[column].to_numpy(), dtype=float)
+        frames.append(
+            pd.DataFrame(
+                {
+                    "open": series,
+                    "high": series,
+                    "low": series,
+                    "close": series,
+                    "volume": np.full(series.size, float(volume)),
+                },
+                index=pd.MultiIndex.from_product(
+                    [[str(column)], timestamps], names=["symbol", "timestamp"]
+                ),
+            )
+        )
+    return pd.concat(frames)
 
 
 # ---------------------------------------------------------------------------
