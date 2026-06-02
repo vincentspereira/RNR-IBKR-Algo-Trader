@@ -1280,6 +1280,27 @@ trade -- it ARCHIVES. A truncation-invariance test proves the rolling s-score is
 look-ahead-free. 25 tests, 100% coverage. This is the last of the 5.C price/return
 factors to clear the gate; the remaining 5.C signals need fundamental data.
 
+**5.D machine-learning foundation -- triple-barrier labeling, 2026-06-02.** The
+5.D ML family opens with its prerequisite: the supervised *labels*. New package
+`core_trading/signals/ml/`, module `labeling.py`, implements Lopez de Prado's
+"Advances in Financial Machine Learning" (2018) ch. 2-3 toolkit in pure
+pandas/NumPy (no ML dependency): `daily_volatility` (EWMA, barrier sizing),
+`cusum_filter` (symmetric CUSUM event sampling), `add_vertical_barrier` (the time
+barrier), `triple_barrier_events` (first-touch among profit-take / stop-loss /
+time, with an optional `side` series for the meta-labelling setup), and
+`get_bins` (realised return + label -- directional sign without a side, or the
+`{0,1}` meta-label with one). Labels are path-dependent and forward-looking *by
+construction* (the look-ahead concern in ML trading is about features, not
+labels), so the tests verify exact labels on synthetic paths with known barrier
+touches rather than truncation-invariance: a rising path hits profit-take (+1), a
+falling path stop-loss (-1), a flat path the vertical barrier; meta-labels are 1
+for a profitable long, 0 for a losing long, and 1 for a short into a fall. 27
+tests, 100% coverage, ruff/mypy/no-stubs/ASCII clean. This is foundation-before-
+model, the same cadence as the 5.C factor modules: the model-fitting 5.D batches
+(5.D.1 trees, 5.D.5 meta-labelling, retiring the 99%-commented
+`ai_enhanced_signal_engine.py` / 77%-commented `reinforcement_learning.py`) train
+on these labels and follow.
+
 ---
 
 ### Phase 6 — Portfolio Construction Layer

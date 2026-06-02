@@ -21,6 +21,9 @@ Sub-packages
 * :mod:`core_trading.signals.factors` -- cross-sectional factor signals
   (Phase 5.C): cross-sectional momentum (5.C.4) and PCA statistical factors
   (5.C.3), operating on multi-asset panels (pure NumPy, no heavy dependency).
+* :mod:`core_trading.signals.ml` -- machine-learning signals (Phase 5.D): the
+  triple-barrier labeling foundation (CUSUM sampling, volatility-scaled
+  barriers, meta-labelling) on which the 5.D models train (pure pandas/NumPy).
 
 Each sub-module lazily imports its heavy statistical dependency (``hmmlearn``,
 ``arch``, ``statsmodels``, ``scipy``) inside the call sites, so importing this
