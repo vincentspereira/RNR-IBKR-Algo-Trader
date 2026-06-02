@@ -196,3 +196,39 @@ class TestReadEnvGuards:
         cfg = main._read_env()
         assert cfg["paper_trading"] is False
         assert cfg["port"] == 7496
+
+    def test_non_integer_port_raises(self, monkeypatch):
+        _clear_ibkr_env(monkeypatch)
+        monkeypatch.setenv("IBKR_ACCOUNT_ID", "DU123456")
+        monkeypatch.setenv("IBKR_PORT", "not-a-port")
+        with pytest.raises(ValueError, match="IBKR_PORT must be an integer"):
+            main._read_env()
+
+    def test_port_out_of_range_raises(self, monkeypatch):
+        _clear_ibkr_env(monkeypatch)
+        monkeypatch.setenv("IBKR_ACCOUNT_ID", "DU123456")
+        monkeypatch.setenv("IBKR_PORT", "99999")
+        with pytest.raises(ValueError, match=r"IBKR_PORT must be in \[1, 65535\]"):
+            main._read_env()
+
+    def test_non_integer_client_id_raises(self, monkeypatch):
+        _clear_ibkr_env(monkeypatch)
+        monkeypatch.setenv("IBKR_ACCOUNT_ID", "DU123456")
+        monkeypatch.setenv("IBKR_CLIENT_ID", "xyz")
+        with pytest.raises(ValueError, match="IBKR_CLIENT_ID must be an integer"):
+            main._read_env()
+
+    def test_negative_client_id_raises(self, monkeypatch):
+        _clear_ibkr_env(monkeypatch)
+        monkeypatch.setenv("IBKR_ACCOUNT_ID", "DU123456")
+        monkeypatch.setenv("IBKR_CLIENT_ID", "-1")
+        with pytest.raises(ValueError, match="IBKR_CLIENT_ID must be >= 0"):
+            main._read_env()
+
+    def test_client_id_zero_allowed(self, monkeypatch):
+        """clientId 0 is the valid IBKR 'master' client and must be accepted."""
+        _clear_ibkr_env(monkeypatch)
+        monkeypatch.setenv("IBKR_ACCOUNT_ID", "DU123456")
+        monkeypatch.setenv("IBKR_CLIENT_ID", "0")
+        cfg = main._read_env()
+        assert cfg["client_id"] == 0

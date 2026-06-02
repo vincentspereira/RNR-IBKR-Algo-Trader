@@ -46,6 +46,23 @@ logging.basicConfig(
 logger = logging.getLogger("TradingEngine")
 
 
+def _parse_int(name: str, raw: str, *, minimum: int, maximum: int | None = None) -> int:
+    """Parse an env-var integer with a clear, actionable error on bad input.
+
+    Bare int(os.getenv(...)) raises a cryptic ValueError on garbage and silently
+    accepts nonsense like negative ports; this guards the bootstrap's numeric
+    inputs the same way the mode/port checks guard the rest.
+    """
+    try:
+        value = int(raw)
+    except (TypeError, ValueError):
+        raise ValueError(f"{name} must be an integer, got: {raw!r}") from None
+    if value < minimum or (maximum is not None and value > maximum):
+        bound = f">= {minimum}" if maximum is None else f"in [{minimum}, {maximum}]"
+        raise ValueError(f"{name} must be {bound}, got: {value}")
+    return value
+
+
 def _read_env() -> dict:
     """Read and validate IBKR-related env vars."""
     trading_mode = os.getenv("IBKR_TRADING_MODE", "paper").lower()
@@ -55,8 +72,15 @@ def _read_env() -> dict:
         )
 
     host = os.getenv("IBKR_HOST", "127.0.0.1")
-    port = int(os.getenv("IBKR_PORT", "7497" if trading_mode == "paper" else "7496"))
-    client_id = int(os.getenv("IBKR_CLIENT_ID", "1"))
+    port = _parse_int(
+        "IBKR_PORT",
+        os.getenv("IBKR_PORT", "7497" if trading_mode == "paper" else "7496"),
+        minimum=1,
+        maximum=65535,
+    )
+    # IBKR clientId 0 is valid (the "master" client that also sees orders placed
+    # manually in TWS), so the floor is 0, not 1.
+    client_id = _parse_int("IBKR_CLIENT_ID", os.getenv("IBKR_CLIENT_ID", "1"), minimum=0)
     account_id = os.getenv("IBKR_ACCOUNT_ID")
     if not account_id:
         raise ValueError(

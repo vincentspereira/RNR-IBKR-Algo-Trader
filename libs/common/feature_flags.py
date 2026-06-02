@@ -4,10 +4,10 @@ This module provides a simple, production-ready feature flag system
 for the IBKR Algo-Trader project.
 """
 
-from typing import Any, Dict, Optional
-from enum import Enum
 import json
 import os
+from enum import Enum
+from typing import Any
 
 
 class FeatureStatus(str, Enum):
@@ -27,7 +27,7 @@ class FeatureFlag:
         default_value: bool = False,
         status: FeatureStatus = FeatureStatus.DISABLED,
         description: str = "",
-        depends_on: Optional[list] = None
+        depends_on: list | None = None
     ):
         """
         Initialize feature flag.
@@ -44,9 +44,9 @@ class FeatureFlag:
         self.status = status
         self.description = description
         self.depends_on = depends_on or []
-        self._value: Optional[bool] = None
+        self._value: bool | None = None
     
-    def is_enabled(self, flags: Dict[str, bool] = None) -> bool:
+    def is_enabled(self, flags: dict[str, bool] | None = None) -> bool:
         """
         Check if feature is enabled.
         
@@ -68,7 +68,7 @@ class FeatureFlag:
         # Check dependencies
         if self.depends_on:
             for dep_key in self.depends_on:
-               _dep_value = flags.get(dep_key) if flags else self._get_env_value(dep_key)
+                _dep_value = flags.get(dep_key) if flags else self._get_env_value(dep_key)
                 if not _dep_value:
                     return False
         
@@ -78,7 +78,7 @@ class FeatureFlag:
         
         return self.default_value
     
-    def _get_env_value(self, key: str = None) -> Optional[bool]:
+    def _get_env_value(self, key: str | None = None) -> bool | None:
         """
         Get value from environment variable.
         
@@ -97,7 +97,7 @@ class FeatureFlag:
         
         return None
     
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """Convert flag to dictionary."""
         return {
             "key": self.key,
@@ -187,7 +187,7 @@ class FeatureFlags:
         ),
     }
     
-    _current_flags: Optional[Dict[str, bool]] = None
+    _current_flags: dict[str, bool] | None = None
     
     @classmethod
     def is_enabled(cls, feature_key: str) -> bool:
@@ -207,7 +207,7 @@ class FeatureFlags:
         return flag.is_enabled(cls._current_flags)
     
     @classmethod
-    def get_all_flags(cls) -> Dict[str, Any]:
+    def get_all_flags(cls) -> dict[str, Any]:
         """
         Get all feature flags with their status.
         
@@ -228,12 +228,12 @@ class FeatureFlags:
             file_path: Path to JSON configuration file
         """
         try:
-            with open(file_path, 'r') as f:
+            with open(file_path) as f:
                 cls._current_flags = json.load(f)
         except FileNotFoundError:
             cls._current_flags = {}
         except json.JSONDecodeError as e:
-            raise ValueError(f"Invalid feature flag file: {e}")
+            raise ValueError(f"Invalid feature flag file: {e}") from e
     
     @classmethod
     def load_from_env(cls) -> None:
@@ -270,7 +270,7 @@ def is_enabled(feature_key: str) -> bool:
     return FeatureFlags.is_enabled(feature_key)
 
 
-def get_flags() -> Dict[str, Any]:
+def get_flags() -> dict[str, Any]:
     """Get all feature flags."""
     return FeatureFlags.get_all_flags()
 
