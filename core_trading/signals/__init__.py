@@ -18,6 +18,9 @@ Sub-packages
 * :mod:`core_trading.signals.stochastic` -- stochastic-process models:
   Ornstein-Uhlenbeck (Phase 5.B.1), Merton jump-diffusion (5.B.2), Heston
   stochastic volatility (5.B.3), and Geometric Brownian Motion (5.B.4).
+* :mod:`core_trading.signals.factors` -- cross-sectional factor signals
+  (Phase 5.C): cross-sectional momentum (5.C.4) and PCA statistical factors
+  (5.C.3), operating on multi-asset panels (pure NumPy, no heavy dependency).
 
 Each sub-module lazily imports its heavy statistical dependency (``hmmlearn``,
 ``arch``, ``statsmodels``, ``scipy``) inside the call sites, so importing this

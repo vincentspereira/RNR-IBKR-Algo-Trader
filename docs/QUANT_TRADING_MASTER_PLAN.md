@@ -1216,6 +1216,30 @@ Remaining Phase 5 batches (5.C factor models, 5.D ML, 5.E microstructure, 5.F
 alt-data) follow the same cadence and retire the corresponding legacy commented
 shells as they land.
 
+**Batch 3 -- cross-sectional factor foundation (5.C.3, 5.C.4), 2026-06-02.** The
+factor family lands in a new `core_trading/signals/factors/` sub-package -- the
+first signals to operate on MULTI-ASSET PANELS (DatetimeIndex rows x asset-symbol
+columns) rather than a single series:
+- `momentum.py` (5.C.4) -- cross-sectional momentum: formation-window returns
+  with a recency skip (Jegadeesh-Titman), Moskowitz-Ooi-Pedersen volatility
+  scaling, cross-sectional z-scoring, and dollar-neutral long/short portfolio
+  construction. 60 tests.
+- `pca_factors.py` (5.C.3) -- PCA statistical factors via `numpy.linalg.eigh` on
+  the correlation / covariance matrix: eigenvalues, loadings, variance explained,
+  Avellaneda-Lee eigenportfolios, factor returns, and idiosyncratic residual
+  returns. 40 tests; parameter recovery is verified by canonical-angle subspace
+  comparison (robust to the eigenvector sign / rotation ambiguity).
+100 tests, 100% coverage on both modules, mypy / ruff / ASCII clean, zero
+no-stubs markers. These replace the 80-85%-commented `multi_factor_models.py`
+shells (read first -- no salvageable logic). The remaining 5.C signals require
+fundamental data and are deferred until it is available: Fama-French
+SMB/HML/RMW/CMA (5.C.1), Barra industry / style (5.C.2), and Quality / Value
+(5.C.5) all need point-in-time market-cap / book-value / earnings data that a
+price/return panel does not carry; the low-volatility leg of 5.C.5 is price-only
+and can extend this sub-package later. Cross-sectional gate-wiring (a multi-asset
+long/short adapter through `evaluate_signal`) follows as its own step, as it did
+for the single-asset signals.
+
 ---
 
 ### Phase 6 — Portfolio Construction Layer
