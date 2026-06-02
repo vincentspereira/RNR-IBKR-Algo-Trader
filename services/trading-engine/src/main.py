@@ -37,6 +37,7 @@ from core_trading.adapters.ibkr_adapter import IBKRAdapter  # noqa: E402
 # must be imported as `src.<...>` so the relative parent resolves correctly.
 from src.core.event_system import get_event_bus  # noqa: E402
 from src.engines.execution_engine import ExecutionEngine  # noqa: E402
+from src.persistence.order_store import OrderStore  # noqa: E402
 
 logging.basicConfig(
     level=os.getenv("LOG_LEVEL", "INFO"),
@@ -88,6 +89,85 @@ def _read_env() -> dict:
     }
 
 
+async def _connect_order_store() -> OrderStore | None:
+    """Build an OrderStore and verify PostgreSQL connectivity.
+
+    Returns a ready OrderStore, or None if the database client cannot be
+    constructed (e.g. DB env vars unset) or the connectivity probe fails.
+    The probe is explicit because OrderStore's own methods degrade silently on
+    DB errors, so without it we could not tell "persisting" from "no-op".
+    """
+    try:
+        from libs.database.postgres.client import get_postgres_client
+
+        client = get_postgres_client()
+    except Exception as e:  # missing config, driver, or import path
+        logger.warning("PostgreSQL client unavailable: %s", e)
+        return None
+
+    try:
+        from sqlalchemy import text
+
+        async with client.session() as session:
+            await session.execute(text("SELECT 1"))
+    except Exception as e:
+        logger.warning("PostgreSQL connectivity probe failed: %s", e)
+        return None
+
+    return OrderStore(postgres_client=client)
+
+
+async def _build_order_store(*, paper_trading: bool) -> OrderStore | None:
+    """Construct order persistence for crash recovery, honoring trading mode.
+
+    Crash recovery -- reconciling in-flight orders against the broker on restart
+    -- requires durable order storage. Behaviour by mode:
+
+    * live  -- persistence is MANDATORY. If PostgreSQL is unreachable, refuse to
+               start: trading live without crash recovery risks orphaned orders
+               whose state is lost on any restart.
+    * paper -- persistence is recommended but optional, so a minimal paper smoke
+               test can run without a database. If unavailable, log a loud
+               warning and continue with persistence disabled.
+
+    Set FEATURE_ORDER_PERSISTENCE_ENABLED=false to skip persistence explicitly.
+    That escape hatch is honored in paper mode only; live mode ignores it and
+    still requires a reachable database.
+    """
+    enabled = os.getenv("FEATURE_ORDER_PERSISTENCE_ENABLED", "true").lower() in (
+        "true", "1", "yes", "on",
+    )
+    if not enabled:
+        if not paper_trading:
+            raise RuntimeError(
+                "FEATURE_ORDER_PERSISTENCE_ENABLED=false but IBKR_TRADING_MODE=live. "
+                "Live trading requires order persistence for crash recovery. Refusing to start."
+            )
+        logger.warning(
+            "Order persistence explicitly disabled (FEATURE_ORDER_PERSISTENCE_ENABLED=false). "
+            "In-flight orders will NOT survive a restart. Paper mode only."
+        )
+        return None
+
+    store = await _connect_order_store()
+    if store is None:
+        if not paper_trading:
+            raise RuntimeError(
+                "Live trading requires order persistence (PostgreSQL) for crash recovery, "
+                "but the database is not configured or not reachable. Refusing to start. "
+                "Set the POSTGRES_* env vars, or run paper mode for a no-database smoke test."
+            )
+        logger.warning(
+            "ORDER PERSISTENCE DISABLED: PostgreSQL not configured/reachable. In-flight "
+            "orders will NOT survive a process restart (crash recovery off). Acceptable for a "
+            "paper smoke test only -- configure POSTGRES_* for durable paper or live runs."
+        )
+        return None
+
+    logger.info("Order persistence enabled (PostgreSQL); crash-recovery reconciliation active.")
+    return store
+
+
 async def _run(stop_event: asyncio.Event) -> None:
     cfg = _read_env()
     logger.info(
@@ -97,6 +177,11 @@ async def _run(stop_event: asyncio.Event) -> None:
     )
 
     event_bus = get_event_bus()
+
+    # Build order persistence first: in live mode this fails fast on a missing
+    # database before we touch the broker. The store (if any) is passed to the
+    # engine, whose initialize() reconciles persisted in-flight orders on startup.
+    order_store = await _build_order_store(paper_trading=cfg["paper_trading"])
 
     ibkr = IBKRAdapter(
         host=cfg["host"],
@@ -113,7 +198,9 @@ async def _run(stop_event: asyncio.Event) -> None:
             f"{cfg['host']}:{cfg['port']} with API enabled and 127.0.0.1 trusted."
         )
 
-    engine = ExecutionEngine(broker_adapter=ibkr, event_bus=event_bus)
+    engine = ExecutionEngine(
+        broker_adapter=ibkr, event_bus=event_bus, order_store=order_store
+    )
     if not await engine.initialize():
         raise RuntimeError("ExecutionEngine.initialize() returned False")
 

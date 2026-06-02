@@ -17,7 +17,7 @@ import uuid
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
 from enum import Enum, auto
-from typing import Any, Callable, Dict, List, Optional, Set, Tuple
+from typing import Any, Callable, Dict, List, Mapping, Optional, Set, Tuple
 
 import numpy as np
 
@@ -411,6 +411,199 @@ class CircuitBreaker:
 
 
 # ---------------------------------------------------------------------------
+# Sector Classification (concentration-risk reference data)
+# ---------------------------------------------------------------------------
+
+# Static GICS sector map for liquid US equities. This is a deliberately
+# dependency-free reference set covering the most heavily traded names so that
+# sector-concentration limits are functional out of the box. Symbols outside the
+# map resolve to the configured fallback bucket ("Unclassified"). For broader or
+# point-in-time-correct coverage, inject a SectorClassifier built from a richer
+# map (e.g. broker contract details or a reference-data vendor) into RiskEngine.
+#
+# Sector assignments follow current GICS (incl. the 2023 reclassification that
+# moved Visa/Mastercard into Financials). Treat this as an approximation for
+# risk bucketing, not an authoritative classification.
+_DEFAULT_GICS_SECTORS: Dict[str, str] = {
+    # Information Technology
+    "AAPL": "Information Technology",
+    "MSFT": "Information Technology",
+    "NVDA": "Information Technology",
+    "AVGO": "Information Technology",
+    "ORCL": "Information Technology",
+    "CRM": "Information Technology",
+    "ADBE": "Information Technology",
+    "CSCO": "Information Technology",
+    "ACN": "Information Technology",
+    "AMD": "Information Technology",
+    "INTC": "Information Technology",
+    "QCOM": "Information Technology",
+    "TXN": "Information Technology",
+    "IBM": "Information Technology",
+    "NOW": "Information Technology",
+    "INTU": "Information Technology",
+    "MU": "Information Technology",
+    "AMAT": "Information Technology",
+    "ADI": "Information Technology",
+    "LRCX": "Information Technology",
+    # Communication Services
+    "GOOGL": "Communication Services",
+    "GOOG": "Communication Services",
+    "META": "Communication Services",
+    "NFLX": "Communication Services",
+    "DIS": "Communication Services",
+    "CMCSA": "Communication Services",
+    "T": "Communication Services",
+    "VZ": "Communication Services",
+    "TMUS": "Communication Services",
+    # Consumer Discretionary
+    "AMZN": "Consumer Discretionary",
+    "TSLA": "Consumer Discretionary",
+    "HD": "Consumer Discretionary",
+    "MCD": "Consumer Discretionary",
+    "NKE": "Consumer Discretionary",
+    "LOW": "Consumer Discretionary",
+    "SBUX": "Consumer Discretionary",
+    "BKNG": "Consumer Discretionary",
+    "TJX": "Consumer Discretionary",
+    # Consumer Staples
+    "WMT": "Consumer Staples",
+    "PG": "Consumer Staples",
+    "KO": "Consumer Staples",
+    "PEP": "Consumer Staples",
+    "COST": "Consumer Staples",
+    "MO": "Consumer Staples",
+    "PM": "Consumer Staples",
+    "CL": "Consumer Staples",
+    "MDLZ": "Consumer Staples",
+    # Financials
+    "BRK.B": "Financials",
+    "JPM": "Financials",
+    "BAC": "Financials",
+    "WFC": "Financials",
+    "GS": "Financials",
+    "MS": "Financials",
+    "C": "Financials",
+    "BLK": "Financials",
+    "SPGI": "Financials",
+    "AXP": "Financials",
+    "SCHW": "Financials",
+    "V": "Financials",
+    "MA": "Financials",
+    # Health Care
+    "UNH": "Health Care",
+    "JNJ": "Health Care",
+    "LLY": "Health Care",
+    "PFE": "Health Care",
+    "MRK": "Health Care",
+    "ABBV": "Health Care",
+    "TMO": "Health Care",
+    "ABT": "Health Care",
+    "DHR": "Health Care",
+    "BMY": "Health Care",
+    "AMGN": "Health Care",
+    # Industrials
+    "BA": "Industrials",
+    "CAT": "Industrials",
+    "GE": "Industrials",
+    "HON": "Industrials",
+    "UPS": "Industrials",
+    "RTX": "Industrials",
+    "UNP": "Industrials",
+    "LMT": "Industrials",
+    "DE": "Industrials",
+    "MMM": "Industrials",
+    # Energy
+    "XOM": "Energy",
+    "CVX": "Energy",
+    "COP": "Energy",
+    "SLB": "Energy",
+    "EOG": "Energy",
+    "MPC": "Energy",
+    "PSX": "Energy",
+    # Utilities
+    "NEE": "Utilities",
+    "DUK": "Utilities",
+    "SO": "Utilities",
+    "D": "Utilities",
+    "AEP": "Utilities",
+    # Materials
+    "LIN": "Materials",
+    "APD": "Materials",
+    "SHW": "Materials",
+    "FCX": "Materials",
+    "NEM": "Materials",
+    "ECL": "Materials",
+    # Real Estate
+    "AMT": "Real Estate",
+    "PLD": "Real Estate",
+    "CCI": "Real Estate",
+    "EQIX": "Real Estate",
+    "SPG": "Real Estate",
+    "O": "Real Estate",
+}
+
+
+class SectorClassifier:
+    """Map instrument symbols to GICS sectors for concentration-risk bucketing.
+
+    Backed by a static reference map of liquid US equities (`_DEFAULT_GICS_SECTORS`).
+    Symbols not covered resolve to ``unknown_sector`` ("Unclassified" by default).
+
+    A custom ``sector_map`` can be supplied to extend or override coverage; by
+    default it is merged on top of the built-in map (set ``merge_defaults=False``
+    to use only the supplied map). For richer or point-in-time-correct data,
+    construct a classifier from a broker/vendor-sourced map and inject it into
+    :class:`RiskEngine`.
+    """
+
+    def __init__(
+        self,
+        sector_map: Optional[Mapping[str, str]] = None,
+        *,
+        unknown_sector: str = "Unclassified",
+        merge_defaults: bool = True,
+    ) -> None:
+        base: Dict[str, str] = dict(_DEFAULT_GICS_SECTORS) if merge_defaults else {}
+        if sector_map:
+            base.update(sector_map)
+        # Normalise keys to upper-case for case-insensitive lookup.
+        self._map: Dict[str, str] = {str(sym).upper(): sector for sym, sector in base.items()}
+        self._unknown = unknown_sector
+
+    def classify(self, symbol: str) -> str:
+        """Return the GICS sector for a symbol, or the fallback bucket if unknown."""
+        if not symbol:
+            return self._unknown
+        return self._map.get(str(symbol).upper(), self._unknown)
+
+    def sector_exposures(self, market_values: Mapping[str, float]) -> Dict[str, float]:
+        """Aggregate absolute market values into fractional exposure by sector.
+
+        Args:
+            market_values: symbol -> signed or unsigned market value. Absolute
+                values are used (a short position still consumes sector capacity).
+
+        Returns:
+            sector -> fraction of total absolute market value (sums to ~1.0).
+            Empty dict if the total absolute market value is zero.
+        """
+        total = sum(abs(float(v)) for v in market_values.values())
+        if total <= 0:
+            return {}
+        exposures: Dict[str, float] = {}
+        for symbol, value in market_values.items():
+            sector = self.classify(symbol)
+            exposures[sector] = exposures.get(sector, 0.0) + abs(float(value)) / total
+        return exposures
+
+    @property
+    def coverage(self) -> int:
+        """Number of symbols with an explicit (non-fallback) sector mapping."""
+        return len(self._map)
+
+
+# ---------------------------------------------------------------------------
 # Risk Engine
 # ---------------------------------------------------------------------------
 
@@ -427,10 +620,12 @@ class RiskEngine:
         broker_adapter: Any = None,
         event_bus: Any = None,
         config: Optional[RiskConfig] = None,
+        sector_classifier: Optional[SectorClassifier] = None,
     ):
         self._broker = broker_adapter
         self._event_bus = event_bus
         self._config = config or RiskConfig()
+        self._sector_classifier = sector_classifier or SectorClassifier()
 
         self._risk_limits: Dict[str, RiskLimit] = {}
         self._position_risks: Dict[str, PositionRisk] = {}
@@ -1217,9 +1412,21 @@ class RiskEngine:
         return min(len(positions) / 10.0, 1.0)
 
     async def _calculate_sector_exposures(self, positions: Dict[str, float]) -> Dict[str, float]:
-        """Calculate exposures by sector."""
-        # Simplified — real implementation would use reference data
-        return {"Unclassified": 1.0}
+        """Calculate fractional portfolio exposure by GICS sector.
+
+        Dollar-weighted by absolute market value (|quantity| * current price), so
+        a sector's exposure is the share of gross portfolio value it represents.
+        Symbols not covered by the sector classifier aggregate into the fallback
+        bucket ("Unclassified"). Returns an empty dict when the portfolio has no
+        measurable market value (no positions, or all prices unavailable).
+        """
+        if not positions:
+            return {}
+        market_values: Dict[str, float] = {}
+        for instrument, quantity in positions.items():
+            price = await self._get_current_price(instrument)
+            market_values[instrument] = abs(float(quantity)) * float(price)
+        return self._sector_classifier.sector_exposures(market_values)
 
     def _calculate_liquidity_ratio(self, positions: Dict[str, float]) -> float:
         """Calculate portfolio liquidity ratio."""
