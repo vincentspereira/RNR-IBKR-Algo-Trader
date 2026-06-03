@@ -1301,6 +1301,28 @@ model, the same cadence as the 5.C factor modules: the model-fitting 5.D batches
 `ai_enhanced_signal_engine.py` / 77%-commented `reinforcement_learning.py`) train
 on these labels and follow.
 
+**5.D.5 meta-labelling -- the secondary model layer, 2026-06-03.** The first
+model that trains on the 5.D labels. New module `signals/ml/meta_labelling.py`
+implements de Prado's meta-labelling architecture (AFML ch. 3 + ch. 10): a
+*primary* model picks the side, a *secondary* classifier decides whether to act
+on it and how large to bet. `MetaLabeler` wraps a scikit-learn estimator
+(default `RandomForestClassifier`, but any `fit`/`predict_proba`/`classes_`
+estimator is injectable) and is fit on the `{0,1}` meta-labels from
+`get_bins(..., side=...)`; it emits `predict_proba` (P(act)), `act` (the
+probability gate), `bet_sizes` (signed sizes in `[-1, 1]`), and
+`feature_importances`. `bet_size_from_prob` is the pure de Prado bet-sizing
+transform `2*Phi(z) - 1` with `z = (p - 1/k)/sqrt(p(1-p))` (snippet 10.1),
+clipped away from `p in {0,1}` so the z-score never divides by zero, with an
+optional discretisation grid (snippet 10.3). scikit-learn is lazy-imported (the
+statsmodels pattern) and already a declared dependency. 37 tests, 100% coverage
+-- the bet-sizing math by parameter-recovery against `scipy.stats.norm`
+(no-edge zero, monotonicity, `p<->1-p` antisymmetry, unit-prob clipping, grid
+rounding), the model with a deterministic stub estimator for exact act/size
+assertions plus a real random forest that recovers a separable label set and
+ranks the informative feature above noise. ruff/mypy(package mode)/no-stubs/ASCII
+clean. Remaining 5.D model batches (5.D.1 trees, AFML ch. 7 purged/embargoed CV,
+ch. 8 MDI/MDA feature importance) follow.
+
 ---
 
 ### Phase 6 — Portfolio Construction Layer
