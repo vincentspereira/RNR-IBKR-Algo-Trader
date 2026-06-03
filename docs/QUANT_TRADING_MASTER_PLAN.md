@@ -1345,6 +1345,30 @@ recovered by hand. 29 tests, 100% coverage on both modules, all gates clean. Thi
 is what lets the next model batches (5.D.1 trees, ch. 8 MDI/MDA importance) report
 an out-of-sample score that is not silently inflated.
 
+**5.D feature importance -- MDI / MDA / SFI, 2026-06-03.** Closes the leakage-
+aware arc (labels -> uniqueness weights -> purged CV -> *which features drive the
+model*), de Prado AFML ch. 8. New module `signals/ml/feature_importance.py`, three
+complementary methods each returning a `mean`/`std` table sorted by importance:
+`mdi_feature_importance` (snippet 8.2, Mean Decrease Impurity -- the ensemble's
+own split-impurity importances averaged across trees, in-sample and fast but
+biased; zeros treated as missing so a feature decisive *when chosen* under
+`max_features=1` is not understated), `mda_feature_importance` (snippet 8.3, Mean
+Decrease Accuracy -- out-of-sample permutation importance computed *under*
+`PurgedKFold`: fit each purged fold, score it, then permute one feature column at
+a time and measure the relative score degradation; the permutation uses an
+explicit seeded generator so the result is reproducible, a deliberate departure
+from de Prado's global random state), and `single_feature_importance` (snippet
+8.4, each feature's standalone `purged_cv_score` -- immune to substitution
+effects, blind to joint ones). The recovery test gives all three the same target:
+on a panel with one noisy-but-predictive feature and one orthogonal noise feature
+(period-4 vs the label's period-2 -> zero correlation), each method must rank the
+signal strictly above the noise; the signal is made *imperfect* on purpose so the
+MDA permutation denominators stay non-degenerate. 10 tests, 100% coverage, all
+gates clean; full 103-test ml suite green. The 5.D ML family now has the full de
+Prado toolkit -- labels, sample weights, purged CV, feature importance -- so the
+remaining model batches (5.D.1 tree-ensemble signals, 5.D.3 neural nets) plug into
+a complete, leakage-aware harness.
+
 ---
 
 ### Phase 6 — Portfolio Construction Layer

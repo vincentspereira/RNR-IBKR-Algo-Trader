@@ -16,9 +16,11 @@ meta-labelling, etc.) are trained:
 * :mod:`~core_trading.signals.ml.cross_validation` -- purged, embargoed K-fold
   cross-validation for honest out-of-sample evaluation under overlapping labels
   (AFML ch. 7).
+* :mod:`~core_trading.signals.ml.feature_importance` -- MDI / MDA / SFI feature
+  importance, telling which features actually drive a trained model (AFML ch. 8).
 
-Remaining 5.D model-fitting modules (5.D.1 trees, 5.D.3 neural nets, ch. 8
-MDI/MDA feature importance) land in later batches; they replace the 99%-commented
+Remaining 5.D model-fitting modules (5.D.1 tree-ensemble signals, 5.D.3 neural
+nets) land in later batches; they replace the 99%-commented
 `ai_enhanced_signal_engine.py` and 77%-commented `reinforcement_learning.py`
 legacy shells.
 """
@@ -28,6 +30,11 @@ from core_trading.signals.ml.cross_validation import (
     PurgedKFold,
     purged_cv_score,
     purged_train_times,
+)
+from core_trading.signals.ml.feature_importance import (
+    mda_feature_importance,
+    mdi_feature_importance,
+    single_feature_importance,
 )
 from core_trading.signals.ml.labeling import (
     add_vertical_barrier,
@@ -64,4 +71,7 @@ __all__ = [
     "purged_train_times",
     "PurgedKFold",
     "purged_cv_score",
+    "mdi_feature_importance",
+    "mda_feature_importance",
+    "single_feature_importance",
 ]
