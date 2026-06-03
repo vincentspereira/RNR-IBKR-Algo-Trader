@@ -1369,6 +1369,30 @@ Prado toolkit -- labels, sample weights, purged CV, feature importance -- so the
 remaining model batches (5.D.1 tree-ensemble signals, 5.D.3 neural nets) plug into
 a complete, leakage-aware harness.
 
+**5.D.1 tree-ensemble directional signal, 2026-06-03.** Turns the 5.D toolkit
+into a tradeable alpha. First, `purged_cv_predict` added to
+`signals/ml/cross_validation.py` -- the leakage-free analogue of scikit-learn's
+`cross_val_predict`: out-of-fold class probabilities under `PurgedKFold`, so every
+observation is scored by a model that never trained on it (nor on an overlapping
+label). Because the purged test folds partition the data, every row gets an OOF
+probability. Then `signals/ml/trees.py`: `RandomForestSignal` trains a forest on
+the triple-barrier *direction* labels (`{-1, +1}`, flat 0s dropped) and turns the
+predicted up-probability into a bet-sized position in `(-1, 1)` via the de Prado
+signed-size transform (snippet 10.2: predicted direction times the magnitude of
+its own probability, so the position is 0 at p=0.5 and approaches +/-1 with
+conviction). Two paths share the sizing: `oof_signal` (the honest *backtest*
+signal, from `purged_cv_predict`) and `signal` (the *live* signal, from a
+full-sample fit). The default forest follows de Prado for noisy labels
+(`class_weight="balanced_subsample"`). 46 tests across both modules (75 total in
+trees + the extended CV suite), 100% coverage on each: the up-prob-to-size math
+recovered exactly (zero at 0.5, antisymmetric, grid-discretised), the live path
+asserted exactly against a deterministic stub estimator, and the OOF path shown to
+recover the label direction out-of-fold on a separable problem with a real random
+forest. All gates clean; full 136-test ml suite green. This is the model-to-signal
+bridge; gate-wiring the event-level OOF signal through `evaluate_signal` (mapping
+sparse CUSUM events to a held position series) is the natural follow-on, and it
+begins retiring the 99%-commented `ai_enhanced_signal_engine.py`.
+
 ---
 
 ### Phase 6 — Portfolio Construction Layer

@@ -19,6 +19,7 @@ import pytest
 
 from core_trading.signals.ml.cross_validation import (
     PurgedKFold,
+    purged_cv_predict,
     purged_cv_score,
     purged_train_times,
 )
@@ -187,3 +188,30 @@ class TestPurgedCvScore:
         x, y, t1 = _separable_panel()
         with pytest.raises(ValueError, match="unknown scoring"):
             purged_cv_score(_forest(), x, y, t1=t1, n_splits=4, scoring="bogus")
+
+
+class TestPurgedCvPredict:
+    def test_partitions_all_observations(self) -> None:
+        x, y, t1 = _separable_panel()
+        oof = purged_cv_predict(_forest(), x, y, t1=t1, n_splits=4)
+        # every observation appears exactly once, in original order.
+        assert list(oof.index) == list(x.index)
+        assert list(oof.columns) == [0, 1]
+
+    def test_probabilities_sum_to_one(self) -> None:
+        x, y, t1 = _separable_panel()
+        oof = purged_cv_predict(_forest(), x, y, t1=t1, n_splits=4)
+        np.testing.assert_allclose(oof.sum(axis=1).to_numpy(), 1.0)
+
+    def test_out_of_fold_recovers_separable_labels(self) -> None:
+        x, y, t1 = _separable_panel()
+        oof = purged_cv_predict(_forest(), x, y, t1=t1, n_splits=4)
+        predicted = oof.columns.to_numpy()[oof.to_numpy().argmax(axis=1)]
+        accuracy = float((predicted == y.to_numpy()).mean())
+        assert accuracy >= 0.9
+
+    def test_sample_weight_path(self) -> None:
+        x, y, t1 = _separable_panel()
+        weights = pd.Series(np.linspace(0.5, 1.5, len(x)), index=x.index)
+        oof = purged_cv_predict(_forest(), x, y, t1=t1, n_splits=4, sample_weight=weights)
+        assert oof.shape == (len(x), 2)

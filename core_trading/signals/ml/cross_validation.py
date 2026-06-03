@@ -52,6 +52,7 @@ __all__ = [
     "purged_train_times",
     "PurgedKFold",
     "purged_cv_score",
+    "purged_cv_predict",
 ]
 
 
@@ -267,6 +268,77 @@ def purged_cv_score(
 
     result: np.ndarray = np.asarray(scores, dtype=float)
     return result
+
+
+def purged_cv_predict(
+    estimator: Any,
+    x: pd.DataFrame,
+    y: pd.Series,
+    *,
+    t1: pd.Series,
+    n_splits: int = 5,
+    embargo_pct: float = 0.0,
+    sample_weight: pd.Series | None = None,
+) -> pd.DataFrame:
+    """Out-of-fold class probabilities under :class:`PurgedKFold`.
+
+    The leakage-free analogue of scikit-learn's ``cross_val_predict``: for each
+    fold the cloned estimator is fit on the purged/embargoed training set and
+    predicts probabilities on the held-out fold. Every observation therefore
+    receives a probability from a model that never trained on it -- nor on any
+    label overlapping it -- which is exactly the signal a backtest may consume
+    without look-ahead. Because :class:`PurgedKFold`'s test folds partition the
+    observations, every row of ``x`` appears once in the result.
+
+    Parameters
+    ----------
+    estimator:
+        A cloneable scikit-learn classifier (``fit`` / ``predict_proba``).
+    x:
+        Feature frame indexed like ``t1``.
+    y:
+        Integer labels indexed like ``t1``.
+    t1:
+        First-touch series for purging / embargoing.
+    n_splits, embargo_pct:
+        Passed to :class:`PurgedKFold`.
+    sample_weight:
+        Optional per-observation training weights indexed like ``t1``.
+
+    Returns
+    -------
+    pd.DataFrame
+        Out-of-fold probabilities indexed by observation, one column per class
+        (the union of ``y``'s classes); a fold that never saw a class leaves its
+        column at 0 for that fold's rows.
+    """
+    from sklearn.base import clone
+
+    cv = PurgedKFold(n_splits, t1=t1, embargo_pct=embargo_pct)
+    classes = np.unique(y.to_numpy())
+    blocks: list[pd.DataFrame] = []
+
+    for train_idx, test_idx in cv.split(x):
+        model = clone(estimator)
+        x_train = x.iloc[train_idx].to_numpy(dtype=float)
+        y_train = y.iloc[train_idx].to_numpy()
+        weight = (
+            None
+            if sample_weight is None
+            else sample_weight.iloc[train_idx].to_numpy(dtype=float)
+        )
+        model.fit(x_train, y_train, sample_weight=weight)
+
+        proba = np.asarray(
+            model.predict_proba(x.iloc[test_idx].to_numpy(dtype=float)), dtype=float
+        )
+        block = pd.DataFrame(0.0, index=x.index[test_idx], columns=classes)
+        for col_pos, cls in enumerate(model.classes_):
+            block[cls] = proba[:, col_pos]
+        blocks.append(block)
+
+    out: pd.DataFrame = pd.concat(blocks).sort_index()
+    return out
 
 
 def _score_fold(

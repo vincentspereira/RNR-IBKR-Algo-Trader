@@ -18,9 +18,12 @@ meta-labelling, etc.) are trained:
   (AFML ch. 7).
 * :mod:`~core_trading.signals.ml.feature_importance` -- MDI / MDA / SFI feature
   importance, telling which features actually drive a trained model (AFML ch. 8).
+* :mod:`~core_trading.signals.ml.trees` -- the tree-ensemble directional signal:
+  a random forest trained on the direction labels whose out-of-fold probabilities
+  become bet-sized positions (the bridge from model to tradeable signal).
 
-Remaining 5.D model-fitting modules (5.D.1 tree-ensemble signals, 5.D.3 neural
-nets) land in later batches; they replace the 99%-commented
+Remaining 5.D model-fitting modules (5.D.3 neural nets, 5.D.4 reinforcement
+learning) land in later batches; they replace the 99%-commented
 `ai_enhanced_signal_engine.py` and 77%-commented `reinforcement_learning.py`
 legacy shells.
 """
@@ -28,6 +31,7 @@ from __future__ import annotations
 
 from core_trading.signals.ml.cross_validation import (
     PurgedKFold,
+    purged_cv_predict,
     purged_cv_score,
     purged_train_times,
 )
@@ -54,6 +58,10 @@ from core_trading.signals.ml.sample_weights import (
     return_attribution_weights,
     time_decay_weights,
 )
+from core_trading.signals.ml.trees import (
+    RandomForestSignal,
+    TreeSignalConfig,
+)
 
 __all__ = [
     "daily_volatility",
@@ -71,7 +79,10 @@ __all__ = [
     "purged_train_times",
     "PurgedKFold",
     "purged_cv_score",
+    "purged_cv_predict",
     "mdi_feature_importance",
     "mda_feature_importance",
     "single_feature_importance",
+    "TreeSignalConfig",
+    "RandomForestSignal",
 ]
