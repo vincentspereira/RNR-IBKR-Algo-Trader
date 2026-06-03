@@ -22,6 +22,9 @@ Adapters
   cross-sectional momentum dollar-neutral long/short (multi-asset).
 * :mod:`~core_trading.research.signal_adapters.pca_stat_arb` -- PCA
   residual-reversion (Avellaneda-Lee) dollar-neutral long/short (multi-asset).
+* :mod:`~core_trading.research.signal_adapters.ml_tree_signal` -- random-forest
+  directional out-of-fold signal, sparse CUSUM events mapped to a dense held
+  position via de Prado ``avgActiveSignals`` (single-asset).
 
 The single-asset adapters compute the expensive look-ahead-free signal path once
 in a ``build_*_weight_fn`` factory, then sweep a cheap threshold grid so each
@@ -46,6 +49,11 @@ from core_trading.research.signal_adapters.forecast import (
     forecast_grid,
     forecast_positions,
     forecast_signal_series,
+)
+from core_trading.research.signal_adapters.ml_tree_signal import (
+    build_ml_signal_weight_fn,
+    event_positions_to_weights,
+    ml_signal_grid,
 )
 from core_trading.research.signal_adapters.pca_stat_arb import (
     build_pca_statarb_weight_fn,
@@ -81,4 +89,8 @@ __all__ = [
     "residual_reversion_weights",
     "build_pca_statarb_weight_fn",
     "pca_statarb_grid",
+    # tree-ensemble ML directional out-of-fold signal (single-asset) adapter
+    "event_positions_to_weights",
+    "build_ml_signal_weight_fn",
+    "ml_signal_grid",
 ]
