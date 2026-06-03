@@ -1323,6 +1323,28 @@ ranks the informative feature above noise. ruff/mypy(package mode)/no-stubs/ASCI
 clean. Remaining 5.D model batches (5.D.1 trees, AFML ch. 7 purged/embargoed CV,
 ch. 8 MDI/MDA feature importance) follow.
 
+**5.D leakage-aware training + evaluation, 2026-06-03.** The honest-evaluation
+backbone that overlapping triple-barrier labels demand -- de Prado AFML ch. 4 +
+ch. 7, two new pure modules. `signals/ml/sample_weights.py` (ch. 4) corrects for
+the fact that overlapping labels are not IID: `num_concurrent_events` (how many
+labels are live at each bar), `average_uniqueness` (mean `1/concurrency` over a
+label's span), `return_attribution_weights` (concurrency-split absolute log
+return per label, renormalised to mean 1) and `time_decay_weights` (linear decay
+over cumulative uniqueness). These feed straight into the `sample_weight` seam of
+`MetaLabeler.fit` and of the CV scorer. `signals/ml/cross_validation.py` (ch. 7)
+is the leakage-free splitter: `purged_train_times` (snippet 7.1, explicit test
+periods), `PurgedKFold` (snippet 7.3, a scikit-learn-compatible
+`split`/`get_n_splits` cross-validator that purges training observations whose
+label window overlaps a contiguous test fold and embargoes a post-fold band to
+sever the serial-correlation leak) and `purged_cv_score` (snippet 7.4, per-fold
+`neg_log_loss`/`accuracy`/`f1` of a cloned classifier, honouring sample weights).
+The decisive test asserts the *no-leakage property* directly: for every fold, no
+training label span overlaps the test window (touching the boundary allowed, per
+de Prado), and the folds partition the data; sample-weight math is parameter-
+recovered by hand. 29 tests, 100% coverage on both modules, all gates clean. This
+is what lets the next model batches (5.D.1 trees, ch. 8 MDI/MDA importance) report
+an out-of-sample score that is not silently inflated.
+
 ---
 
 ### Phase 6 — Portfolio Construction Layer

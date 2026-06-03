@@ -10,14 +10,25 @@ meta-labelling, etc.) are trained:
 * :mod:`~core_trading.signals.ml.meta_labelling` -- the secondary classifier that
   decides whether to act on, and how large to size, a primary signal (the
   *model* layer trained on the labeling targets, AFML ch. 3 / ch. 10).
+* :mod:`~core_trading.signals.ml.sample_weights` -- uniqueness / return-
+  attribution / time-decay weights that correct for overlapping (non-IID) labels
+  before training (AFML ch. 4).
+* :mod:`~core_trading.signals.ml.cross_validation` -- purged, embargoed K-fold
+  cross-validation for honest out-of-sample evaluation under overlapping labels
+  (AFML ch. 7).
 
-Remaining 5.D model-fitting modules (5.D.1 trees, 5.D.2 random forest with purged
-CV, AFML ch. 7 leakage-aware evaluation) land in later batches; they replace the
-99%-commented `ai_enhanced_signal_engine.py` and 77%-commented
-`reinforcement_learning.py` legacy shells.
+Remaining 5.D model-fitting modules (5.D.1 trees, 5.D.3 neural nets, ch. 8
+MDI/MDA feature importance) land in later batches; they replace the 99%-commented
+`ai_enhanced_signal_engine.py` and 77%-commented `reinforcement_learning.py`
+legacy shells.
 """
 from __future__ import annotations
 
+from core_trading.signals.ml.cross_validation import (
+    PurgedKFold,
+    purged_cv_score,
+    purged_train_times,
+)
 from core_trading.signals.ml.labeling import (
     add_vertical_barrier,
     cusum_filter,
@@ -30,6 +41,12 @@ from core_trading.signals.ml.meta_labelling import (
     MetaLabeler,
     bet_size_from_prob,
 )
+from core_trading.signals.ml.sample_weights import (
+    average_uniqueness,
+    num_concurrent_events,
+    return_attribution_weights,
+    time_decay_weights,
+)
 
 __all__ = [
     "daily_volatility",
@@ -40,4 +57,11 @@ __all__ = [
     "MetaLabelConfig",
     "MetaLabeler",
     "bet_size_from_prob",
+    "num_concurrent_events",
+    "average_uniqueness",
+    "return_attribution_weights",
+    "time_decay_weights",
+    "purged_train_times",
+    "PurgedKFold",
+    "purged_cv_score",
 ]
