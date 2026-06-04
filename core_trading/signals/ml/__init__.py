@@ -21,11 +21,21 @@ meta-labelling, etc.) are trained:
 * :mod:`~core_trading.signals.ml.trees` -- the tree-ensemble directional signal:
   a random forest trained on the direction labels whose out-of-fold probabilities
   become bet-sized positions (the bridge from model to tradeable signal).
-
-Remaining 5.D model-fitting modules (5.D.3 neural nets, 5.D.4 reinforcement
-learning) land in later batches; they replace the 99%-commented
-`ai_enhanced_signal_engine.py` and 77%-commented `reinforcement_learning.py`
-legacy shells.
+* :mod:`~core_trading.signals.ml.random_forest` -- the bagging/OOB ensemble
+  (5.D.2): out-of-bag scoring as a free generalisation estimate, plus
+  ``compare_oob_vs_purged_cv`` exposing the OOB optimism gap under overlapping
+  labels (AFML ch. 6 / ch. 7).
+* :mod:`~core_trading.signals.ml.neural` -- the LSTM directional net (5.D.3):
+  a sequence model over rolling feature windows whose up-probabilities become
+  bet-sized positions; deterministic CPU training (``torch`` is lazy-imported).
+  Replaces the 99%-commented ``ai_enhanced_signal_engine.py`` legacy shell.
+* :mod:`~core_trading.signals.ml.rl` -- the reinforcement-learning subpackage
+  (5.D.4): a gymnasium trading environment with a differential-Sharpe-ratio
+  reward (Moody-Saffell 1998) and a reproducible stable-baselines3 PPO/DQN
+  agent wrapper. Kept as a subpackage (not re-exported here) because importing
+  it pulls in ``gymnasium`` at module load; use
+  ``from core_trading.signals.ml.rl import TradingEnv, RLTradingAgent``.
+  Replaces the 77%-commented ``reinforcement_learning.py`` legacy shell.
 """
 from __future__ import annotations
 
@@ -51,6 +61,14 @@ from core_trading.signals.ml.meta_labelling import (
     MetaLabelConfig,
     MetaLabeler,
     bet_size_from_prob,
+)
+from core_trading.signals.ml.neural import (
+    LSTMConfig,
+    LSTMSignal,
+)
+from core_trading.signals.ml.random_forest import (
+    BaggingForestConfig,
+    RandomForestOOB,
 )
 from core_trading.signals.ml.sample_weights import (
     average_uniqueness,
@@ -85,4 +103,8 @@ __all__ = [
     "single_feature_importance",
     "TreeSignalConfig",
     "RandomForestSignal",
+    "BaggingForestConfig",
+    "RandomForestOOB",
+    "LSTMConfig",
+    "LSTMSignal",
 ]

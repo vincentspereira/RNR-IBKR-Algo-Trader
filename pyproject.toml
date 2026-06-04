@@ -89,6 +89,9 @@ scikit-learn = "^1.5"
 xgboost = "^2.1"
 lightgbm = "^4.5"
 catboost = "^1.2"
+# torch is also a transitive dep of stable-baselines3, but signals.ml.neural
+# (5.D.3 LSTM) imports it directly, so declare it explicitly. CPU-only use.
+torch = "^2.0"
 
 # Reinforcement learning
 stable-baselines3 = "^2.3"
