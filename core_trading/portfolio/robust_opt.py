@@ -54,6 +54,11 @@ portfolio (the mean forecast is fully distrusted).  The default
 Sigma_mu = Sigma / n_obs is the sampling covariance of the mean estimate,
 so kappa is measured in standard errors of the forecast.
 
+.. warning::
+    Windows entrypoint rule: ``import cvxpy`` before pandas in any
+    process that calls these optimisers -- see the warning in
+    :mod:`core_trading.portfolio.mvo` for the failure mode.
+
 Mathematical references
 -----------------------
   * Michaud, R.O. (1998). "Efficient Asset Management." Harvard Business

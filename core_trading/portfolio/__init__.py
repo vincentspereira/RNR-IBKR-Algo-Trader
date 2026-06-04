@@ -22,11 +22,24 @@ Phase 6 builds the general portfolio-construction stack on top:
 * :mod:`core_trading.portfolio.robust_opt` -- Michaud resampled efficiency,
   Rockafellar-Uryasev / Zhu-Fukushima (worst-case) CVaR, and DRO
   mean-variance under ellipsoidal mean ambiguity (6.5).
+* :mod:`core_trading.portfolio.strategy_allocator` -- capital across
+  strategies (6.6): equal / risk parity / Bayesian-Sharpe weighting, the
+  live-Sharpe decommission rule, and the asset-book netting glue to the
+  Phase 4 pairs vertical.
+* :mod:`core_trading.portfolio.rebalance` -- calendar / threshold / hybrid
+  triggers with a proportional turnover budget (6.7).
+* :mod:`core_trading.portfolio.comparison` -- the Phase 6 DOD cross-method
+  comparison (equal / min-var / MVO / HRP / risk parity, OOS split).
 """
 from core_trading.portfolio.black_litterman import (
     BlackLittermanResult,
     black_litterman,
     implied_equilibrium_returns,
+)
+from core_trading.portfolio.comparison import (
+    MethodComparison,
+    compare_methods,
+    comparison_report,
 )
 from core_trading.portfolio.covariance import (
     CovarianceResult,
@@ -59,6 +72,12 @@ from core_trading.portfolio.pairs_portfolio import (
     construct_pairs_portfolio,
     inverse_variance_weights,
 )
+from core_trading.portfolio.rebalance import (
+    RebalanceConfig,
+    RebalanceDecision,
+    drift_weights,
+    rebalance_decision,
+)
 from core_trading.portfolio.risk_parity import (
     RiskParityConfig,
     RiskParityResult,
@@ -74,6 +93,12 @@ from core_trading.portfolio.robust_opt import (
     michaud_weights,
     robust_mean_variance_weights,
     worst_case_cvar_weights,
+)
+from core_trading.portfolio.strategy_allocator import (
+    StrategyAllocation,
+    StrategyAllocatorConfig,
+    allocate_strategies,
+    combine_strategy_weights,
 )
 
 __all__ = [
@@ -122,4 +147,18 @@ __all__ = [
     "michaud_weights",
     "robust_mean_variance_weights",
     "worst_case_cvar_weights",
+    # strategy allocation (Phase 6.6)
+    "StrategyAllocation",
+    "StrategyAllocatorConfig",
+    "allocate_strategies",
+    "combine_strategy_weights",
+    # rebalancing (Phase 6.7)
+    "RebalanceConfig",
+    "RebalanceDecision",
+    "drift_weights",
+    "rebalance_decision",
+    # cross-method comparison (Phase 6 DOD)
+    "MethodComparison",
+    "compare_methods",
+    "comparison_report",
 ]

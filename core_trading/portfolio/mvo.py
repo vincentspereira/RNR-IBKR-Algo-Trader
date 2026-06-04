@@ -39,6 +39,17 @@ Problems are quadratic programs solved through cvxpy (CLARABEL by default).
 Infeasible or unbounded problems raise ``ValueError`` with the solver
 status -- silent garbage weights are never returned.
 
+.. warning::
+    Windows entrypoint rule: cvxpy's compiled core access-violates
+    (0xC0000005, hard interpreter crash) when FIRST imported into a
+    process that already loaded pandas (observed with cvxpy 1.9.1 /
+    pandas 2.x wheels).  This module imports cvxpy lazily at solve time,
+    so any process that will call the solvers must ``import cvxpy``
+    before pandas -- in scripts, put it at the top of the import block;
+    in pytest, pre-import it in the ``-c`` wrapper (see the Phase 6 test
+    recipe).  Modules that never solve QPs (hrp, risk_parity,
+    black_litterman, covariance) are unaffected.
+
 Bayes-Stein expected returns (Jorion 1986)
 ------------------------------------------
     mu_BS = (1 - v) mu_hat + v mu_g 1
