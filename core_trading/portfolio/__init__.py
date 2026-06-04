@@ -19,6 +19,9 @@ Phase 6 builds the general portfolio-construction stack on top:
   bisection; no matrix inversion anywhere.
 * :mod:`core_trading.portfolio.black_litterman` -- equilibrium prior +
   views posterior (6.2) with Omega confidence control of signal injection.
+* :mod:`core_trading.portfolio.robust_opt` -- Michaud resampled efficiency,
+  Rockafellar-Uryasev / Zhu-Fukushima (worst-case) CVaR, and DRO
+  mean-variance under ellipsoidal mean ambiguity (6.5).
 """
 from core_trading.portfolio.black_litterman import (
     BlackLittermanResult,
@@ -62,6 +65,16 @@ from core_trading.portfolio.risk_parity import (
     risk_contributions,
     risk_parity_weights,
 )
+from core_trading.portfolio.robust_opt import (
+    CVaRConfig,
+    CVaRResult,
+    MichaudResult,
+    cvar_weights,
+    empirical_cvar,
+    michaud_weights,
+    robust_mean_variance_weights,
+    worst_case_cvar_weights,
+)
 
 __all__ = [
     # pairs portfolio (Phase 4.5)
@@ -100,4 +113,13 @@ __all__ = [
     "BlackLittermanResult",
     "black_litterman",
     "implied_equilibrium_returns",
+    # robust optimisation (Phase 6.5)
+    "CVaRConfig",
+    "CVaRResult",
+    "MichaudResult",
+    "cvar_weights",
+    "empirical_cvar",
+    "michaud_weights",
+    "robust_mean_variance_weights",
+    "worst_case_cvar_weights",
 ]
