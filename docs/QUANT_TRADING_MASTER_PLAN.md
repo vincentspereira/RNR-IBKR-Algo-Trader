@@ -1545,6 +1545,14 @@ Phase 6 (portfolio construction) is **READY TO START**. Its prerequisites:
 
 ### Phase 6 — Portfolio Construction Layer
 
+**Status: Phase 6 COMPLETE (2026-06-04).** All seven sub-phases shipped in
+five batches (commits 5d52d7f, 0d3e1f8, a0bf366, ded93b3, 72eb3f7) plus the
+estimator foundation `portfolio/covariance.py` (Ledoit-Wolf / OAS /
+constant-correlation shrinkage, PCA factor-model covariance, nearest-PSD,
+condition diagnostics). 466 tests in `tests/portfolio/`, 100% coverage per
+new module, every module's mathematical reference cited, all four DOD items
+closed — see "Phase 6 closing status" below.
+
 **Duration:** 2–3 months (overlaps Phase 5)
 
 #### 6.1 Mean-variance optimisation (`portfolio/mvo.py`)
@@ -1595,10 +1603,49 @@ Phase 6 (portfolio construction) is **READY TO START**. Its prerequisites:
 
 #### Definition of Done — Phase 6
 
-- [ ] Each optimiser produces valid weights for a 20-asset universe in < 1 second
-- [ ] Sensitivity tests: small input changes produce small output changes (test for matrix-inversion instability)
-- [ ] Cross-method comparison report: MVO vs HRP vs RP on same universe
-- [ ] Multi-strategy allocator integrated with Phase 4 pairs strategy
+- [x] Each optimiser produces valid weights for a 20-asset universe in < 1 second
+      (perf-gated in every test suite; the committed comparison report measures
+      0.1–19.5 ms per method)
+- [x] Sensitivity tests: small input changes produce small output changes (test for matrix-inversion instability)
+      (MVO: Ledoit-Wolf damps the mu-bump weight swing of the raw sample
+      covariance by >2x at T=24/N=20; HRP: closed-form Sigma^-1 min-variance
+      reshuffles L1 ~3.9 on a near-twin universe where HRP moves ~0.003, and
+      variance-only bumps leave the HRP tree provably unchanged; risk parity:
+      1% covariance perturbation moves weights < 0.05 L1)
+- [x] Cross-method comparison report: MVO vs HRP vs RP on same universe
+      (`portfolio/comparison.py` + `docs/PHASE6_METHOD_COMPARISON.md`,
+      regenerable via `tools/phase6_comparison_report.py`)
+- [x] Multi-strategy allocator integrated with Phase 4 pairs strategy
+      (end-to-end test: `construct_pairs_portfolio` book -> risk-parity
+      allocation with the losing sleeve decommissioned ->
+      `combine_strategy_weights` netted asset book)
+
+#### Phase 6 closing status (2026-06-04)
+
+Shipped (one module = math reference + parameter-recovery tests + 100%
+coverage + ruff/mypy-strict clean, same bar as Phase 5):
+
+| Module | Highlights |
+| ------ | ---------- |
+| `covariance.py` | LW identity-target (sklearn-exact), OAS (paper Eq. 23), constant-correlation "Honey", Fan-Fan-Lv factor model, Higham nearest-PSD |
+| `mvo.py` (6.1) | cvxpy QP, utility/target-return/min-variance, long-only + gross + per-asset + sector + turnover constraints, Jorion Bayes-Stein means |
+| `black_litterman.py` (6.2) | He-Litterman stable k x k form, proportional Omega with per-view confidence dial, information-form cross-checked |
+| `hrp.py` (6.3) | de Prado worked example recovered to 1e-12 from his exact seeds; accepts singular PSD inputs |
+| `risk_parity.py` (6.4) | Spinu objective via Griveau-Billion CCD, risk budgeting, vol targeting; Maillard closed forms verified |
+| `robust_opt.py` (6.5) | Michaud resampling, RU/Zhu-Fukushima (worst-case) CVaR LP (grid-search-verified optimality), Delage-Ye/GUW DRO SOCP |
+| `strategy_allocator.py` (6.6) | equal / risk parity / Bayesian posterior-Sharpe across strategies; 60-bar live-Sharpe halving rule; pairs-book netting glue |
+| `rebalance.py` (6.7) | calendar / threshold / hybrid triggers, proportional turnover budget, buy-and-hold drift |
+| `comparison.py` (DOD) | OOS-split cross-method metrics + ASCII report |
+
+Toolchain caveat pinned during the phase (documented in the `mvo.py` /
+`robust_opt.py` / `comparison.py` docstrings and the test recipes): on this
+Windows environment cvxpy 1.9.1 access-violates if FIRST imported after
+pandas; any QP-solving entrypoint must `import cvxpy` before pandas (pytest:
+pre-import in the `-c` wrapper alongside numpy).
+
+Open follow-ons (not Phase 6 gaps): wire live Phase 5 signal mu into
+Black-Litterman views in the research loop; DCC-GARCH correlation timing
+(deferred from 5.A) would upgrade the covariance inputs when added.
 
 ---
 
