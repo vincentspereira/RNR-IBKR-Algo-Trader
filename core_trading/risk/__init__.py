@@ -10,7 +10,23 @@ Phase 7 builds out the full risk stack:
 - ``cvar`` -- CVaR / Expected Shortfall (historical / parametric normal+t /
   Monte Carlo), Rockafellar-Uryasev linearization, Acerbi-Szekely backtest
   (7.4).
+- ``vol_forecast`` -- GARCH/GJR-GARCH multi-step vol forecasts with EWMA
+  fallback and CCC forward covariance for Phase 6 / VaR consumption (7.6).
+- ``correlation_regime`` -- rolling correlations, spectral market mode,
+  absorption ratio, Marchenko-Pastur noise floor, regime-shift alerts (7.9).
 """
+from core_trading.risk.correlation_regime import (
+    AbsorptionShiftResult,
+    CorrelationAlert,
+    RollingCorrelationResult,
+    SpectralResult,
+    absorption_shift,
+    detect_regime_alerts,
+    frobenius_distance,
+    market_mode_rotation,
+    rolling_correlation,
+    spectral_analysis,
+)
 from core_trading.risk.cvar import (
     AcerbiSzekelyResult,
     ESConfig,
@@ -41,6 +57,15 @@ from core_trading.risk.var import (
     monte_carlo_var,
     parametric_var,
 )
+from core_trading.risk.vol_forecast import (
+    AssetVolForecast,
+    CCCCovResult,
+    VolForecastConfig,
+    VolForecastResult,
+    ewma_variance,
+    forecast_cov_matrix,
+    forecast_panel_vols,
+)
 
 __all__ = [
     # Phase 4 pairs risk
@@ -70,4 +95,23 @@ __all__ = [
     "portfolio_es",
     "ru_linearization",
     "acerbi_szekely_test",
+    # 7.6 vol forecasting
+    "VolForecastConfig",
+    "AssetVolForecast",
+    "VolForecastResult",
+    "CCCCovResult",
+    "ewma_variance",
+    "forecast_panel_vols",
+    "forecast_cov_matrix",
+    # 7.9 correlation regime
+    "RollingCorrelationResult",
+    "SpectralResult",
+    "AbsorptionShiftResult",
+    "CorrelationAlert",
+    "rolling_correlation",
+    "spectral_analysis",
+    "absorption_shift",
+    "frobenius_distance",
+    "market_mode_rotation",
+    "detect_regime_alerts",
 ]
