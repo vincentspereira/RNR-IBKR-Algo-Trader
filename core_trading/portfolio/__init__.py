@@ -14,7 +14,17 @@ Phase 6 builds the general portfolio-construction stack on top:
 * :mod:`core_trading.portfolio.risk_parity` -- equal risk contribution and
   risk budgeting (6.4) via cyclical coordinate descent, with volatility
   targeting.
+* :mod:`core_trading.portfolio.hrp` -- de Prado Hierarchical Risk Parity
+  (6.3): correlation-distance clustering, quasi-diagonalisation, recursive
+  bisection; no matrix inversion anywhere.
+* :mod:`core_trading.portfolio.black_litterman` -- equilibrium prior +
+  views posterior (6.2) with Omega confidence control of signal injection.
 """
+from core_trading.portfolio.black_litterman import (
+    BlackLittermanResult,
+    black_litterman,
+    implied_equilibrium_returns,
+)
 from core_trading.portfolio.covariance import (
     CovarianceResult,
     condition_number,
@@ -24,6 +34,12 @@ from core_trading.portfolio.covariance import (
     nearest_psd,
     oas_covariance,
     sample_covariance,
+)
+from core_trading.portfolio.hrp import (
+    HRPConfig,
+    HRPResult,
+    correlation_distance,
+    hrp_weights,
 )
 from core_trading.portfolio.mvo import (
     MVOConfig,
@@ -75,4 +91,13 @@ __all__ = [
     "RiskParityResult",
     "risk_contributions",
     "risk_parity_weights",
+    # hierarchical risk parity (Phase 6.3)
+    "HRPConfig",
+    "HRPResult",
+    "correlation_distance",
+    "hrp_weights",
+    # Black-Litterman (Phase 6.2)
+    "BlackLittermanResult",
+    "black_litterman",
+    "implied_equilibrium_returns",
 ]
