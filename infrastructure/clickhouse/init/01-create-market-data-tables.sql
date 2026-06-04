@@ -2,25 +2,27 @@
 -- File: 01-create-market-data-tables.sql
 
 -- OHLCV bars table
+-- NOTE: this DDL must stay in sync with the canonical writer,
+-- core_trading/data/storage.py (_BARS_DDL). ReplacingMergeTree keyed on
+-- (symbol, resolution, timestamp) makes re-ingestion of overlapping windows
+-- idempotent. No TTL: Phase 1 requires at least 5 years of daily history
+-- (the previous 2-year TTL silently deleted required backtest data).
 CREATE TABLE IF NOT EXISTS market_data.bars (
     symbol String,
-    timestamp DateTime64(3),
+    resolution String,
+    timestamp DateTime64(3, 'UTC'),
     open Float64,
     high Float64,
     low Float64,
     close Float64,
     volume Float64,
-    timeframe String,
-    bar_count Int32 DEFAULT 0,
-    average Float64 DEFAULT 0.0,
-    source String DEFAULT 'ibkr'
-) ENGINE = MergeTree()
-PARTITION BY toYYYYMM(timestamp)
-ORDER BY (symbol, timeframe, timestamp)
-TTL timestamp + INTERVAL 2 YEAR;
-
--- Indexes for common queries
-ALTER TABLE market_data.bars ADD INDEX idx_bars_symbol_timeframe (symbol, timeframe) TYPE minmax GRANULARITY 4;
+    adjusted_close Nullable(Float64),
+    vwap Nullable(Float64),
+    trade_count Nullable(Int64),
+    source String,
+    ingested_at DateTime64(3, 'UTC') DEFAULT now64(3)
+) ENGINE = ReplacingMergeTree(ingested_at)
+ORDER BY (symbol, resolution, timestamp);
 
 -- Tick data table
 CREATE TABLE IF NOT EXISTS market_data.ticks (

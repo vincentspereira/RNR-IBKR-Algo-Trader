@@ -110,7 +110,10 @@ jobs:
         poetry run pytest tests/data tests/research tests/backtest \
           --cov=core_trading.data --cov=core_trading.research --cov=core_trading.backtest \
           --cov-report=term-missing --cov-fail-under=90 \
-          -W error -p no:cacheprovider \
+          -W error \
+          -W "ignore:unclosed event loop:ResourceWarning" \
+          -W "ignore:unclosed <socket.socket:ResourceWarning" \
+          -p no:cacheprovider \
           --override-ini="addopts="
 
     - name: Smoke-execute research notebook templates (Phase 2.2)

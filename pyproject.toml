@@ -121,6 +121,12 @@ pyarrow = "^16.0"
 transformers = "^4.43"
 sentence-transformers = "^3.0"
 
+# Broker connectivity
+# ib_insync is unmaintained since 2024 (author deceased); the maintained fork
+# is "ib-async" with a near-identical API. Migrate imports when we next touch
+# the IBKR adapters; until then pin the final ib_insync release.
+ib_insync = "^0.9.86"            # IBKR TWS/Gateway API (BSD-2)
+
 # Free data vendors (see docs/FREE_DATA_VENDORS.md)
 yfinance = "^0.2"                # Yahoo Finance OHLCV (no API key)
 fredapi = "^0.5"                 # FRED macro data (free API key)
@@ -213,3 +219,13 @@ filterwarnings = [
     "ignore:.*model_validator.*:DeprecationWarning",
     "ignore:.*class-based.*config.*:DeprecationWarning",
 ]
+# NOTE on `-W error` runs of async test files (tests/data etc.): pytest-asyncio
+# 0.21's per-test "clean event loop" finalizer leaks unclosed event loops whose
+# self-pipe sockets emit ResourceWarning at GC time -- blamed on whichever test
+# happens to be running (flaky, order-dependent). ini filterwarnings CANNOT
+# override an explicit command-line `-W error` (command line wins), so the
+# ignores must be appended on the command line AFTER `-W error`:
+#   -W error -W "ignore:unclosed event loop:ResourceWarning" \
+#            -W "ignore:unclosed <socket.socket:ResourceWarning"
+# (CI does this in .github/workflows/ci.yml.) Remove when pytest-asyncio is
+# upgraded past the leak.

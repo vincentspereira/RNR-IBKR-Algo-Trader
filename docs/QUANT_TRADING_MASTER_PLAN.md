@@ -594,7 +594,23 @@ no-stubs violations.
 ###  Phase 1 — Data Infrastructure
 
 **Duration:** 4–8 weeks
-**Status:** prerequisite for any backtest
+**Status: Phase 1 CODE-COMPLETE, OPERATOR-GATED (2026-06-04).** The data-layer
+*code* is built and tested offline: vendor-agnostic Bar/BarSource model (1.2),
+adapters (yfinance, IBKR, FRED, EDGAR), ClickHouse `BarStore` +
+`CachingBarSource` storage, corporate-actions model (1.3), point-in-time
+`FundamentalRecord` + free EDGAR source (1.4), reference data (1.5),
+survivorship-bias-*aware* universe API (1.1 -- interface correct, vintage data
+pending), quality framework (1.8 `validate_bar_frame` + `cross_source_compare`),
+an ingestion CLI (`python -m core_trading.data.ingest`: universe -> fetch ->
+quality gate -> idempotent store), and a provisioned Grafana data-quality
+dashboard (`infrastructure/grafana/dashboards/data-quality.json`). What remains
+is **operational, not code** -- run Docker, run the CLI, optionally pay for
+vintage data -- and is checklisted in `docs/PHASE1_OPERATOR_RUNBOOK.md`. DOD
+state: bars/dashboard/universe-query items are one operator command away;
+"survivorship-bias-free with delisted names" requires a paid vendor (Norgate
+~USD 300-500/yr) or Tiingo free-tier partial coverage -- an explicit cost
+decision left to the operator. None of this blocks Phase 5 research (done on
+validated synthetic data per the DOD) or the Phase 6 build.
 
 The most expensive mistake in quant is starting with strategies before data. Garbage in, garbage out. Backtests on dirty data are worse than no backtests because they create false confidence.
 
@@ -1135,11 +1151,15 @@ Each signal module:
 - [ ] Either promoted to paper trading (Sharpe > threshold) or archived with rejection memo
 - [ ] No `.fixed_attempt` siblings, no commented-out blocks
 
-**Status: Phase 5 IN PROGRESS -- Batches 1-2 shipped (2026-06-01).** Phase 5 is an
-incremental, multi-month alpha factory; it is built one signal family at a time,
-each held to the per-module DOD above. Sub-phases **5.A (time-series statistical
-models)** and **5.B (stochastic process models)** are now complete (one deferral
-noted below).
+**Status: Phase 5 SUBSTANTIALLY COMPLETE (2026-06-04).** Phase 5 is an
+incremental alpha factory, built one signal family at a time, each held to the
+per-module DOD above. Every sub-phase that is feasible with the current
+(free/synthetic-validated) data layer has shipped: **5.A** and **5.B** complete;
+**5.C** complete (price factors + fundamental factors against the point-in-time
+EDGAR data model); **5.D** complete (full de Prado toolkit + tree / OOB-forest /
+LSTM / RL models); **5.E** the OHLCV-estimable subset; **5.F** the free-source
+subset. The explicit data-blocked deferrals -- none of which gate Phase 6 -- are
+tabulated in the "Phase 5 closing status" note below.
 
 Batch 1 -- econometric foundation (commit `182475b`, 2026-05-30):
 
@@ -1392,6 +1412,134 @@ forest. All gates clean; full 136-test ml suite green. This is the model-to-sign
 bridge; gate-wiring the event-level OOF signal through `evaluate_signal` (mapping
 sparse CUSUM events to a held position series) is the natural follow-on, and it
 begins retiring the 99%-commented `ai_enhanced_signal_engine.py`.
+
+**5.D.1 OOF ML signal gate-wiring (DOD items 3-5), 2026-06-04 (commit
+`0d316e4`).** New adapter `research/signal_adapters/ml_tree_signal.py` maps the
+*sparse event-level* OOF positions onto a *dense per-bar* weight series via de
+Prado's average-active-signals method (AFML snippet 10.2): each bar's weight is
+the mean bet size of all events whose holding window covers it, where the window
+end is the **fixed vertical (time) barrier known at event time** -- never the
+path-dependent first-touch `t1`, which would leak the exit. The swept knob is a
+`min_size` conviction floor. The honesty caveat is documented rather than hidden:
+purged-CV OOF probabilities are a whole-sample leakage-free *model-skill*
+estimate, not causal (folds depend on the full sample), so the adapter gate
+evaluates model skill; the causal property unit-tested is the held-position map
+(appending later events never changes earlier bars). The live analogue
+(`RandomForestSignal.signal`, trailing refit) is gated separately at deployment.
+End-to-end: CUSUM events -> triple-barrier labels -> purged-CV OOF forest
+probabilities -> bet-sized event positions -> dense weights -> Phase 3 engine.
+On a regime-persistent series the gate PROMOTES (modes agree); on a noise
+feature it ARCHIVES. 17 tests, 100% coverage, all gates clean.
+
+**Batch 4 -- 5.C fundamental factor family (5.C.1 / 5.C.2 / 5.C.5), 2026-06-04
+(commit `7fd252a`).** The "needs fundamental data" deferral was resolved by
+building against the Phase 1 *data model* rather than waiting on a paid feed:
+all three modules consume the tidy point-in-time fundamentals panel
+(`FundamentalSource.records_to_dataframe`, one row per disclosed fact with both
+`period_end` and `filing_date`; a value enters the cross-section at `t` only
+once `filing_date <= t`), which the free SEC EDGAR adapter supplies.
+- `factors/fama_french.py` (5.C.1) -- Fama-French SMB/HML/RMW/CMA (+UMD) factor
+  returns from the canonical 2x3 size-x-characteristic sorts (1993/2015):
+  size-median and 30/70 characteristic breakpoints, six value-weighted
+  portfolios, SMB averaged across all three sorts. 73 tests incl. sign-recovery
+  of every premium on panels with planted drifts. (Independent re-verification
+  caught and fixed a real CMA sign bug -- aggressive-minus-conservative
+  inverted -- before commit.)
+- `factors/barra.py` (5.C.2) -- Barra-style cross-sectional risk model:
+  z-scored style exposures (size/value/momentum/volatility/liquidity/leverage/
+  growth), drop-one industry + market identification, per-period WLS
+  (sqrt-mkt-cap weights) factor returns, idiosyncratic residual alpha. 56 tests.
+- `factors/style_factors.py` (5.C.5) -- Quality (QMJ composite) / Value
+  (B/P + E/P + CF/P) / Low-volatility (price-only) style scores and
+  dollar-neutral weights. 48 tests.
+177 tests, 100% coverage each, all gates clean. 5.C is now complete.
+
+**Batch 5 -- 5.E microstructure, OHLCV-estimable subset, 2026-06-04 (commit
+`9389b8c`).** New `signals/microstructure/` package: the price-only estimators
+that do not require tick/L2 data. `spread.py` -- Roll (1984) effective spread
+(`2*sqrt(-cov)`, NaN on positive autocovariance) and Corwin-Schultz (2012)
+high-low spread; `kyle_lambda.py` -- Amihud (2002) ILLIQ and a Kyle-lambda
+proxy via tick-rule signed volume (Goyenko-Holden-Trzcinka; attenuation bias
+documented); `hf_vol.py` -- close-to-close, Parkinson, Garman-Klass,
+Rogers-Satchell and Yang-Zhang range volatility estimators. 114 tests,
+100% coverage, parameter recovery on simulated processes with known truth.
+**Deferred (data-blocked):** order-book imbalance and VPIN need L2 / signed
+tick data that the free data layer does not carry.
+
+**Batch 6 -- 5.F alt-data, free-source subset, 2026-06-04 (commit `03e57e4`).**
+New `signals/alt_data/` package: `macro.py` (5.F.5) -- yield-curve slope /
+curvature / inversion (Estrella-Mishkin), VIX term-structure regime, credit
+spreads, rate-differential carry, over FRED-shaped series; `earnings.py`
+(5.F.2) -- SUE (Foster-Olsen-Shevlin seasonal random walk) and the
+Bernard-Thomas PEAD long/short, point-in-time from the EDGAR panel;
+`insider.py` (5.F.3) -- net insider sentiment, Lakonishok-Lee cluster-buy
+detection, Cohen-Malloy-Pomorski routine-vs-opportunistic weighting over a
+defined Form 4 transaction shape. 197 tests, 100% coverage each, all gates
+clean. **Deferred (data-blocked):** news sentiment (5.F.1, needs a headline
+corpus + sentiment model) and options flow (5.F.4, needs an options-chain
+feed).
+
+**Batch 7 -- 5.D heavy ML: OOB forest, LSTM, RL, 2026-06-04 (commit
+`7eb5f74`).** The three remaining model-fitting modules, retiring the legacy
+commented shells:
+- `ml/random_forest.py` (5.D.2) -- `RandomForestOOB`: bagging with
+  out-of-bag scoring, plus `compare_oob_vs_purged_cv` exposing the AFML
+  ch. 4/7 teaching point that OOB is optimistically biased under overlapping
+  labels (bootstrap bags ignore label time spans) while purged CV is the
+  honest number. 60 tests.
+- `ml/neural.py` (5.D.3) -- `LSTMSignal`: sequence model over rolling feature
+  windows trained on triple-barrier direction labels; up-probability ->
+  bet-sized position via the same de Prado transform as every 5.D signal.
+  Deterministic CPU training (seeded torch/numpy/random + seeded DataLoader +
+  `use_deterministic_algorithms(True)`; two identical configs reproduce to
+  1e-6). DOD bar for nets: overfit-a-tiny-batch + determinism + alignment +
+  bet-sizing contract (parameter recovery is not meaningful for an LSTM).
+  Replaces the 99%-commented `ai_enhanced_signal_engine.py`. 59 tests.
+- `ml/rl/` (5.D.4) -- `TradingEnv`: gymnasium `Discrete(3)` short/flat/long
+  environment on a fixed price path whose reward is the **differential Sharpe
+  ratio** (Moody-Saffell 1998) with a proportional transaction-cost penalty;
+  passes `gymnasium.utils.env_checker` with no warnings. `RLTradingAgent`:
+  reproducible stable-baselines3 PPO/DQN wrapper (train/predict/save/load).
+  Replaces the 77%-commented `reinforcement_learning.py`. 57 tests.
+312-test ml suite green under `-W error`; 100% coverage on every module; ruff /
+mypy-strict / no-stubs / ASCII clean. torch declared explicitly in pyproject.
+
+#### Phase 5 closing status (2026-06-04)
+
+Shipped across 7 batches: ~25 signal/toolkit modules, ~1,500 tests, every
+module at 100% coverage with its mathematical reference cited and
+textbook/parameter-recovery validation; the evaluation harness
+(`evaluate_signal` + deflated Sharpe + PROMOTE/ARCHIVE) has gate-wired six
+structurally different families (OU mean-reversion, trend, AR forecast,
+cross-sectional momentum, PCA stat-arb, OOF ML).
+
+Deferred items -- each blocked on DATA or genuinely later-phase, none gating
+Phase 6:
+
+| Item | Blocked on | Unblock path |
+| ---- | ---------- | ------------ |
+| Order-book imbalance, VPIN (5.E) | L2 / signed tick history | IBKR tick recording (forward), Polygon/Databento (history) |
+| News sentiment (5.F.1) | headline corpus + sentiment model | Benzinga/RSS pipeline + FinBERT |
+| Options flow (5.F.4) | options-chain feed | IBKR options data / CBOE DataShop |
+| DCC-GARCH (5.A) | nothing -- multivariate extension | later add-on when portfolio-level correlation timing is needed |
+| Fundamental-factor gate-wiring | synthetic-panel DOD done; live panel needs EDGAR backfill | run EDGAR ingest, then wire value/low-vol long/short through `evaluate_signal` like momentum |
+
+#### Phase 6 readiness certification (2026-06-04)
+
+Phase 6 (portfolio construction) is **READY TO START**. Its prerequisites:
+
+1. *Signals to allocate across* -- supplied: the Phase 5 library emits
+   per-asset weights/scores in standard shapes (single-series rules and
+   multi-asset panels).
+2. *A backtest engine to evaluate allocations* -- supplied: Phase 3 engine +
+   deflated-Sharpe harness (Phase 5 gate-wiring exercised both modes across
+   six families).
+3. *Risk/return estimators* -- supplied: covariance via 5.C PCA factors and
+   Barra; volatility via 5.A GARCH/HAR and 5.E range estimators.
+4. *Optimiser dependency* -- `cvxpy` pinned since Phase 0.3.
+5. *Data* -- daily-bar research proceeds on the Phase 1 code path (ingest CLI
+   + quality gate); live-data operationalisation is the operator runbook, not
+   a Phase 6 blocker.
 
 ---
 

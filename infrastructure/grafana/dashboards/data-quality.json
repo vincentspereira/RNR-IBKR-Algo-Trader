@@ -1,0 +1,199 @@
+{
+  "annotations": { "list": [] },
+  "description": "Phase 1.8 data-quality dashboard: bar coverage, freshness, and structural integrity of market_data.bars (canonical writer: core_trading/data/storage.py; quality gate: core_trading/data/quality.py via python -m core_trading.data.ingest).",
+  "editable": true,
+  "fiscalYearStartMonth": 0,
+  "graphTooltip": 1,
+  "id": null,
+  "links": [],
+  "liveNow": false,
+  "panels": [
+    {
+      "type": "stat",
+      "title": "Total bars stored",
+      "datasource": { "type": "grafana-clickhouse-datasource", "uid": "clickhouse" },
+      "gridPos": { "h": 5, "w": 4, "x": 0, "y": 0 },
+      "id": 1,
+      "targets": [
+        {
+          "refId": "A",
+          "queryType": "sql",
+          "rawSql": "SELECT count() AS bars FROM market_data.bars FINAL",
+          "format": 1
+        }
+      ],
+      "fieldConfig": { "defaults": { "unit": "short" }, "overrides": [] }
+    },
+    {
+      "type": "stat",
+      "title": "Distinct symbols",
+      "datasource": { "type": "grafana-clickhouse-datasource", "uid": "clickhouse" },
+      "gridPos": { "h": 5, "w": 4, "x": 4, "y": 0 },
+      "id": 2,
+      "targets": [
+        {
+          "refId": "A",
+          "queryType": "sql",
+          "rawSql": "SELECT uniqExact(symbol) AS symbols FROM market_data.bars",
+          "format": 1
+        }
+      ],
+      "fieldConfig": { "defaults": { "unit": "short" }, "overrides": [] }
+    },
+    {
+      "type": "stat",
+      "title": "History span (days, 1d bars)",
+      "datasource": { "type": "grafana-clickhouse-datasource", "uid": "clickhouse" },
+      "gridPos": { "h": 5, "w": 4, "x": 8, "y": 0 },
+      "id": 3,
+      "targets": [
+        {
+          "refId": "A",
+          "queryType": "sql",
+          "rawSql": "SELECT dateDiff('day', min(timestamp), max(timestamp)) AS span_days FROM market_data.bars WHERE resolution = '1d'",
+          "format": 1
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "d",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "red", "value": null },
+              { "color": "yellow", "value": 1095 },
+              { "color": "green", "value": 1825 }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "description": "Phase 1 DOD requires >= 5 years (1825 days) of daily history."
+    },
+    {
+      "type": "stat",
+      "title": "Structural violations (must be 0)",
+      "datasource": { "type": "grafana-clickhouse-datasource", "uid": "clickhouse" },
+      "gridPos": { "h": 5, "w": 6, "x": 12, "y": 0 },
+      "id": 4,
+      "targets": [
+        {
+          "refId": "A",
+          "queryType": "sql",
+          "rawSql": "SELECT countIf(high < low) AS high_lt_low, countIf(volume < 0) AS negative_volume, countIf(close = 0) AS zero_close FROM market_data.bars FINAL",
+          "format": 1
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green", "value": null },
+              { "color": "red", "value": 1 }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "description": "Mirrors the error-severity checks in core_trading/data/quality.py: high < low, negative volume, zero closes."
+    },
+    {
+      "type": "stat",
+      "title": "Unmerged duplicate rows",
+      "datasource": { "type": "grafana-clickhouse-datasource", "uid": "clickhouse" },
+      "gridPos": { "h": 5, "w": 6, "x": 18, "y": 0 },
+      "id": 5,
+      "targets": [
+        {
+          "refId": "A",
+          "queryType": "sql",
+          "rawSql": "SELECT count() - uniqExact(symbol, resolution, timestamp) AS pending_dups FROM market_data.bars",
+          "format": 1
+        }
+      ],
+      "fieldConfig": { "defaults": { "unit": "short" }, "overrides": [] },
+      "description": "Physical duplicates awaiting ReplacingMergeTree merge. Non-zero is normal shortly after re-ingestion; persistently growing values are not."
+    },
+    {
+      "type": "timeseries",
+      "title": "Symbols with a 1d bar per day (coverage)",
+      "datasource": { "type": "grafana-clickhouse-datasource", "uid": "clickhouse" },
+      "gridPos": { "h": 9, "w": 12, "x": 0, "y": 5 },
+      "id": 6,
+      "targets": [
+        {
+          "refId": "A",
+          "queryType": "sql",
+          "rawSql": "SELECT toStartOfDay(timestamp) AS time, uniqExact(symbol) AS symbols FROM market_data.bars FINAL WHERE resolution = '1d' AND $__timeFilter(timestamp) GROUP BY time ORDER BY time",
+          "format": 0
+        }
+      ],
+      "fieldConfig": { "defaults": { "unit": "short" }, "overrides": [] },
+      "description": "Dips on trading days indicate per-symbol fetch gaps; flat weekend/holiday gaps are expected."
+    },
+    {
+      "type": "timeseries",
+      "title": "Rows ingested per day by source",
+      "datasource": { "type": "grafana-clickhouse-datasource", "uid": "clickhouse" },
+      "gridPos": { "h": 9, "w": 12, "x": 12, "y": 5 },
+      "id": 7,
+      "targets": [
+        {
+          "refId": "A",
+          "queryType": "sql",
+          "rawSql": "SELECT toStartOfDay(ingested_at) AS time, source, count() AS rows FROM market_data.bars WHERE $__timeFilter(ingested_at) GROUP BY time, source ORDER BY time",
+          "format": 0
+        }
+      ],
+      "fieldConfig": { "defaults": { "unit": "short" }, "overrides": [] }
+    },
+    {
+      "type": "table",
+      "title": "Freshness: most stale symbols (1d bars)",
+      "datasource": { "type": "grafana-clickhouse-datasource", "uid": "clickhouse" },
+      "gridPos": { "h": 9, "w": 12, "x": 0, "y": 14 },
+      "id": 8,
+      "targets": [
+        {
+          "refId": "A",
+          "queryType": "sql",
+          "rawSql": "SELECT symbol, max(timestamp) AS latest_bar, dateDiff('hour', max(timestamp), now()) AS hours_stale FROM market_data.bars WHERE resolution = '1d' GROUP BY symbol ORDER BY hours_stale DESC LIMIT 25",
+          "format": 1
+        }
+      ],
+      "fieldConfig": { "defaults": { "unit": "short" }, "overrides": [] },
+      "description": "After a daily ingest run every symbol should be < 72h stale (weekends included)."
+    },
+    {
+      "type": "table",
+      "title": "Per-symbol bar counts (1d, lowest 25)",
+      "datasource": { "type": "grafana-clickhouse-datasource", "uid": "clickhouse" },
+      "gridPos": { "h": 9, "w": 12, "x": 12, "y": 14 },
+      "id": 9,
+      "targets": [
+        {
+          "refId": "A",
+          "queryType": "sql",
+          "rawSql": "SELECT symbol, count() AS bars, min(timestamp) AS first_bar, max(timestamp) AS last_bar FROM market_data.bars FINAL WHERE resolution = '1d' GROUP BY symbol ORDER BY bars ASC LIMIT 25",
+          "format": 1
+        }
+      ],
+      "fieldConfig": { "defaults": { "unit": "short" }, "overrides": [] },
+      "description": "Symbols with materially fewer bars than the universe norm have fetch gaps, late listings, or delistings."
+    }
+  ],
+  "refresh": "5m",
+  "schemaVersion": 38,
+  "style": "dark",
+  "tags": ["data-quality", "phase-1"],
+  "templating": { "list": [] },
+  "time": { "from": "now-90d", "to": "now" },
+  "timepicker": {},
+  "timezone": "utc",
+  "title": "Data Quality -- Market Data Bars",
+  "uid": "data-quality-bars",
+  "version": 1,
+  "weekStart": ""
+}
