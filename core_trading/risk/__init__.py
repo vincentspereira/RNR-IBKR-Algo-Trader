@@ -14,7 +14,23 @@ Phase 7 builds out the full risk stack:
   fallback and CCC forward covariance for Phase 6 / VaR consumption (7.6).
 - ``correlation_regime`` -- rolling correlations, spectral market mode,
   absorption ratio, Marchenko-Pastur noise floor, regime-shift alerts (7.9).
+- ``stress`` -- historical / hypothetical / reverse stress testing with a
+  built-in scenario library and daily report generator (7.5).
+- ``copulas`` -- Gaussian, Student-t, and C/D-vine copulas with tail
+  dependence coefficients and PIT utilities (7.7).
 """
+from core_trading.risk.copulas import (
+    CopulaFitResult,
+    CVineCopula,
+    DVineCopula,
+    GaussianCopula,
+    StudentTCopula,
+    empirical_pit,
+    empirical_pit_inverse,
+    tail_dependence_empirical,
+    tail_dependence_gaussian,
+    tail_dependence_student_t,
+)
 from core_trading.risk.correlation_regime import (
     AbsorptionShiftResult,
     CorrelationAlert,
@@ -46,6 +62,19 @@ from core_trading.risk.pairs_risk import (
     PairsRiskManager,
     RiskCheck,
     RiskLimits,
+)
+from core_trading.risk.stress import (
+    HISTORICAL_SCENARIOS,
+    FactorShock,
+    HistoricalScenario,
+    ScenarioResult,
+    StressReport,
+    apply_scenario,
+    build_stress_report,
+    hypothetical_shock,
+    render_stress_report_markdown,
+    reverse_stress_linear,
+    reverse_stress_numeric,
 )
 from core_trading.risk.var import (
     BacktestResult,
@@ -114,4 +143,27 @@ __all__ = [
     "frobenius_distance",
     "market_mode_rotation",
     "detect_regime_alerts",
+    # 7.5 stress testing
+    "FactorShock",
+    "HistoricalScenario",
+    "HISTORICAL_SCENARIOS",
+    "ScenarioResult",
+    "StressReport",
+    "apply_scenario",
+    "hypothetical_shock",
+    "reverse_stress_linear",
+    "reverse_stress_numeric",
+    "build_stress_report",
+    "render_stress_report_markdown",
+    # 7.7 copulas
+    "CopulaFitResult",
+    "GaussianCopula",
+    "StudentTCopula",
+    "CVineCopula",
+    "DVineCopula",
+    "empirical_pit",
+    "empirical_pit_inverse",
+    "tail_dependence_gaussian",
+    "tail_dependence_student_t",
+    "tail_dependence_empirical",
 ]
