@@ -64,6 +64,13 @@ class TestConfigValidation:
         with pytest.raises(ValueError):
             PairsTradingConfig(selection_method="magic")
 
+    def test_bad_max_pairs_per_sector(self) -> None:
+        with pytest.raises(ValueError):
+            PairsTradingConfig(max_pairs_per_sector=0)
+
+    def test_max_pairs_per_sector_none_is_default(self) -> None:
+        assert PairsTradingConfig().max_pairs_per_sector is None
+
 
 class TestFormationGuard:
     def test_panel_shorter_than_formation_is_flat(self) -> None:
@@ -92,6 +99,87 @@ class TestSelectionMethods:
         for plan in strat.plans:
             pid = _pair_id(plan.candidate)
             assert pid == f"{plan.candidate.symbol_y}__{plan.candidate.symbol_x}"
+
+
+class TestSectorStratification:
+    """max_pairs_per_sector caps the ranked candidate list per sector label."""
+
+    @staticmethod
+    def _candidate(sym_y: str, sym_x: str, sector: str | None, score: float):
+        from core_trading.signals.pairs.selection import PairCandidate
+
+        return PairCandidate(
+            symbol_y=sym_y,
+            symbol_x=sym_x,
+            hedge_ratio=1.0,
+            pvalue=float("nan"),
+            pvalue_adj=float("nan"),
+            half_life=10.0,
+            method="distance",
+            score=score,
+            sector=sector,
+        )
+
+    def test_caps_pairs_per_sector_in_rank_order(self) -> None:
+        cfg = PairsTradingConfig(
+            formation_window=150, zscore_window=20, max_pairs_per_sector=2
+        )
+        strat = PairsTradingStrategy(cfg)
+        ranked = [
+            self._candidate("A1", "A2", "FIN", 0.1),
+            self._candidate("A3", "A4", "FIN", 0.2),
+            self._candidate("A5", "A6", "FIN", 0.3),  # third FIN: dropped
+            self._candidate("B1", "B2", "TECH", 0.4),
+            self._candidate("B3", "B4", "TECH", 0.5),
+        ]
+        kept = strat._stratify_by_sector(ranked)
+        labels = [(c.symbol_y, c.sector) for c in kept]
+        assert labels == [
+            ("A1", "FIN"),
+            ("A3", "FIN"),
+            ("B1", "TECH"),
+            ("B3", "TECH"),
+        ]
+
+    def test_unlabelled_pairs_share_one_bucket(self) -> None:
+        cfg = PairsTradingConfig(
+            formation_window=150, zscore_window=20, max_pairs_per_sector=1
+        )
+        strat = PairsTradingStrategy(cfg)
+        ranked = [
+            self._candidate("A1", "A2", None, 0.1),
+            self._candidate("A3", "A4", None, 0.2),  # second unlabelled: dropped
+        ]
+        kept = strat._stratify_by_sector(ranked)
+        assert len(kept) == 1
+
+    def test_none_cap_keeps_everything(self) -> None:
+        cfg = PairsTradingConfig(formation_window=150, zscore_window=20)
+        strat = PairsTradingStrategy(cfg)
+        ranked = [self._candidate(f"Y{i}", f"X{i}", "FIN", float(i)) for i in range(5)]
+        assert strat._stratify_by_sector(ranked) == ranked
+
+    def test_unique_symbols_skips_reused_names(self) -> None:
+        cfg = PairsTradingConfig(
+            formation_window=150, zscore_window=20, unique_symbols=True
+        )
+        strat = PairsTradingStrategy(cfg)
+        ranked = [
+            self._candidate("COF", "WFC", "FIN", 0.1),
+            self._candidate("COF", "JPM", "FIN", 0.2),  # reuses COF: dropped
+            self._candidate("GS", "JPM", "FIN", 0.3),  # JPM still unused: kept
+            self._candidate("HD", "LOW", "DISC", 0.4),
+        ]
+        kept = strat._stratify_by_sector(ranked)
+        assert [(c.symbol_y, c.symbol_x) for c in kept] == [
+            ("COF", "WFC"),
+            ("GS", "JPM"),
+            ("HD", "LOW"),
+        ]
+
+    def test_bad_max_abs_hedge_beta(self) -> None:
+        with pytest.raises(ValueError):
+            PairsTradingConfig(max_abs_hedge_beta=0.5)
 
 
 class TestInputForms:

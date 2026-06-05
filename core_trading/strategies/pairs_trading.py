@@ -102,6 +102,27 @@ class PairsTradingConfig:
     max_half_life: float = 30.0
     correction: str = "bonferroni"
     min_avg_volume: float = 0.0
+    # Sector-stratified selection: at most this many pairs per sector label
+    # are carried from the ranked candidate list (None disables). Without it
+    # a distance ranking can concentrate the whole book in one sector, which
+    # a *relative* sector cap cannot then repair by scaling -- when most
+    # active pairs share a sector, scaling that sector shrinks total gross
+    # along with it and the fraction never reaches the cap.
+    max_pairs_per_sector: int | None = None
+    # Hedge-ratio band: candidates whose OLS hedge beta falls outside
+    # [1/max_abs_hedge_beta, max_abs_hedge_beta] are rejected at selection
+    # (None disables). The per-pair cap bounds only the y-leg; the x-leg is
+    # scaled by |beta|, so a pair of very different price levels (e.g. a
+    # $200 vs a $25 stock, beta ~10) would put 10x the pair cap on one leg.
+    # Gatev's original distance method trades ~equal dollar legs; a band of
+    # ~3 keeps leg notionals within the same order of magnitude.
+    max_abs_hedge_beta: float | None = None
+    # When true, each symbol appears in at most one kept pair: a ranked
+    # candidate reusing an already-kept symbol is skipped. Without this a
+    # small book can hold three pairs that are all really the same bet on
+    # one name (e.g. COF/WFC + COF/JPM + COF/GS), tripling that symbol's
+    # leg and defeating both diversification and the sector cap.
+    unique_symbols: bool = False
     signal: SignalConfig = field(default_factory=SignalConfig)
     sizing: SizingConfig = field(default_factory=SizingConfig)
     portfolio: PortfolioConfig = field(default_factory=PortfolioConfig)
@@ -115,6 +136,10 @@ class PairsTradingConfig:
             raise ValueError("max_pairs must be at least 1")
         if self.selection_method not in ("cointegration", "distance"):
             raise ValueError("selection_method must be 'cointegration' or 'distance'")
+        if self.max_pairs_per_sector is not None and self.max_pairs_per_sector < 1:
+            raise ValueError("max_pairs_per_sector must be at least 1 (or None)")
+        if self.max_abs_hedge_beta is not None and self.max_abs_hedge_beta < 1.0:
+            raise ValueError("max_abs_hedge_beta must be >= 1.0 (or None)")
 
 
 @dataclass(frozen=True, slots=True)
@@ -222,13 +247,53 @@ class PairsTradingStrategy:
         else:
             candidates = select_pairs_distance(
                 formation,
-                top_n=cfg.max_pairs,
+                # Request the full ranking when stratifying so lower-ranked
+                # pairs from under-represented sectors can fill the book.
+                top_n=(
+                    cfg.max_pairs
+                    if cfg.max_pairs_per_sector is None
+                    else len(formation.columns) ** 2
+                ),
                 sectors=self.sectors,
                 require_same_sector=self.require_same_sector,
                 volume=volume,
                 min_avg_volume=cfg.min_avg_volume,
             )
+        if cfg.max_abs_hedge_beta is not None:
+            lo = 1.0 / cfg.max_abs_hedge_beta
+            candidates = [
+                c
+                for c in candidates
+                if lo <= abs(c.hedge_ratio) <= cfg.max_abs_hedge_beta
+            ]
+        candidates = self._stratify_by_sector(candidates)
         return candidates[: cfg.max_pairs]
+
+    def _stratify_by_sector(self, candidates: list[PairCandidate]) -> list[PairCandidate]:
+        """Cap the number of pairs carried per sector label.
+
+        Walks the ranked candidate list in order, keeping at most
+        ``config.max_pairs_per_sector`` pairs per sector. Pairs without a
+        sector label (cross-sector or unmapped) are bucketed together under
+        one label so they cannot become a concentration loophole.
+        """
+        cap = self.config.max_pairs_per_sector
+        unique = self.config.unique_symbols
+        if cap is None and not unique:
+            return candidates
+        counts: dict[str, int] = {}
+        used: set[str] = set()
+        kept: list[PairCandidate] = []
+        for pc in candidates:
+            label = pc.sector or "UNKNOWN"
+            if cap is not None and counts.get(label, 0) >= cap:
+                continue
+            if unique and (pc.symbol_y in used or pc.symbol_x in used):
+                continue
+            counts[label] = counts.get(label, 0) + 1
+            used.update((pc.symbol_y, pc.symbol_x))
+            kept.append(pc)
+        return kept
 
     def _build_plan(self, formation: pd.DataFrame, pc: PairCandidate) -> PairTradePlan | None:
         """Fit the static hedge, OU and variance for a pair on formation data."""

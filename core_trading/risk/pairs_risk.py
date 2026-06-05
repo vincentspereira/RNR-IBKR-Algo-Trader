@@ -86,9 +86,15 @@ class RiskLimits:
     monthly_drawdown_limit: float = 0.10
     var_limit: float = 0.05
     var_alpha: float = 0.05
+    # Materiality floor for the sector-concentration check: the check is
+    # skipped while total gross exposure is below this fraction of NAV. A
+    # *relative* concentration measure is meaningless for a sparse book --
+    # the first pair to enter is always ~100% of a tiny gross. 0.0 (the
+    # default) preserves the original always-on behaviour.
+    sector_check_min_gross: float = 0.0
 
     def __post_init__(self) -> None:
-        """Validate that every limit is strictly positive."""
+        """Validate limits (strictly positive; the materiality floor may be 0)."""
         for attr in (
             "per_pair_cap",
             "sector_cap",
@@ -102,6 +108,11 @@ class RiskLimits:
             val = getattr(self, attr)
             if val <= 0:
                 raise ValueError(f"RiskLimits.{attr} must be > 0, got {val!r}")
+        if self.sector_check_min_gross < 0:
+            raise ValueError(
+                "RiskLimits.sector_check_min_gross must be >= 0, got "
+                f"{self.sector_check_min_gross!r}"
+            )
 
 
 # Module-level singleton used as the default for PairsRiskManager.
@@ -231,8 +242,9 @@ class PairsRiskManager:
                 f" {limits.gross_leverage_cap:.4f}"
             )
 
-        # (c) Sector concentration
-        if sectors is not None and gross > 0:
+        # (c) Sector concentration (only once the book is material; see
+        # RiskLimits.sector_check_min_gross)
+        if sectors is not None and gross > 0 and gross >= limits.sector_check_min_gross:
             sector_gross: dict[str, float] = {}
             for sym, w in proposed_weights.items():
                 sec = sectors.get(sym, "UNKNOWN")

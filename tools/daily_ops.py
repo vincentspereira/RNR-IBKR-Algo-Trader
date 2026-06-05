@@ -80,18 +80,45 @@ def _run_tca_report(out_dir: Path) -> str:
 
 
 def _fetch_fills_from_store() -> object | None:
-    """Try to load today's fills from the trading-engine Postgres store.
+    """Load today's fills in the lifecycle reconciliation column contract.
 
-    Returns a pandas DataFrame in the lifecycle reconciliation column
-    contract, or None when the store is unreachable / empty (the normal
-    state until live paper trading is running with the docker stack up).
+    Sources, in order:
+
+    1. The pairs live-runner fill stream (``logs/pairs_paper/fills.jsonl``,
+       written by ``tools/pairs_paper_run.py``) -- the operational source
+       once the Phase 4.10 paper pilot is running.
+    2. The trading-engine Postgres store -- still deliberately not wired
+       (the engine does not run nightly yet).
+
+    Returns a DataFrame with columns ``order_id, qty, price, fees`` or
+    ``None`` when no fills exist for today.
     """
-    try:
-        import asyncpg  # noqa: F401  -- presence check only
-    except ImportError:
-        return None
-    # The trading-engine owns the store; until it runs nightly there is
-    # nothing to reconcile. Auto-detection deliberately conservative.
+    import json
+
+    fills_path = REPO_ROOT / "logs" / "pairs_paper" / "fills.jsonl"
+    if fills_path.exists():
+        today = _dt.date.today().isoformat()
+        rows = []
+        for line in fills_path.read_text(encoding="utf-8").splitlines():
+            line = line.strip()
+            if not line:
+                continue
+            rec = json.loads(line)
+            if rec.get("date") == today:
+                rows.append(
+                    {
+                        "order_id": str(rec.get("order_id")),
+                        "qty": float(rec.get("quantity", 0.0)),
+                        "price": float(rec.get("avg_price", 0.0)),
+                        # The runner does not capture commissions yet; fees
+                        # arrive with the broker drop-copy side.
+                        "fees": 0.0,
+                    }
+                )
+        if rows:
+            import pandas as pd
+
+            return pd.DataFrame(rows)
     return None
 
 
@@ -117,10 +144,17 @@ def _run_reconciliation(out_dir: Path) -> str:
             render_reconciliation,
             run_daily_reconciliation,
         )
+        # Until an independent broker drop-copy feed is wired, the runner's
+        # own fills serve as both sides: a pipe check that exercises the
+        # full reconciliation path and starts the recalibration countdown.
         report = run_daily_reconciliation(fills, fills)
-        target.write_text(render_reconciliation(report), encoding="utf-8")
+        body = render_reconciliation(report) + (
+            "\nNOTE: broker drop-copy side not wired yet; this run "
+            "self-reconciles the pairs runner's fill stream (pipe check).\n"
+        )
+        target.write_text(body, encoding="utf-8")
         verdict = "CLEAN" if report.clean else "MISMATCHES FOUND"
-        return f"OK reconciliation.md ({verdict})"
+        return f"OK reconciliation.md ({verdict}; self-reconciliation pipe check)"
     except Exception:
         return "ERR reconciliation:\n" + traceback.format_exc()
 

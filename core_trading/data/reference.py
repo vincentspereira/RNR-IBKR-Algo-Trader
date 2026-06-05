@@ -119,9 +119,11 @@ class ReferenceData:
 # Built-in starter data (static snapshot 2026-05-28)
 # ---------------------------------------------------------------------------
 
-# GICS sectors for a subset of the SP100 starter universe. Not exhaustive --
-# enough to exercise sector-neutral pairs selection and sector-cap risk checks
-# in the Phase 4 pilot. Extend or replace with a vendor feed before scaling.
+# GICS sectors for the full SP100 starter universe (completed 2026-06-05 for
+# the Phase 4.10 live paper pilot: the pre-trade sector-cap gate lumps any
+# unmapped symbol into UNKNOWN, so partial coverage would trip the gate).
+# Static snapshot at GICS sector level; replace with a vendor feed before
+# scaling beyond SP100.
 _STARTER_SECTORS: dict[str, tuple[str, str]] = {
     "AAPL": ("Information Technology", "Technology Hardware"),
     "MSFT": ("Information Technology", "Software"),
@@ -180,6 +182,51 @@ _STARTER_SECTORS: dict[str, tuple[str, str]] = {
     "SO": ("Utilities", "Electric Utilities"),
     "AMT": ("Real Estate", "REITs"),
     "SPG": ("Real Estate", "REITs"),
+    # --- completion of the SP100 snapshot (2026-06-05) ---
+    "ACN": ("Information Technology", "IT Consulting & Services"),
+    "AIG": ("Financials", "Multi-line Insurance"),
+    "AMD": ("Information Technology", "Semiconductors"),
+    "AMGN": ("Health Care", "Biotechnology"),
+    "BK": ("Financials", "Asset Management & Custody Banks"),
+    "BMY": ("Health Care", "Pharmaceuticals"),
+    "BRK-B": ("Financials", "Multi-Sector Holdings"),
+    "CHTR": ("Communication Services", "Cable & Satellite"),
+    "CL": ("Consumer Staples", "Household Products"),
+    "CMCSA": ("Communication Services", "Cable & Satellite"),
+    "COF": ("Financials", "Consumer Finance"),
+    "CSCO": ("Information Technology", "Communications Equipment"),
+    "CVS": ("Health Care", "Health Care Services"),
+    "DE": ("Industrials", "Agricultural & Farm Machinery"),
+    "DHR": ("Health Care", "Life Sciences Tools"),
+    "DOW": ("Materials", "Commodity Chemicals"),
+    "EMR": ("Industrials", "Electrical Components & Equipment"),
+    "EXC": ("Utilities", "Electric Utilities"),
+    "F": ("Consumer Discretionary", "Automobiles"),
+    "FDX": ("Industrials", "Air Freight & Logistics"),
+    "GD": ("Industrials", "Aerospace & Defense"),
+    "GILD": ("Health Care", "Biotechnology"),
+    "GM": ("Consumer Discretionary", "Automobiles"),
+    "IBM": ("Information Technology", "IT Consulting & Services"),
+    "INTC": ("Information Technology", "Semiconductors"),
+    "KHC": ("Consumer Staples", "Packaged Foods"),
+    "LMT": ("Industrials", "Aerospace & Defense"),
+    "MDLZ": ("Consumer Staples", "Packaged Foods"),
+    "MDT": ("Health Care", "Health Care Equipment"),
+    "MET": ("Financials", "Life & Health Insurance"),
+    "MMM": ("Industrials", "Industrial Conglomerates"),
+    "MO": ("Consumer Staples", "Tobacco"),
+    "PM": ("Consumer Staples", "Tobacco"),
+    "PYPL": ("Financials", "Payments"),
+    "QCOM": ("Information Technology", "Semiconductors"),
+    "RTX": ("Industrials", "Aerospace & Defense"),
+    "SBUX": ("Consumer Discretionary", "Restaurants"),
+    "SCHW": ("Financials", "Capital Markets"),
+    "TGT": ("Consumer Staples", "Food Retail"),
+    "TMUS": ("Communication Services", "Telecom"),
+    "TXN": ("Information Technology", "Semiconductors"),
+    "UNP": ("Industrials", "Railroads"),
+    "USB": ("Financials", "Banks"),
+    "WBA": ("Consumer Staples", "Drug Retail"),
 }
 
 _STARTER_SYMBOL_CHANGES: list[SymbolChange] = [

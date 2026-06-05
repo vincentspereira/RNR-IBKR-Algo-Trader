@@ -110,6 +110,17 @@ class TestRiskLimits:
         with pytest.raises((AttributeError, TypeError)):
             lim.per_pair_cap = 0.99  # type: ignore[misc]
 
+    def test_sector_check_min_gross_defaults_to_zero(self) -> None:
+        assert RiskLimits().sector_check_min_gross == 0.0
+
+    def test_sector_check_min_gross_zero_allowed(self) -> None:
+        # Unlike the hard limits, the materiality floor may legitimately be 0.
+        assert RiskLimits(sector_check_min_gross=0.0).sector_check_min_gross == 0.0
+
+    def test_sector_check_min_gross_negative_raises(self) -> None:
+        with pytest.raises(ValueError, match="sector_check_min_gross"):
+            RiskLimits(sector_check_min_gross=-0.1)
+
 
 # ---------------------------------------------------------------------------
 # RiskCheck
@@ -235,6 +246,29 @@ class TestPreTrade:
         sector_viols = [v for v in chk.violations if "TECH" in v]
         assert len(sector_viols) == 1
         assert not chk.passed
+
+    def test_sector_check_skipped_below_materiality_floor(self) -> None:
+        # Same fully-concentrated book, but gross (0.025) sits below the
+        # materiality floor: the first pair to enter is always ~100% of a
+        # tiny gross, which is not a meaningful concentration signal.
+        mgr = PairsRiskManager(
+            RiskLimits(per_pair_cap=0.02, sector_check_min_gross=0.25)
+        )
+        weights = {"A": 0.01, "B": 0.01, "C": 0.005}
+        sectors = {"A": "TECH", "B": "TECH", "C": "TECH"}
+        chk = mgr.pre_trade(weights, sectors=sectors)
+        assert chk.passed
+
+    def test_sector_check_applies_at_or_above_materiality_floor(self) -> None:
+        mgr = PairsRiskManager(
+            RiskLimits(per_pair_cap=0.20, sector_check_min_gross=0.25)
+        )
+        # Gross 0.30 >= floor 0.25 and TECH is 100% of it: violation.
+        weights = {"A": 0.15, "B": -0.15}
+        sectors = {"A": "TECH", "B": "TECH"}
+        chk = mgr.pre_trade(weights, sectors=sectors)
+        assert not chk.passed
+        assert any("TECH" in v for v in chk.violations)
 
     def test_sector_within_cap_passes(self) -> None:
         # TECH gets 20% of gross, FINANCE gets 80% -- still over sector_cap for FINANCE
