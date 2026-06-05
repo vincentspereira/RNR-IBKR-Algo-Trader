@@ -171,10 +171,19 @@ def _build_runner_parts(args: argparse.Namespace):
     #   selection instead.
     # Walk-forward 2025-06..2026-06 (IBKR 2Y daily, frictionless marks):
     # Sharpe -0.03 +/- 0.07, max DD 1.7%, mean gross 18%, 0 incidents --
-    # operationally clean, NO demonstrated edge. The 90-day clock is HELD
-    # pending a research pass on longer history (operator decision
-    # 2026-06-05); do not register the scheduler until that pass pins a
-    # positive-edge config and updates --backtest-sharpe.
+    # operationally clean, NO demonstrated edge.
+    #
+    # RESEARCH PASS 2026-06-05 (tools/pairs_research_pass.py, 2005-2026
+    # yfinance dailies, 24-config grid, net of costs; full record at
+    # docs/PAIRS_RESEARCH_PASS_2026-06.md): VERDICT REJECT. The best grid
+    # config (z30/e1.5/x0.5/p20/sector, full-period net Sharpe 0.73) fails
+    # the Deflated Sharpe gate, and its era breakdown shows why: Sharpe
+    # 1.97 in 2006-2010 decaying monotonically to -0.36 in 2021-2026 --
+    # the documented death of large-cap distance pairs, not noise. This
+    # pilot config's own 20-year Sharpe is 0.18. The 90-day clock stays
+    # HELD for this strategy family; do not register the scheduler. A
+    # restart requires a different universe or signal family, not more
+    # grid search on this one.
     from core_trading.portfolio.pairs_portfolio import PortfolioConfig
 
     strategy_config = PairsTradingConfig(
@@ -416,8 +425,9 @@ def main(argv: list[str] | None = None) -> int:
         type=float,
         default=0.0,
         help="validated backtest Sharpe for the promotion gate. 0.0 is the "
-        "honest 2025-06..2026-06 walk-forward estimate (-0.03 +/- 0.07); "
-        "re-pin from the research pass before relying on the gate",
+        "honest estimate: the 2026-06-05 long-history research pass "
+        "REJECTED this strategy family (see docs/PAIRS_RESEARCH_PASS_"
+        "2026-06.md); recent-era edge is negative",
     )
     args = parser.parse_args(argv)
 

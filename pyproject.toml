@@ -189,6 +189,8 @@ module = [
     "hmmlearn.*",
     "sklearn",
     "sklearn.*",
+    "yfinance",
+    "yfinance.*",
 ]
 ignore_missing_imports = true
 
