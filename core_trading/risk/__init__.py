@@ -14,6 +14,10 @@ Phase 7 builds out the full risk stack:
   fallback and CCC forward covariance for Phase 6 / VaR consumption (7.6).
 - ``correlation_regime`` -- rolling correlations, spectral market mode,
   absorption ratio, Marchenko-Pastur noise floor, regime-shift alerts (7.9).
+- ``dcc_garch`` -- two-stage DCC-GARCH (Engle 2002): univariate GARCH margins
+  plus a dynamic conditional-correlation recursion, the time-varying-correlation
+  upgrade path for ``vol_forecast`` CCC covariance and ``correlation_regime``
+  timing (deferred Phase 5.A item).
 - ``stress`` -- historical / hypothetical / reverse stress testing with a
   built-in scenario library and daily report generator (7.5).
 - ``copulas`` -- Gaussian, Student-t, and C/D-vine copulas with tail
@@ -90,6 +94,14 @@ from core_trading.risk.daily_report import (
     VaRSection,
     generate_daily_risk_report,
     render_daily_risk_report_markdown,
+)
+from core_trading.risk.dcc_garch import (
+    DCCConfig,
+    DCCResult,
+    dcc_correlation_series,
+    dcc_forecast_correlation,
+    dcc_forward_covariance,
+    fit_dcc,
 )
 from core_trading.risk.liquidity import (
     AssetLiquidityResult,
@@ -223,6 +235,13 @@ __all__ = [
     "frobenius_distance",
     "market_mode_rotation",
     "detect_regime_alerts",
+    # DCC-GARCH (Engle 2002; deferred Phase 5.A)
+    "DCCConfig",
+    "DCCResult",
+    "fit_dcc",
+    "dcc_forecast_correlation",
+    "dcc_forward_covariance",
+    "dcc_correlation_series",
     # 7.5 stress testing
     "FactorShock",
     "HistoricalScenario",

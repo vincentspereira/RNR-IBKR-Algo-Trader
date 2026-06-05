@@ -1,7 +1,7 @@
 """Test suite for library modules."""
 
-import sys
 import os
+import sys
 
 # Add project root to path
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '../../')))
@@ -13,19 +13,19 @@ from uuid import uuid4
 # Import from libs if available
 try:
     from libs.common.events.base import (
-        BaseEvent,
-        MarketDataEvent,
-        TradingEvent,
-        RiskEvent,
-        FundamentalEvent,
         AIEvent,
-        SystemEvent,
+        BaseEvent,
+        FundamentalDataUpdatedEvent,
+        FundamentalEvent,
+        MarketDataEvent,
         OrderCreatedEvent,
         OrderFilledEvent,
         PositionOpenedEvent,
+        RiskEvent,
+        RiskLimitBreachedEvent,
         SignalGeneratedEvent,
-        FundamentalDataUpdatedEvent,
-        RiskLimitBreachedEvent
+        SystemEvent,
+        TradingEvent,
     )
     LIBS_AVAILABLE = True
 except ImportError:
@@ -251,6 +251,7 @@ class TestJSONSerializer(unittest.TestCase):
 
     def test_deserialize_event(self):
         import json
+
         from libs.common.events.serializers import JSONSerializer
         data = json.dumps({
             "symbol": "AAPL",
@@ -272,14 +273,18 @@ class TestJSONSerializer(unittest.TestCase):
         self.assertEqual(deserialized.symbol, event.symbol)
         self.assertEqual(deserialized.exchange, event.exchange)
 
-    def test_avro_serializer_not_implemented(self):
+    def test_avro_serializer_requires_registered_schema(self):
+        """AvroSerializer is Schema-Registry-backed: serialize/deserialize raise
+        KeyError until a schema is registered for the event class via
+        register_schema(). The current signatures take (event, topic) and
+        (data, event_class, topic) -- there is no schema_id parameter."""
         from libs.common.events.serializers import AvroSerializer
         serializer = AvroSerializer(schema_registry_url="http://localhost:8081")
         event = MarketDataEvent(symbol="AAPL", exchange="SMART")
-        with self.assertRaises(NotImplementedError):
-            serializer.serialize(event, schema_id=1)
-        with self.assertRaises(NotImplementedError):
-            serializer.deserialize(b"data", MarketDataEvent)
+        with self.assertRaises(KeyError):
+            serializer.serialize(event, "market-data-topic")
+        with self.assertRaises(KeyError):
+            serializer.deserialize(b"data", MarketDataEvent, "market-data-topic")
 
 
 if __name__ == '__main__':

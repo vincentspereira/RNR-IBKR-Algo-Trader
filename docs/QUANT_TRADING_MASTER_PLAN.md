@@ -1232,6 +1232,12 @@ jump-diffusion).
 
 **Deferred within 5.A:** DCC-GARCH (multivariate time-varying correlation) -- the
 univariate GARCH family shipped in Batch 1; DCC is a later multivariate add-on.
+*(CLOSED 2026-06-05: shipped as `core_trading/risk/dcc_garch.py` alongside the
+Phase 9 work -- Engle (2002) two-stage QMLE on top of the same
+`signals/volatility/garch.py` univariate machinery, with h-step correlation
+forecasts and a PSD-guaranteed forward covariance that drop-in upgrades
+`risk/vol_forecast.py`'s CCC covariance. 55 tests, 100% coverage, parameter
+recovery a=0.041/0.051 vs true 0.05, b=0.892/0.898 vs true 0.90.)*
 Remaining Phase 5 batches (5.C factor models, 5.D ML, 5.E microstructure, 5.F
 alt-data) follow the same cadence and retire the corresponding legacy commented
 shells as they land.
@@ -1785,8 +1791,11 @@ each factor (decimal equity/USD returns, VIX points, rate percentage
 points, credit bps) — mixing unit scales inflates scenario P&L by orders
 of magnitude.
 
-Open follow-ons (not Phase 7 gaps): DCC-GARCH (deferred from 5.A) would
-upgrade both `vol_forecast` covariance and `correlation_regime` timing;
+Open follow-ons (not Phase 7 gaps): ~~DCC-GARCH (deferred from 5.A) would
+upgrade both `vol_forecast` covariance and `correlation_regime` timing~~
+(CLOSED 2026-06-05: `risk/dcc_garch.py` shipped -- `dcc_forward_covariance`
+is the documented drop-in upgrade for the CCC covariance, and
+`dcc_correlation_series` feeds correlation_regime-style monitoring);
 operator wiring of `daily_report` into cron/Task Scheduler; live
 `PortfolioState` feed for the pre-trade gate (currently caller-supplied,
 by design).
