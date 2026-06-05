@@ -1651,6 +1651,13 @@ Black-Litterman views in the research loop; DCC-GARCH correlation timing
 
 ### Phase 7 — Risk Management Layer
 
+**Status: Phase 7 COMPLETE (2026-06-05).** All ten sub-phases shipped in five
+batches (commits 0beb763, 07f76a3, 4ac1f7c, e768f44, + Batch 5) plus the
+daily risk report generator `risk/daily_report.py` (DOD). 923 tests in
+`tests/risk/`, 100% coverage on every module in `core_trading/risk/`, every
+module's mathematical reference cited, all five DOD items closed — see
+"Phase 7 closing status" below.
+
 **Duration:** 2–3 months (overlaps Phase 5–6)
 
 Risk management is what makes quant work, not signal quality. Treat this phase as load-bearing.
@@ -1727,11 +1734,62 @@ Risk management is what makes quant work, not signal quality. Treat this phase a
 
 #### Definition of Done — Phase 7
 
-- [ ] All risk modules implemented and tested
-- [ ] VaR backtest (Kupiec) passes for the pilot strategy
-- [ ] Stress test report auto-generated daily
-- [ ] Circuit breakers fire correctly in simulation
-- [ ] Pre-trade risk gate integrated with execution layer
+- [x] All risk modules implemented and tested
+      (10/10 sub-phases: 13 modules in `core_trading/risk/`, 923 tests,
+      100% coverage per module, ruff + mypy-strict clean)
+- [x] VaR backtest (Kupiec) passes for the pilot strategy
+      (`tests/risk/test_phase7_dod.py`: Phase 4 pairs vertical replayed via
+      `PairsPaperTrader`, expanding-window no-lookahead historical VaR on
+      190 active days; Kupiec POF p=0.27, Christoffersen IND p=0.17 /
+      CC p=0.21 — all pass at 5%)
+- [x] Stress test report auto-generated daily
+      (`risk/daily_report.py`: VaR/ES + all six historical scenarios +
+      hypothetical shocks + liquidity sections, ASCII markdown renderer;
+      `python -m core_trading.risk.daily_report --demo|--output <path>`;
+      cron/Task Scheduler wiring is an operator item)
+- [x] Circuit breakers fire correctly in simulation
+      (`tests/risk/test_circuit_breakers.py`: deterministic equity replays —
+      10% strategy pause, 15%/25% graduated de-risk/halt at exact bars,
+      3% intraday halt with next-session auto-reset, sticky HALT until
+      `manual_reset`, cooldown re-arm, no false fires on grinding-up curves,
+      combined three-breaker replay)
+- [x] Pre-trade risk gate integrated with execution layer
+      (`risk/pretrade.py` `gate_pair_order` decomposes a Phase 4
+      `PairOrder` into legs + combined exposure; integration test shows a
+      passing order filling through `PairExecutor` and a blocked order —
+      restricted symbol / kill switch — never reaching the executor)
+
+#### Phase 7 closing status (2026-06-05)
+
+Shipped (one module = math reference + parameter-recovery tests + 100%
+coverage + ruff/mypy-strict clean, same bar as Phases 5–6):
+
+| Module | Highlights |
+| ------ | ---------- |
+| `var.py` (7.3) | parametric (normal + Cornish-Fisher), historical, Monte Carlo Student-t/normal VaR; 95/99, 1d/10d; Kupiec POF + Christoffersen IND/CC LR backtests |
+| `cvar.py` (7.4) | Acerbi-Tasche historical ES, analytic normal/Student-t ES (MFE eq. 2.27), MC ES, Rockafellar-Uryasev linearization (complements `robust_opt`), Acerbi-Szekely Z2 backtest, ES-subadditivity-vs-VaR demo |
+| `vol_forecast.py` (7.6) | GJR-GARCH-default multi-step forecasts over `signals/volatility/garch.py`, RiskMetrics EWMA fallback (recorded, never silent), CCC forward covariance (PSD-guaranteed) for Phase 6 / VaR |
+| `correlation_regime.py` (7.9) | rolling correlations, market-mode eigenvalue share, Kritzman absorption ratio + shift indicator, Marchenko-Pastur noise floor, z-scored regime alerts (mean-corr / AR / Frobenius / eigenvector rotation) |
+| `copulas.py` (7.7) | Gaussian + Student-t copulas (tau inversion, profile-MLE nu), C-vine/D-vine with Gaussian/t pairs (Aas et al. 2009), analytic + empirical tail dependence, PIT utilities; no external copulas pkg |
+| `stress.py` (7.5) | six historical scenario shocks as data (GFC/flash-crash/CNY/Q4-18/COVID/2022), replay + factor-beta application, hypothetical shocks, Studer reverse stress (closed form, SLSQP-verified) + numeric fallback, report builder + ASCII renderer |
+| `position_risk.py` (7.2) | absolute/ATR(Wilder)/vol stops, HWM trailing stops, Euler component VaR (sums to 1e-12), BSM greeks (parity + finite-difference verified), position snapshots |
+| `liquidity.py` (7.10) | days-to-liquidate at ADV participation cap with schedules, BDSS exogenous LVaR + square-root-impact endogenous add-on, spreads-triple stress with capital evaporation |
+| `pretrade.py` (7.1) | six-check gate (ADV 10%, NAV 5%, gross/net exposure, Reg-T margin, restricted list, kill switch), all failures reported, machine-readable reasons, `PairOrder` execution adapter |
+| `circuit_breakers.py` (7.8) | replayable state machine (NORMAL/PAUSED/DERISKED/HALTED/HALT_NEW_ORDERS), conservative configurable re-arm (recovery + cooldown), sticky 25% halt with `manual_reset`, audit events |
+| `daily_report.py` (DOD) | composed VaR/ES/stress/liquidity daily report + CLI (`--demo`, `--output`) |
+
+Conventions pinned during the phase: positive-loss sign throughout
+(consistent with `pairs_risk.py`); strict `>` firing / strict `<` re-arm
+boundary semantics pinned by tests; stress betas are per *natural unit* of
+each factor (decimal equity/USD returns, VIX points, rate percentage
+points, credit bps) — mixing unit scales inflates scenario P&L by orders
+of magnitude.
+
+Open follow-ons (not Phase 7 gaps): DCC-GARCH (deferred from 5.A) would
+upgrade both `vol_forecast` covariance and `correlation_regime` timing;
+operator wiring of `daily_report` into cron/Task Scheduler; live
+`PortfolioState` feed for the pre-trade gate (currently caller-supplied,
+by design).
 
 ---
 

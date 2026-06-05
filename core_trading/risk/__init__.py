@@ -22,7 +22,28 @@ Phase 7 builds out the full risk stack:
   component VaR (Euler), BSM option greeks, position snapshots (7.2).
 - ``liquidity`` -- days-to-liquidate, BDSS liquidity-adjusted VaR with
   square-root impact add-on, spread-stress reports (7.10).
+- ``pretrade`` -- universal six-check pre-trade gate (liquidity,
+  concentration, exposure, margin, restricted list, kill switch) with the
+  PairOrder execution-layer adapter (7.1).
+- ``circuit_breakers`` -- strategy / portfolio / daily-loss drawdown
+  breakers as a replayable state machine with audit events (7.8).
+- ``daily_report`` -- daily risk report generator (VaR / ES / stress /
+  liquidity sections) with CLI entry (DOD).
+
+Note: ``pretrade.DEFAULT_CONFIG`` and ``circuit_breakers.DEFAULT_CONFIG``
+are re-exported here as ``DEFAULT_GATE_CONFIG`` / ``DEFAULT_BREAKER_CONFIG``
+to avoid the name collision.
 """
+from core_trading.risk.circuit_breakers import (
+    DEFAULT_CONFIG as DEFAULT_BREAKER_CONFIG,
+)
+from core_trading.risk.circuit_breakers import (
+    BreakerConfig,
+    BreakerEvent,
+    BreakerState,
+    BreakerType,
+    CircuitBreakerEngine,
+)
 from core_trading.risk.copulas import (
     CopulaFitResult,
     CVineCopula,
@@ -59,6 +80,16 @@ from core_trading.risk.cvar import (
     parametric_es,
     portfolio_es,
     ru_linearization,
+)
+from core_trading.risk.daily_report import (
+    DailyRiskConfig,
+    DailyRiskReport,
+    ESSection,
+    LiquiditySection,
+    StressSection,
+    VaRSection,
+    generate_daily_risk_report,
+    render_daily_risk_report_markdown,
 )
 from core_trading.risk.liquidity import (
     AssetLiquidityResult,
@@ -97,6 +128,20 @@ from core_trading.risk.position_risk import (
     trailing_stop,
     volatility_stop,
     wilder_atr,
+)
+from core_trading.risk.pretrade import (
+    DEFAULT_CONFIG as DEFAULT_GATE_CONFIG,
+)
+from core_trading.risk.pretrade import (
+    AssetClass,
+    CheckDetail,
+    GateConfig,
+    PairGateResult,
+    PortfolioState,
+    PreTradeDecision,
+    PreTradeGate,
+    ProposedOrder,
+    gate_pair_order,
 )
 from core_trading.risk.stress import (
     HISTORICAL_SCENARIOS,
@@ -230,4 +275,31 @@ __all__ = [
     "liquidity_adjusted_var",
     "stress_liquidity",
     "render_liquidity_stress_markdown",
+    # 7.1 pre-trade gate
+    "AssetClass",
+    "ProposedOrder",
+    "PortfolioState",
+    "GateConfig",
+    "DEFAULT_GATE_CONFIG",
+    "CheckDetail",
+    "PreTradeDecision",
+    "PreTradeGate",
+    "PairGateResult",
+    "gate_pair_order",
+    # 7.8 circuit breakers
+    "BreakerState",
+    "BreakerType",
+    "BreakerEvent",
+    "BreakerConfig",
+    "DEFAULT_BREAKER_CONFIG",
+    "CircuitBreakerEngine",
+    # daily risk report (DOD)
+    "DailyRiskConfig",
+    "VaRSection",
+    "ESSection",
+    "StressSection",
+    "LiquiditySection",
+    "DailyRiskReport",
+    "generate_daily_risk_report",
+    "render_daily_risk_report_markdown",
 ]
