@@ -18,6 +18,10 @@ Phase 7 builds out the full risk stack:
   built-in scenario library and daily report generator (7.5).
 - ``copulas`` -- Gaussian, Student-t, and C/D-vine copulas with tail
   dependence coefficients and PIT utilities (7.7).
+- ``position_risk`` -- stop-losses (absolute / ATR / vol), trailing stops,
+  component VaR (Euler), BSM option greeks, position snapshots (7.2).
+- ``liquidity`` -- days-to-liquidate, BDSS liquidity-adjusted VaR with
+  square-root impact add-on, spread-stress reports (7.10).
 """
 from core_trading.risk.copulas import (
     CopulaFitResult,
@@ -56,12 +60,43 @@ from core_trading.risk.cvar import (
     portfolio_es,
     ru_linearization,
 )
+from core_trading.risk.liquidity import (
+    AssetLiquidityResult,
+    LiquidationSchedule,
+    LiquidityConfig,
+    LiquidityStressReport,
+    LVaRResult,
+    PortfolioLiquidityResult,
+    days_to_liquidate,
+    liquidity_adjusted_var,
+    render_liquidity_stress_markdown,
+    stress_liquidity,
+)
 from core_trading.risk.pairs_risk import (
     DEFAULT_LIMITS,
     DivergenceAlert,
     PairsRiskManager,
     RiskCheck,
     RiskLimits,
+)
+from core_trading.risk.position_risk import (
+    ComponentVaRResult,
+    GreeksResult,
+    PositionGreeksResult,
+    PositionRiskSnapshot,
+    StopHitResult,
+    StopLevel,
+    TrailingStopResult,
+    absolute_stop,
+    atr_stop,
+    bsm_greeks,
+    build_snapshot,
+    check_stop_hit,
+    component_var,
+    position_greeks,
+    trailing_stop,
+    volatility_stop,
+    wilder_atr,
 )
 from core_trading.risk.stress import (
     HISTORICAL_SCENARIOS,
@@ -166,4 +201,33 @@ __all__ = [
     "tail_dependence_gaussian",
     "tail_dependence_student_t",
     "tail_dependence_empirical",
+    # 7.2 position-level risk
+    "StopLevel",
+    "StopHitResult",
+    "TrailingStopResult",
+    "ComponentVaRResult",
+    "GreeksResult",
+    "PositionGreeksResult",
+    "PositionRiskSnapshot",
+    "absolute_stop",
+    "atr_stop",
+    "volatility_stop",
+    "check_stop_hit",
+    "wilder_atr",
+    "trailing_stop",
+    "component_var",
+    "bsm_greeks",
+    "position_greeks",
+    "build_snapshot",
+    # 7.10 liquidity risk
+    "LiquidityConfig",
+    "LiquidationSchedule",
+    "AssetLiquidityResult",
+    "PortfolioLiquidityResult",
+    "LVaRResult",
+    "LiquidityStressReport",
+    "days_to_liquidate",
+    "liquidity_adjusted_var",
+    "stress_liquidity",
+    "render_liquidity_stress_markdown",
 ]
