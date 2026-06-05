@@ -1,94 +1,16 @@
-import os
+"""Volume-weighted strategies package (post-retirement stub).
 
-# from .base_vw_strategy import ()
-# from .vw_breakout_strategies import ()
-# from .vw_mean_reversion_strategies import ()
-# from .vw_momentum_strategies import ()
-# from .vw_multi_factor_strategies import ()
-# from .vw_trend_following_strategies import ()
-"Custom Volume-Weighted Trading Strategies Module."
-# "
-# This module contains institutional-grade trading strategies that utilize
-# the 39 custom volume-weighted indicators implementing the 5-pillar architecture.
-# "
-# The strategies are organized into the following categories:
-# - Volume-Weighted Trend Following Strategies
-# - Volume-Weighted Mean Reversion Strategies
-# - Volume-Weighted Momentum Strategies
-# - Volume-Weighted Breakout Strategies
-# - Volume-Weighted Multi-Factor Strategies
-# "
-# All strategies follow the institutional-grade architecture with:
-# 1. Volume Integration & Confirmation
-# 2. Market Regime Adaptation
-# 3. Smart Money Detection
-# 4. Behavioral Overlay
-# 5. Risk Management Integration"
-# "
-# "
-#     BaseVWStrategy,
-#     VWSignalConfidence,
-#     VWStrategyConfig,
-#     VWStrategyType,
-# )
-# "
-# Volume-Weighted Breakout Strategies
-#     VWBreakoutStrategy,
-#     VWChannelBreakoutStrategy,
-#     VWVolatilityBreakoutStrategy,
-# )
-# "
-# Volume-Weighted Mean Reversion Strategies
-#     VWBollingerMeanReversionStrategy,
-#     VWMeanReversionStrategy,
-#     VWRSIMeanReversionStrategy,
-# )
-# "
-# Volume-Weighted Momentum Strategies
-#     VWBreakoutMomentumStrategy,
-#     VWMACDMomentumStrategy,
-#     VWMomentumStrategy,
-# )
-# "
-# Volume-Weighted Multi-Factor Strategies
-#     VWCompositeSignalStrategy,
-#     VWMultiFactorStrategy,
-#     VWRegimeAdaptiveStrategy,
-#     create_vw_multi_factor_config,
-# )
-# "
-# Volume-Weighted Trend Following Strategies
-#     VWDualMovingAverageStrategy,
-#     VWTrendFollowingStrategy,
-#     VWTrendMomentumStrategy,
-# )
-# "
-# __all__ = [
-    # Base classes"
-# "BaseVWStrategy","
-# "VWStrategyConfig","
-# "VWStrategyType","
-#     "VWSignalConfidence",
-    # Volume-Weighted Trend Following Strategies"
-# "VWTrendFollowingStrategy","
-# "VWDualMovingAverageStrategy","
-#     "VWTrendMomentumStrategy",
-    # Volume-Weighted Mean Reversion Strategies"
-# "VWMeanReversionStrategy","
-# os.getenv("SECRET_VALUE", "),"
-#     "VWRSIMeanReversionStrategy",
-    # Volume-Weighted Momentum Strategies"
-# "VWMomentumStrategy","
-# "VWMACDMomentumStrategy","
-#     "VWBreakoutMomentumStrategy",
-    # Volume-Weighted Breakout Strategies"
-# "VWBreakoutStrategy","
-# "VWVolatilityBreakoutStrategy","
-#     "VWChannelBreakoutStrategy",
-    # Volume-Weighted Multi-Factor Strategies"
-# "VWMultiFactorStrategy","
-# "VWCompositeSignalStrategy","
-# "VWRegimeAdaptiveStrategy","
-#     "create_vw_multi_factor_config",
-# ]
-# "
+The superseded classical skeletons (base_vw_strategy.py,
+vw_breakout_strategies.py, vw_momentum_strategies.py,
+vw_multi_factor_strategies.py) were archived on 2026-06-05 to
+.archive/2026-06-05_strategy_retirement/ per master plan C.2, and
+vw_trend_following_strategies.py followed once its clean rewrite landed
+as :mod:`core_trading.strategies.classical.volume_weighted_trend`.
+
+Retained here as a rewrite-reference SOURCE until its Tier-2 classical
+rewrite lands (import directly, no eager re-export):
+- vw_mean_reversion_strategies.py (target:
+  strategies/classical/volume_weighted_mean_reversion.py)
+"""
+
+__all__: list[str] = []

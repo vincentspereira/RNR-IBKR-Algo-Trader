@@ -25,6 +25,12 @@ Adapters
 * :mod:`~core_trading.research.signal_adapters.ml_tree_signal` -- random-forest
   directional out-of-fold signal, sparse CUSUM events mapped to a dense held
   position via de Prado ``avgActiveSignals`` (single-asset).
+* :mod:`~core_trading.research.signal_adapters.classical_breakout` --
+  Crabel-class volatility breakout (squeeze + volume confirmation)
+  classical strategy (single-asset, full OHLCV).
+* :mod:`~core_trading.research.signal_adapters.classical_vw_trend` --
+  volume-weighted EMA/MACD trend following with ADX gate
+  classical strategy (single-asset, full OHLCV).
 
 The single-asset adapters compute the expensive look-ahead-free signal path once
 in a ``build_*_weight_fn`` factory, then sweep a cheap threshold grid so each
@@ -38,6 +44,17 @@ or by their submodule path.
 """
 from __future__ import annotations
 
+from core_trading.research.signal_adapters.classical_breakout import (
+    breakout_grid,
+    build_breakout_weight_fn,
+    evaluate_breakout,
+    ohlcv_panel,
+)
+from core_trading.research.signal_adapters.classical_vw_trend import (
+    build_vw_trend_weight_fn,
+    evaluate_vw_trend,
+    vw_trend_grid,
+)
 from core_trading.research.signal_adapters.cross_sectional_momentum import (
     build_momentum_weight_fn,
     momentum_grid,
@@ -93,4 +110,13 @@ __all__ = [
     "event_positions_to_weights",
     "build_ml_signal_weight_fn",
     "ml_signal_grid",
+    # classical volatility breakout (single-asset, OHLCV) adapter
+    "ohlcv_panel",
+    "build_breakout_weight_fn",
+    "breakout_grid",
+    "evaluate_breakout",
+    # classical volume-weighted trend (single-asset, OHLCV) adapter
+    "build_vw_trend_weight_fn",
+    "vw_trend_grid",
+    "evaluate_vw_trend",
 ]
