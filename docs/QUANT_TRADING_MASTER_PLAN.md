@@ -2085,10 +2085,10 @@ The buildable surface is SHIPPED (Phase 10 stays "ongoing" by design):
 | 10.4 chaos tests | tests/chaos/, 16 fault injections (dup fills, partial-then-cancel, post-terminal fills, rejects, connect/place failures, stalled data) — all degrade gracefully |
 | 10.5 benchmarks | tools/benchmarks.py: vectorised backtest 205k bars/s; event-driven 717 bars/s; AC trajectory 24k calls/s |
 
-KNOWN HOT-PATH ISSUES surfaced by 10.5 (open, pre-live items):
-1. `execution/adverse_selection.vpin` ~14 s/call on 5k points —
-   needs vectorisation before any intraday/per-bar use.
-2. Event-driven backtest ~300x slower than vectorised (scalar
+KNOWN HOT-PATH ISSUES surfaced by 10.5 (pre-live items):
+1. FIXED 2026-06-05 (cba68b9): `execution/adverse_selection.vpin`
+   vectorised, 14 s -> 0.145 s/call (97x).
+2. OPEN: event-driven backtest ~300x slower than vectorised (scalar
    `.loc[ts, sym]` lookups in the bars x symbols loop in
    `backtest/engine.run_event_driven`) — fine for daily pilots,
    painful for sweeps; optimise when event-driven sweeps are needed.
@@ -2157,6 +2157,23 @@ Per strategy:
 - [ ] Decision (promote / reject / extend) signed off
 - [ ] Attribution report archived
 
+#### Phase 11 build-out status (2026-06-05)
+
+The buildable surface is SHIPPED; the per-strategy DOD items above are
+operational (they consume calendar days, not code):
+
+| Item | Delivered |
+| ---- | --------- |
+| 11.1 paper infrastructure | `ops/pairs_live_runner.py` + `tools/pairs_paper_run.py`, TWS-validated (bf656b4); generic across strategies via the Strategy seam |
+| 11.2 daily monitoring | daily reports Task-Scheduler job + `ops/divergence.py` |
+| 11.3 promotion criteria | encoded in `RunnerConfig` / `evaluate_promotion` |
+| 11.4 attribution | `ops/attribution.py` -- factor (OLS, alpha, R^2), strategy (additive), trade (realised+unrealised), cost (bps of notional); 82 tests |
+
+NOTE: Phase 11 currently has NO occupant -- the pairs pilot was
+REJECTED by the long-history research pass (docs/PAIRS_RESEARCH_PASS_
+2026-06.md). The whole-house validation sweep
+(`tools/strategy_research_sweep.py`) selects the next candidate.
+
 ---
 
 ### Phase 12 — Live Trading
@@ -2220,6 +2237,17 @@ Ongoing:
 - [ ] No unreconciled positions at EOD
 - [ ] Monthly performance report generated
 
+#### Phase 12 build-out status (2026-06-05)
+
+Buildable surface shipped ahead of need (Phase 12 itself is gated on a
+strategy surviving Phase 11):
+
+| Item | Delivered |
+| ---- | --------- |
+| 12.5 reconciliation | `ops/reconciliation.py` -- position (per-symbol, one-sided detection), fill (order-id then (symbol,side,qty) fallback, bps price tolerance), cash (abs+rel tolerance); CLEAN/MISMATCH verdict with incident strings; 98 tests |
+| 12.6 tax (partial) | wash-sale flagging in `ops/reconciliation.py` (61-day window, proportional replacement); tax-lot accounting already in `backtest/costs.py` TaxLotBook (FIFO/LIFO/HIFO) |
+| 12.3/12.4 runbooks + daily ops | `tools/daily_ops.py` + runner kill-switch/incident flow; formal runbook docs remain an operator item |
+
 ---
 
 ### Phase 13 — Continuous Research & Improvement
@@ -2256,6 +2284,15 @@ Ongoing:
 - Maintained as a separate `RESEARCH_BACKLOG.md`
 - Prioritised by: expected edge × ease of implementation
 - Rejected ideas archived with reason (so we don't re-explore them)
+
+#### Phase 13 build-out status (2026-06-05)
+
+| Item | Delivered |
+| ---- | --------- |
+| 13.1 decay monitoring | `research/signal_decay.py` -- rolling/expanding Sharpe, decay gap vs pinned backtest Sharpe, HEALTHY/WARN/RETIRE verdicts (retire on rolling Sharpe < 0 for 60 consecutive days); 115 tests |
+| 13.3 strategy pipeline | exercised twice: pairs research pass (REJECT, docs/PAIRS_RESEARCH_PASS_2026-06.md) + whole-house sweep (`tools/strategy_research_sweep.py`) |
+| 13.4 retraining cadence | declarative `RetrainPolicy` registry + `due_for_retrain` in `research/signal_decay.py`; scheduler wiring is an operator item |
+| 13.2 crowding | NOT BUILT -- data-gated (13F/crowding indices need a data source decision) |
 
 ---
 
