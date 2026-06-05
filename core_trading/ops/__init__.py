@@ -20,26 +20,6 @@ Phase 12.5 adds daily broker-vs-internal reconciliation: position, fill, and
 cash reconciliation sections with configurable tolerances, incident strings,
 and an ASCII renderer.  Phase 12.6 adds wash-sale tracking.
 """
-from core_trading.ops.reconciliation import (
-    BuyEvent,
-    CashReconciliationResult,
-    FillMatchRecord,
-    FillReconciliationResult,
-    PositionRecord,
-    PositionReconciliationResult,
-    ReconciliationConfig,
-    ReconciliationReport,
-    ReconciliationStatus,
-    SaleEvent,
-    WashSaleFlag,
-    WashSaleReport,
-    build_reconciliation_report,
-    flag_wash_sales,
-    reconcile_cash,
-    reconcile_fills,
-    reconcile_positions,
-    render_reconciliation_report,
-)
 from core_trading.ops.attribution import (
     AttributionConfig,
     CostAttributionResult,
@@ -67,6 +47,26 @@ from core_trading.ops.pairs_paper_trading import (
     PairsPaperTrader,
     PaperConfig,
     PromotionDecision,
+)
+from core_trading.ops.reconciliation import (
+    BuyEvent,
+    CashReconciliationResult,
+    FillMatchRecord,
+    FillReconciliationResult,
+    PositionReconciliationResult,
+    PositionRecord,
+    ReconciliationConfig,
+    ReconciliationReport,
+    ReconciliationStatus,
+    SaleEvent,
+    WashSaleFlag,
+    WashSaleReport,
+    build_reconciliation_report,
+    flag_wash_sales,
+    reconcile_cash,
+    reconcile_fills,
+    reconcile_positions,
+    render_reconciliation_report,
 )
 
 __all__ = [
