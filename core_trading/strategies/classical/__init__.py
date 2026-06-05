@@ -14,6 +14,9 @@ volatility_breakout:
 volume_weighted_trend:
     Volume-weighted EMA crossover confirmed by a volume-weighted MACD and
     filtered by a Wilder ADX trend-strength gate.
+vw_mean_reversion:
+    Volume-weighted mean-reversion: VWMA z-score entry on deep deviation with
+    volume confirmation, exit on reversion inside a tighter z-score band.
 
 Conventions
 -----------
@@ -35,6 +38,13 @@ from core_trading.strategies.classical.volume_weighted_trend import (
     vw_trend_signal,
     vw_trend_weights,
 )
+from core_trading.strategies.classical.vw_mean_reversion import (
+    VWMeanReversionConfig,
+    volume_surge_mask,
+    vw_mean_reversion_signal,
+    vw_mean_reversion_weights,
+    vwma_zscore,
+)
 
 __all__ = [
     "BreakoutConfig",
@@ -43,4 +53,9 @@ __all__ = [
     "VWTrendConfig",
     "vw_trend_signal",
     "vw_trend_weights",
+    "VWMeanReversionConfig",
+    "vwma_zscore",
+    "volume_surge_mask",
+    "vw_mean_reversion_signal",
+    "vw_mean_reversion_weights",
 ]

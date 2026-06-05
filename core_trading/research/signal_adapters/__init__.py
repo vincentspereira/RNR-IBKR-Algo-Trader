@@ -31,6 +31,9 @@ Adapters
 * :mod:`~core_trading.research.signal_adapters.classical_vw_trend` --
   volume-weighted EMA/MACD trend following with ADX gate
   classical strategy (single-asset, full OHLCV).
+* :mod:`~core_trading.research.signal_adapters.vw_mean_reversion` --
+  volume-weighted VWMA z-score mean reversion with volume confirmation
+  classical strategy (single-asset, close/volume).
 
 The single-asset adapters compute the expensive look-ahead-free signal path once
 in a ``build_*_weight_fn`` factory, then sweep a cheap threshold grid so each
@@ -84,6 +87,11 @@ from core_trading.research.signal_adapters.trend import (
     trend_positions,
     trend_slope_series,
 )
+from core_trading.research.signal_adapters.vw_mean_reversion import (
+    build_vw_mr_weight_fn,
+    evaluate_vw_mr,
+    vw_mr_grid,
+)
 
 __all__ = [
     # trend (local-linear-trend) adapter
@@ -119,4 +127,8 @@ __all__ = [
     "build_vw_trend_weight_fn",
     "vw_trend_grid",
     "evaluate_vw_trend",
+    # classical VW mean-reversion (single-asset, close/volume) adapter
+    "build_vw_mr_weight_fn",
+    "vw_mr_grid",
+    "evaluate_vw_mr",
 ]
