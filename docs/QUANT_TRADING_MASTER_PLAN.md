@@ -1834,10 +1834,58 @@ by design).
 
 #### Definition of Done — Phase 8
 
-- [ ] All sizing methods implemented and unit-tested with known examples
-- [ ] Backtest comparison: same signal under different sizing methods
-- [ ] Drawdown circuit logic verified in simulation
-- [ ] Live capital allocation tied to Phase 6 multi-strategy allocator
+- [x] All sizing methods implemented and unit-tested with known examples
+      (`money/sizing.py`: fractional Kelly, vol targeting, per-position
+      cap, fixed fractional, fixed dollar, naive risk-parity sizing,
+      Optimal f (Vince 1990, TWR grid search, hand-verified interior
+      optimum f*=0.25 for trades [+2, -1]); `money/leverage.py`:
+      gross/net/per-asset-class caps + dynamic delever;
+      `money/turnover.py`: monthly turnover cap, cost-alpha budget,
+      edge > 2x cost filter — all with hand-computed known-value tests)
+- [x] Backtest comparison: same signal under different sizing methods
+      (`tests/money/test_phase8_dod.py`: one seeded signal on a 750-bar
+      vol-regime-change path under 5 sizing methods, no lookahead;
+      vol-targeting realises 10.2% ann. vol in the 3%/day regime vs
+      24% for constant weight; quarter-Kelly max DD 0.68 <= full-Kelly
+      1.00; five distinct equity curves, all finite)
+- [x] Drawdown circuit logic verified in simulation
+      (`money/drawdown_management.py` continuous ladder — complements
+      the discrete Phase 7 breakers; seeded crash-and-recovery replays
+      in `test_drawdown_management.py` + `test_phase8_dod.py`: each
+      rung visited, vol-of-vol halving, exposure restored only at a
+      new high-water mark)
+- [x] Live capital allocation tied to Phase 6 multi-strategy allocator
+      (`money/capital_allocation.py` `allocate_live_capital` overlays
+      the lifecycle — research -> paper -> small live ($5K fixed) ->
+      scaled live — on real `allocate_strategies` output; integration
+      tests call the actual Phase 6 allocator; promotion needs 30 clean
+      days AND live Sharpe within 30% of paper; decommission on live
+      Sharpe < 0 for 60 days or paper Sharpe degraded > 50%)
+
+#### Phase 8 closing status (2026-06-05)
+
+COMPLETE — 5/5 sub-phases, 330 tests in `tests/money/`, 100% line
+coverage on every module in `core_trading/money/`, ruff + mypy
+(package mode) + `-W error` clean, same bar as Phases 5–7.
+
+| Module | Highlights |
+| ------ | ---------- |
+| `sizing.py` (8.1) | fractional Kelly, vol targeting, per-position cap (three-way conservative min), fixed fractional (stop-distance NAV risk), fixed dollar, naive risk-parity sizing (defers covariance version to `portfolio/risk_parity.py`), Optimal f with fractional variant |
+| `leverage.py` (8.2) | gross/net/per-asset-class gross caps with proportional scale-down + binding-constraint report; compounding drawdown/high-vol delever factors (positive-loss convention) |
+| `capital_allocation.py` (8.3) | strategy lifecycle state machine with machine-readable HOLD/PROMOTE/SCALE_UP/DECOMMISSION decisions (observed vs limit); live-capital overlay on the Phase 6 allocator |
+| `drawdown_management.py` (8.4) | continuous exposure ladder by DD depth, vol-of-vol halving (vol rising AND DD growing), new-HWM re-leverage hysteresis; complements discrete Phase 7 breakers |
+| `turnover.py` (8.5) | one-sided turnover (sum|dw|/2), rolling monthly cap with budget-aware proportional rebalance scaling, cost <= 30% of gross alpha budget, edge > 2x cost filter (scalar + vectorised) |
+
+Conventions pinned: weights are signed NAV fractions; drawdowns
+positive-loss (matches Phase 7); turnover one-sided; direction owned
+by the signal layer, magnitude by `money/`.
+
+Known environment issue (pre-existing, not Phase 8): `pytest --cov`
+runs abort because the root `tests/conftest.py` imports
+`services/risk-manager` -> scipy, which trips a numpy 2.x sentinel
+corruption under coverage tracing. Coverage figures were obtained via
+the coverage API / isolated rootdir. The canonical `--no-cov -W error`
+gate is unaffected.
 
 ---
 

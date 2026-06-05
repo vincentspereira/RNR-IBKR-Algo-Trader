@@ -16,6 +16,17 @@ Direction (long/short) is supplied by the caller (the trading signal), not
 inferred from the Kelly sign, because the signal layer owns conviction while
 this layer owns *how much*.
 
+Phase 8.1 adds four further standalone sizing rules that map a trade idea to a
+concrete share/unit count or weight without the three-way Kelly/vol/cap blend:
+
+4. Fixed-fractional risk -- risk a fixed fraction of NAV per trade based on the
+   entry-to-stop distance (the classic stop-loss money-management rule).
+5. Fixed-dollar -- allocate a fixed dollar amount per trade.
+6. Naive risk parity -- inverse-volatility weights normalised to a total risk
+   budget (a covariance-free sizing heuristic; the full covariance-based
+   optimiser lives in :mod:`core_trading.portfolio.risk_parity`).
+7. Optimal f -- Ralph Vince's terminal-wealth-maximising fixed fraction.
+
 All routines are pure NumPy/pandas -- no external optimisation libraries.
 """
 from __future__ import annotations
@@ -34,6 +45,10 @@ __all__ = [
     "vol_target_weight",
     "size_position",
     "scale_to_budget",
+    "fixed_fractional",
+    "fixed_dollar",
+    "risk_parity_size",
+    "optimal_f",
 ]
 
 
@@ -350,3 +365,293 @@ def scale_to_budget(
         return dict(weights)
     scale = gross_budget / gross
     return {k: v * scale for k, v in weights.items()}
+
+
+# ---------------------------------------------------------------------------
+# Phase 8.1 standalone sizing rules
+# ---------------------------------------------------------------------------
+
+
+def fixed_fractional(
+    nav: float,
+    risk_fraction: float,
+    entry_price: float,
+    stop_price: float,
+) -> float:
+    """Return the position size that risks a fixed fraction of NAV per trade.
+
+    This is the classic stop-based money-management rule (sometimes called the
+    *percent-risk* or *fixed-fractional* model; see Tharp (2008), *Trade Your
+    Way to Financial Freedom*, ch. 14).  The dollar amount put at risk is
+
+        risk_dollars = nav * risk_fraction
+
+    and the per-unit risk is the distance from entry to the protective stop
+
+        per_unit_risk = abs(entry_price - stop_price)
+
+    so the number of units to trade is
+
+        units = risk_dollars / per_unit_risk
+
+    Unit convention
+    ---------------
+    The return value is an **unsigned position size in shares/units** (not a
+    weight).  Direction (long vs short) is owned by the signal layer, exactly
+    as in :func:`size_position`; the entry/stop ordering does not encode it.
+    To convert to a fraction-of-NAV weight, multiply by ``entry_price`` and
+    divide by ``nav``::
+
+        weight = units * entry_price / nav
+
+    Parameters
+    ----------
+    nav:
+        Portfolio net asset value (must be positive).
+    risk_fraction:
+        Fraction of NAV to risk on the trade, in ``(0, 1]`` (e.g. ``0.01`` for
+        the conventional 1%-risk rule).
+    entry_price:
+        Anticipated entry price (must be positive).
+    stop_price:
+        Protective stop price.  Must differ from ``entry_price`` so the
+        entry-to-stop distance is non-zero.
+
+    Returns
+    -------
+    float
+        Unsigned position size in shares/units.
+
+    Raises
+    ------
+    ValueError
+        If ``nav`` or ``entry_price`` is non-positive, ``risk_fraction`` is
+        outside ``(0, 1]``, or ``entry_price == stop_price`` (zero stop
+        distance, which would imply an infinite size).
+    """
+    if nav <= 0:
+        raise ValueError(f"nav must be positive; got {nav}")
+    if not (0 < risk_fraction <= 1):
+        raise ValueError(
+            f"risk_fraction must be in (0, 1]; got {risk_fraction}"
+        )
+    if entry_price <= 0:
+        raise ValueError(f"entry_price must be positive; got {entry_price}")
+    per_unit_risk = abs(entry_price - stop_price)
+    if per_unit_risk == 0.0:
+        raise ValueError(
+            "entry_price and stop_price must differ (zero stop distance "
+            "implies infinite size)"
+        )
+    risk_dollars = nav * risk_fraction
+    return risk_dollars / per_unit_risk
+
+
+def fixed_dollar(dollar_amount: float, price: float) -> float:
+    """Return the number of units for a fixed dollar allocation per trade.
+
+    The simplest possible sizing rule: allocate a constant cash amount to the
+    trade regardless of volatility or edge::
+
+        units = dollar_amount / price
+
+    The result is an unsigned position size in shares/units; direction is
+    supplied by the signal layer, as elsewhere in this module.
+
+    Parameters
+    ----------
+    dollar_amount:
+        Cash to allocate to the position (must be positive).
+    price:
+        Per-unit price (must be positive).
+
+    Returns
+    -------
+    float
+        Unsigned position size in shares/units.
+
+    Raises
+    ------
+    ValueError
+        If ``dollar_amount`` or ``price`` is non-positive.
+    """
+    if dollar_amount <= 0:
+        raise ValueError(
+            f"dollar_amount must be positive; got {dollar_amount}"
+        )
+    if price <= 0:
+        raise ValueError(f"price must be positive; got {price}")
+    return dollar_amount / price
+
+
+def risk_parity_size(
+    vol_estimates: Mapping[str, float],
+    total_risk_budget: float,
+) -> dict[str, float]:
+    """Return naive (inverse-volatility) risk-parity weights for sizing.
+
+    This is the *covariance-free* risk-parity heuristic: each position is
+    sized inversely to its own standalone volatility so that, ignoring
+    correlations, every position contributes an equal amount of risk.  Raw
+    weights ``1 / vol_i`` are normalised so that the sum of risk contributions
+    equals the requested budget::
+
+        raw_i      = 1 / vol_i
+        risk_i     = raw_i * vol_i = 1                  (constant per position)
+        scale      = total_risk_budget / sum_j(raw_j * vol_j)
+                   = total_risk_budget / N
+        weight_i   = scale * raw_i
+
+    so that ``sum_i (weight_i * vol_i) == total_risk_budget`` exactly.
+
+    This is deliberately a *standalone sizing* heuristic.  The full
+    covariance-based equal-risk-contribution optimiser (Spinu 2013;
+    Griveau-Billion, Richard & Roncalli 2013) lives in
+    :func:`core_trading.portfolio.risk_parity` and should be preferred when a
+    covariance matrix is available; this function is for the common case where
+    only per-asset volatilities are known.
+
+    Parameters
+    ----------
+    vol_estimates:
+        Mapping of identifier to a strictly positive volatility estimate (same
+        units for every asset, e.g. annualised return standard deviation).
+    total_risk_budget:
+        Target total risk, i.e. the value of ``sum_i(weight_i * vol_i)`` after
+        normalisation (must be positive).
+
+    Returns
+    -------
+    dict[str, float]
+        Mapping of identifier to its (positive) inverse-vol weight.  An empty
+        input yields an empty mapping.
+
+    Raises
+    ------
+    ValueError
+        If ``total_risk_budget`` is non-positive or any volatility estimate is
+        non-positive.
+    """
+    if total_risk_budget <= 0:
+        raise ValueError(
+            f"total_risk_budget must be positive; got {total_risk_budget}"
+        )
+    if not vol_estimates:
+        return {}
+    for key, vol in vol_estimates.items():
+        if vol <= 0:
+            raise ValueError(
+                f"volatility estimate for {key!r} must be positive; got {vol}"
+            )
+    raw = {k: 1.0 / v for k, v in vol_estimates.items()}
+    # sum of risk contributions of the raw (un-normalised) weights:
+    # raw_i * vol_i == 1 for every asset, so this equals N.
+    risk_sum = sum(raw[k] * vol_estimates[k] for k in vol_estimates)
+    scale = total_risk_budget / risk_sum
+    return {k: scale * raw[k] for k in raw}
+
+
+def optimal_f(
+    returns: Sequence[float] | pd.Series,
+    *,
+    max_f: float = 1.0,
+    grid: int = 1000,
+    fraction: float = 1.0,
+) -> float:
+    """Return Ralph Vince's Optimal f via a deterministic grid search.
+
+    Optimal f is the fixed fraction of capital that maximises the terminal
+    wealth relative (TWR) of a sequence of holding-period returns, where risk
+    is normalised by the single largest losing trade.  Following Vince (1990),
+    *Portfolio Management Formulas*, define the biggest loss
+
+        biggest_loss = min_t(r_t)           (the most negative trade)
+
+    which is negative whenever any losing trade exists.  For a candidate
+    fraction ``f`` the holding-period return relative of trade ``t`` is
+
+        HPR_t(f) = 1 + f * (-r_t / biggest_loss)
+
+    so a winning trade (``r_t > 0``) gives ``HPR > 1`` and the worst losing
+    trade gives exactly ``HPR = 1 - f`` (it reaches ``0`` at ``f = 1``).
+
+    and the terminal wealth relative is the product over all trades
+
+        TWR(f) = prod_t HPR_t(f).
+
+    Optimal f is ``argmax_f TWR(f)`` searched over a uniform grid of ``grid``
+    points in ``(0, max_f]``.  Because every HPR factor must stay positive,
+    the natural upper bound on a usable ``f`` is 1 (at ``f = 1`` the
+    worst-loss trade contributes exactly ``HPR = 0`` and bankrupts the
+    account), which is why ``max_f`` defaults to 1.0.
+
+    Undefined case
+    --------------
+    Optimal f is undefined when there are **no losing trades**: with
+    ``biggest_loss >= 0`` the normalisation is ill-posed and any fraction
+    increases wealth without bound.  In that case this function returns
+    ``0.0`` (size nothing) rather than raising, so callers can treat "no
+    losers in the sample" as "insufficient information to size".
+
+    Fractional optimal f
+    ---------------------
+    Just as fractional Kelly scales the full-Kelly bet, the ``fraction``
+    parameter scales the grid-optimal ``f`` (e.g. ``fraction=0.5`` for
+    half-optimal-f), trading geometric growth for a smoother equity curve.
+
+    Parameters
+    ----------
+    returns:
+        Sequence of per-trade returns (decimal fractions; a 2% gain is
+        ``0.02``).  NaN and Inf are excluded before the search.
+    max_f:
+        Upper bound of the search grid, in ``(0, 1]``.
+    grid:
+        Number of grid points across ``(0, max_f]`` (must be positive).  The
+        grid is ``max_f * k / grid`` for ``k = 1 .. grid`` so the endpoint
+        ``max_f`` is always evaluated and ``f = 0`` is excluded.
+    fraction:
+        Multiplier applied to the grid-optimal ``f``, in ``(0, 1]``.
+
+    Returns
+    -------
+    float
+        ``fraction * f_opt`` where ``f_opt`` maximises TWR on the grid; or
+        ``0.0`` when no losing trades are present.
+
+    Raises
+    ------
+    ValueError
+        If ``max_f`` is outside ``(0, 1]``, ``grid`` is non-positive, or
+        ``fraction`` is outside ``(0, 1]``.
+    """
+    if not (0 < max_f <= 1):
+        raise ValueError(f"max_f must be in (0, 1]; got {max_f}")
+    if grid <= 0:
+        raise ValueError(f"grid must be positive; got {grid}")
+    if not (0 < fraction <= 1):
+        raise ValueError(f"fraction must be in (0, 1]; got {fraction}")
+
+    arr = np.asarray(returns, dtype=float).ravel()
+    finite = arr[np.isfinite(arr)]
+    if finite.size == 0:
+        return 0.0
+
+    biggest_loss = float(finite.min())
+    if biggest_loss >= 0.0:
+        # No losing trades -> Optimal f undefined; size nothing.
+        return 0.0
+
+    # Candidate fractions: max_f * k / grid for k = 1..grid (excludes 0,
+    # includes max_f).  Shape (grid,).
+    f_grid = max_f * (np.arange(1, grid + 1, dtype=float) / grid)
+    # HPR matrix: rows = candidate f, cols = trades.  (grid, n_trades)
+    # biggest_loss is negative, so a winning trade maps to a positive multiple.
+    normalised = -finite / biggest_loss  # (n_trades,)
+    hpr = 1.0 + np.outer(f_grid, normalised)
+    # Guard against non-positive HPR (bankruptcy): such an f gives TWR <= 0,
+    # which can never be the maximiser, so clip the product contribution.
+    twr = np.prod(hpr, axis=1)
+    best_idx = int(np.argmax(twr))
+    f_opt = float(f_grid[best_idx])
+    return fraction * f_opt
