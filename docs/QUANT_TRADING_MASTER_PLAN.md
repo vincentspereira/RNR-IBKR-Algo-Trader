@@ -2060,9 +2060,51 @@ brokers are added).
 
 Ongoing gates:
 
-- [ ] Every PR ships green tests + coverage report
-- [ ] Strategy promotion requires fresh statistical robustness report
+- [ ] Every PR ships green tests + coverage report (tooling in place:
+      property/regression/chaos suites + golden hashes; CI wiring is
+      an operator item)
+- [x] Strategy promotion requires fresh statistical robustness report
+      (`research/robustness_report.py` battery: bootstrap Sharpe CI,
+      DSR>=0.95, PBO<=0.5, White RC p<=0.10, CPCV OOS distribution;
+      PROMOTE/REJECT/INSUFFICIENT_DATA verdict + `--demo` CLI)
 - [ ] Daily ops dashboard shows live-vs-backtest divergence
+      (`ops/divergence.py` comparator + z>2 alert shipped; the daily
+      live feed + shadow backtest wiring activates with paper trading
+      via the nightly Task Scheduler job)
+
+#### Phase 10 build-out status (2026-06-05)
+
+The buildable surface is SHIPPED (Phase 10 stays "ongoing" by design):
+
+| Item | Delivered |
+| ---- | --------- |
+| 10.1 property tests | 16 Hypothesis invariant tests (tests/property/): budget/leverage caps, turnover>=0, drawdown in [0,1), schedules sum-to-total, VPIN in [0,1], BVC volume conservation, VaR sign — no production violations found |
+| 10.1 regression hashes | 3 seeded canonical backtests sha256-pinned in tests/regression/golden_hashes.json; --regen path for intentional changes; cross-process stability proven |
+| 10.2 robustness battery | research/robustness_report.py, 44 tests, 100% cov; skilled fixture PROMOTES (DSR 0.978), best-of-60-noise REJECTS |
+| 10.3 divergence | ops/divergence.py, 40 tests, 100% cov; trailing-window-excluding-today z-score, strict >2.0 alert |
+| 10.4 chaos tests | tests/chaos/, 16 fault injections (dup fills, partial-then-cancel, post-terminal fills, rejects, connect/place failures, stalled data) — all degrade gracefully |
+| 10.5 benchmarks | tools/benchmarks.py: vectorised backtest 205k bars/s; event-driven 717 bars/s; AC trajectory 24k calls/s |
+
+KNOWN HOT-PATH ISSUES surfaced by 10.5 (open, pre-live items):
+1. `execution/adverse_selection.vpin` ~14 s/call on 5k points —
+   needs vectorisation before any intraday/per-bar use.
+2. Event-driven backtest ~300x slower than vectorised (scalar
+   `.loc[ts, sym]` lookups in the bars x symbols loop in
+   `backtest/engine.run_event_driven`) — fine for daily pilots,
+   painful for sweeps; optimise when event-driven sweeps are needed.
+
+Strategy retirement + classical batch 1 also landed 2026-06-05
+(master plan C.2): 73 legacy files archived after 4-agent triage
+(zero active importers, zero new test failures, no-stubs 135 -> 28),
+and the first two classical rewrites shipped gate-PROMOTED:
+`strategies/classical/volatility_breakout.py` (Crabel squeeze +
+volume-confirmed band breakout) and `volume_weighted_trend.py`
+(VW-EMA/VW-MACD + Wilder ADX gate), 81 tests, 100% cov. Remaining
+extraction backlog (unique logic kept in place): microstructure
+scalping signals (order flow, latency, stat-arb half-life), IV/RV
+vol arbitrage, index tracking, HMM/GMM regime detection + MC stress,
+signal filtering/aggregation, ML feature selection + RL env, perf
+caching utilities, VW mean reversion (Tier-2 rewrite).
 
 ---
 
