@@ -7,10 +7,10 @@ simple data classes to avoid circular imports with the main execution engine.
 
 import asyncio
 import logging
-import uuid
+from collections.abc import Callable
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
-from typing import Any, Callable, Dict, List, Optional, Set, Tuple
+from datetime import UTC, datetime
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
@@ -28,10 +28,10 @@ class AlgoOrder:
     side: str  # "buy" or "sell"
     quantity: float
     order_type: str = "market"
-    price: Optional[float] = None
-    stop_price: Optional[float] = None
-    strategy_id: Optional[str] = None
-    metadata: Dict[str, Any] = field(default_factory=dict)
+    price: float | None = None
+    stop_price: float | None = None
+    strategy_id: str | None = None
+    metadata: dict[str, Any] = field(default_factory=dict)
 
 
 @dataclass
@@ -44,9 +44,9 @@ class SliceResult:
     quantity: float
     price: float
     status: str  # "filled", "rejected", "pending"
-    timestamp: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
+    timestamp: datetime = field(default_factory=lambda: datetime.now(UTC))
     commission: float = 0.0
-    metadata: Dict[str, Any] = field(default_factory=dict)
+    metadata: dict[str, Any] = field(default_factory=dict)
 
 
 @dataclass
@@ -58,13 +58,13 @@ class AlgoOrderResult:
     total_quantity: float
     executed_quantity: float
     average_price: float
-    slices: List[SliceResult]
+    slices: list[SliceResult]
     start_time: datetime
-    end_time: Optional[datetime] = None
+    end_time: datetime | None = None
     status: str = "pending"  # "pending", "executing", "completed", "failed", "cancelled"
     total_commission: float = 0.0
     slippage: float = 0.0
-    metadata: Dict[str, Any] = field(default_factory=dict)
+    metadata: dict[str, Any] = field(default_factory=dict)
 
 
 @dataclass
@@ -76,7 +76,7 @@ class VolumeProfile:
     approximately 1.0.
     """
 
-    intervals: Dict[str, float]  # time_label -> volume_fraction (should sum to ~1.0)
+    intervals: dict[str, float]  # time_label -> volume_fraction (should sum to ~1.0)
     total_expected_volume: float = 1000000.0
 
 
@@ -105,15 +105,15 @@ class TWAPExecutor:
 
     def __init__(
         self,
-        execution_callback: Optional[Callable] = None,
-        event_bus=None,
-        config: Optional[AlgoConfig] = None,
+        execution_callback: Callable | None = None,
+        event_bus: Any = None,
+        config: AlgoConfig | None = None,
     ):
         self._execute_callback = execution_callback
         self._event_bus = event_bus
         self._config = config or AlgoConfig()
-        self._active_orders: Dict[str, AlgoOrderResult] = {}
-        self._cancelled: Set[str] = set()
+        self._active_orders: dict[str, AlgoOrderResult] = {}
+        self._cancelled: set[str] = set()
         self._logger = logging.getLogger(__name__)
 
     async def execute_twap(
@@ -153,7 +153,7 @@ class TWAPExecutor:
             executed_quantity=0.0,
             average_price=0.0,
             slices=[],
-            start_time=datetime.now(timezone.utc),
+            start_time=datetime.now(UTC),
             status="executing",
             metadata={
                 "duration_minutes": duration_minutes,
@@ -173,7 +173,7 @@ class TWAPExecutor:
                 # Check for cancellation before each slice.
                 if order.order_id in self._cancelled:
                     result.status = "cancelled"
-                    result.end_time = datetime.now(timezone.utc)
+                    result.end_time = datetime.now(UTC)
                     self._cancelled.discard(order.order_id)
                     self._logger.info(
                         "TWAP cancelled after slice %d/%d for order %s",
@@ -245,7 +245,7 @@ class TWAPExecutor:
                     )
 
             result.status = "completed"
-            result.end_time = datetime.now(timezone.utc)
+            result.end_time = datetime.now(UTC)
 
             await self._notify_event("twap_completed", {
                 "order_id": order.order_id,
@@ -256,7 +256,7 @@ class TWAPExecutor:
 
         except Exception:
             result.status = "failed"
-            result.end_time = datetime.now(timezone.utc)
+            result.end_time = datetime.now(UTC)
             self._logger.exception(
                 "TWAP execution failed for order %s", order.order_id,
             )
@@ -278,7 +278,7 @@ class TWAPExecutor:
             return True
         return False
 
-    def get_active_orders(self) -> List[AlgoOrderResult]:
+    def get_active_orders(self) -> list[AlgoOrderResult]:
         """Get currently executing TWAP orders."""
         return list(self._active_orders.values())
 
@@ -298,14 +298,14 @@ class TWAPExecutor:
             commission=order.quantity * price * 0.001,
         )
 
-    async def _notify_event(self, event_type: str, data: Dict[str, Any]) -> None:
+    async def _notify_event(self, event_type: str, data: dict[str, Any]) -> None:
         """Publish event to event bus if available."""
         if self._event_bus is not None and hasattr(self._event_bus, "publish"):
             try:
                 await self._event_bus.publish({
                     "type": event_type,
                     "data": data,
-                    "timestamp": datetime.now(timezone.utc).isoformat(),
+                    "timestamp": datetime.now(UTC).isoformat(),
                 })
             except Exception:
                 self._logger.warning(
@@ -326,15 +326,15 @@ class VWAPExecutor:
 
     def __init__(
         self,
-        execution_callback: Optional[Callable] = None,
-        event_bus=None,
-        config: Optional[AlgoConfig] = None,
+        execution_callback: Callable | None = None,
+        event_bus: Any = None,
+        config: AlgoConfig | None = None,
     ):
         self._execute_callback = execution_callback
         self._event_bus = event_bus
         self._config = config or AlgoConfig()
-        self._active_orders: Dict[str, AlgoOrderResult] = {}
-        self._cancelled: Set[str] = set()
+        self._active_orders: dict[str, AlgoOrderResult] = {}
+        self._cancelled: set[str] = set()
         self._logger = logging.getLogger(__name__)
 
     async def execute_vwap(
@@ -377,7 +377,7 @@ class VWAPExecutor:
             executed_quantity=0.0,
             average_price=0.0,
             slices=[],
-            start_time=datetime.now(timezone.utc),
+            start_time=datetime.now(UTC),
             status="executing",
             metadata={
                 "duration_minutes": duration_minutes,
@@ -396,7 +396,7 @@ class VWAPExecutor:
                 # Check for cancellation.
                 if order.order_id in self._cancelled:
                     result.status = "cancelled"
-                    result.end_time = datetime.now(timezone.utc)
+                    result.end_time = datetime.now(UTC)
                     self._cancelled.discard(order.order_id)
                     self._logger.info(
                         "VWAP cancelled after slice %d/%d for order %s",
@@ -470,7 +470,7 @@ class VWAPExecutor:
                     )
 
             result.status = "completed"
-            result.end_time = datetime.now(timezone.utc)
+            result.end_time = datetime.now(UTC)
 
             await self._notify_event("vwap_completed", {
                 "order_id": order.order_id,
@@ -481,7 +481,7 @@ class VWAPExecutor:
 
         except Exception:
             result.status = "failed"
-            result.end_time = datetime.now(timezone.utc)
+            result.end_time = datetime.now(UTC)
             self._logger.exception(
                 "VWAP execution failed for order %s", order.order_id,
             )
@@ -495,7 +495,7 @@ class VWAPExecutor:
         self,
         total_quantity: float,
         volume_profile: VolumeProfile,
-    ) -> List[Tuple[str, float]]:
+    ) -> list[tuple[str, float]]:
         """Calculate slice sizes based on volume distribution.
 
         Returns a list of (time_label, quantity) tuples. Ensures the total
@@ -509,7 +509,7 @@ class VWAPExecutor:
         if total_fraction == 0:
             return []
 
-        slices: List[Tuple[str, float]] = []
+        slices: list[tuple[str, float]] = []
         accumulated = 0.0
 
         sorted_intervals = sorted(intervals.items(), key=lambda x: x[0])
@@ -539,7 +539,7 @@ class VWAPExecutor:
             return True
         return False
 
-    def get_active_orders(self) -> List[AlgoOrderResult]:
+    def get_active_orders(self) -> list[AlgoOrderResult]:
         """Get currently executing VWAP orders."""
         return list(self._active_orders.values())
 
@@ -583,14 +583,14 @@ class VWAPExecutor:
             commission=order.quantity * price * 0.001,
         )
 
-    async def _notify_event(self, event_type: str, data: Dict[str, Any]) -> None:
+    async def _notify_event(self, event_type: str, data: dict[str, Any]) -> None:
         """Publish event to event bus if available."""
         if self._event_bus is not None and hasattr(self._event_bus, "publish"):
             try:
                 await self._event_bus.publish({
                     "type": event_type,
                     "data": data,
-                    "timestamp": datetime.now(timezone.utc).isoformat(),
+                    "timestamp": datetime.now(UTC).isoformat(),
                 })
             except Exception:
                 self._logger.warning(

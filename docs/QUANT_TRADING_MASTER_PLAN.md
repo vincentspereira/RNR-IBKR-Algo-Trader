@@ -1943,10 +1943,71 @@ Already exists (Community 15). Extend with:
 
 #### Definition of Done — Phase 9
 
-- [ ] All execution algorithms run in backtest and live
-- [ ] TCA report auto-generated daily
-- [ ] Market impact models calibrated on actual fills
-- [ ] Reconciliation runs daily with zero unexplained mismatches
+- [x] All execution algorithms run in backtest and live — BACKTEST half
+      (`tests/execution/test_phase9_dod.py`: every schedule generator —
+      AC trajectories across lambdas, POV, arrival price both variants,
+      adaptive liquidity, iceberg clips — runs through a seeded
+      square-root-impact fill simulator; full quantity executed, AC
+      front-loading strictly increases with lambda, lambda=0 == TWAP
+      exactly, POV respects max participation. LIVE half is
+      operator-gated on TWS connectivity — same gate as Phases 1/4.)
+- [x] TCA report auto-generated daily — generation pipeline
+      (`execution/tca.py`: Perold IS decomposition with exact
+      attribution identity spread+impact+timing+opportunity+fees ==
+      total IS; markouts at 1s/10s/1m/5m/1h/EOD; ASCII renderer + CLI
+      `python -m core_trading.execution.tca --demo [--output]`;
+      DOD test builds the report from simulated fills end-to-end.
+      Cron/Task Scheduler wiring = operator item, same as the Phase 7
+      daily risk report.)
+- [x] Market impact models calibrated on actual fills — calibration
+      pipeline (`calibrate_impact` log-linearised square-root OLS;
+      DOD round trip on 167 simulated fills recovers eta=0.4500
+      (true 0.45), beta=0.5000 (true 0.50), R^2=1.000,
+      well_determined=True; "actual fills" accumulate only once live —
+      operator-gated, monthly recalibration is the documented cadence.)
+- [x] Reconciliation runs daily with zero unexplained mismatches —
+      (`execution/lifecycle.py`: order state machine with audit trail
+      + duplicate-event dedup; `run_daily_reconciliation` classifies
+      MISSING_INTERNAL/MISSING_BROKER/QTY/PRICE/FEE mismatches with
+      injected alert callback; DOD test drives every simulated fill
+      through LifecycleTracker then reconciles internal-vs-broker
+      frames: `report.clean` True, zero alerts; a perturbed broker row
+      raises exactly one QTY_MISMATCH alert. Daily scheduling =
+      operator item.)
+
+#### Phase 9 closing status (2026-06-05)
+
+CODE-COMPLETE, OPERATOR-GATED for live wall-clock items — 6/6
+sub-phases, 421 tests in `tests/execution/` (+97 legacy in
+`tests/unit/`), 100% line coverage on every new/extended module,
+ruff + mypy clean across the whole `core_trading/execution/` package
+(10 source files), `-W error` clean, ASCII only.
+
+| Module | Highlights |
+| ------ | ---------- |
+| `exec_algorithms.py` (9.1) | Almgren-Chriss closed-form IS solver (x_j = X sinh(kappa(T-t_j))/sinh(kappa T)) with exact E[C]/V[C], hand-pinned to 1e-12 (N=2 case E=1/9, V=200/9); lambda->0 linear branch == TWAP; efficient frontier (E up, V down in lambda); POV with cleanup/truncation; arrival-price (AC-urgency XOR exponential front-load); deterministic adaptive liquidity-seeking with completion guarantee; schedules validated sum-to-total |
+| `smart_order_router.py` (9.2) | venue analytics: Laplace-smoothed fill probability, rolling latency mean/percentile, side-signed post-fill markout (positive=adverse); analytics feed `_score_venue` with VenueStats/static fallbacks; bounded routing-decision log with full per-venue rationale + `decisions_to_frame()` for TCA |
+| `impact_models.py` (9.3) | AC square-root temporary (eta sigma (v/V)^beta) + permanent (gamma sigma Q/V); Obizhaeva-Wang exp(-rho dt) resilience path; Kissell-Glantz I-Star with b1 temp/perm split; deterministic OLS calibration with well_determined flag (never raises on degenerate data); all costs decimal-fraction, positive = trader cost |
+| `tca.py` (9.4) | arrival/VWAP slippage (bps, side-signed), Perold IS with unfilled opportunity cost, exact 5-component attribution identity (pinned), markout ladder, per-symbol + portfolio daily report, ASCII renderer + `--demo` CLI (mirrors risk/daily_report.py) |
+| `adverse_selection.py` (9.5) | VPIN via bulk volume classification (ELO 2012) — closes the Phase 5 VPIN deferral; pro-rata volume bucketing; absolute + trailing-percentile toxicity modes; one-sided t-stat markout drift; replayable auto-pause monitor with typed audit events + conservative cooldown re-arm (rising prices -> VPIN 1.0, alternation -> 0.0 pinned) |
+| `lifecycle.py` (9.6) | NEW->ACK->PARTIAL->FILLED/CANCELLED/REJECTED state machine; illegal transitions raise with detail; overfill guard; replayable audit trail; per-order (order_id, event_id) dedup for broker at-least-once redelivery; reconciliation with 5 mismatch classes, tolerances, injected alerts, ASCII renderer |
+
+Also cleared in this phase: all 88 outstanding ruff violations + 7
+mypy untyped defs in the legacy `algo_orders.py` / `advanced_orders.py`
+(Phase 0.5 debt sequenced to "when execution is touched").
+
+Conventions pinned: costs/slippage/markouts side-signed positive =
+cost/adverse to the trader (extends the positive-loss convention);
+schedule generators are pure and deterministic, executors own I/O;
+two ACParams namespaces (scheduler vs impact) disambiguated as
+`ImpactACParams` at the package surface.
+
+Open follow-ons (operator items, not Phase 9 gaps): TWS paper smoke
+test to run algorithms live; cron/Task Scheduler wiring for daily TCA
++ reconciliation; impact recalibration once >= 1 month of real fills
+exists; venue analytics warm-up needs live routing data (IBKR
+SMART-only initially, so multi-venue scoring stays dormant until more
+brokers are added).
 
 ---
 

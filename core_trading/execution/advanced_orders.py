@@ -7,20 +7,20 @@ implementations with full state tracking and validation.
 import logging
 import uuid
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
-from typing import Any, Dict, List, Optional, Tuple
+from datetime import UTC, datetime
+from typing import Any
 
 
 @dataclass
 class AdvancedOrderState:
     """State tracking for advanced orders."""
     status: str = "pending"
-    created_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
-    updated_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
-    trigger_price: Optional[float] = None
-    fill_price: Optional[float] = None
+    created_at: datetime = field(default_factory=lambda: datetime.now(UTC))
+    updated_at: datetime = field(default_factory=lambda: datetime.now(UTC))
+    trigger_price: float | None = None
+    fill_price: float | None = None
     fill_quantity: float = 0.0
-    error_message: Optional[str] = None
+    error_message: str | None = None
 
 
 class TrailingStopOrder:
@@ -37,7 +37,7 @@ class TrailingStopOrder:
         side: str,
         trail_type: str = "percentage",
         trail_amount: float = 0.05,
-        event_bus=None,
+        event_bus: Any = None,
     ):
         self.order_id = uuid.uuid4().hex[:12]
         self.symbol = symbol
@@ -46,8 +46,8 @@ class TrailingStopOrder:
         self.trail_type = trail_type
         self.trail_amount = trail_amount
         self._state = AdvancedOrderState()
-        self._high_water_mark: Optional[float] = None
-        self._low_water_mark: Optional[float] = None
+        self._high_water_mark: float | None = None
+        self._low_water_mark: float | None = None
         self._event_bus = event_bus
         self._logger = logging.getLogger(__name__)
 
@@ -68,7 +68,7 @@ class TrailingStopOrder:
                 self._state.status = "triggered"
                 self._state.fill_price = current_price
                 self._state.fill_quantity = self.quantity
-                self._state.updated_at = datetime.now(timezone.utc)
+                self._state.updated_at = datetime.now(UTC)
                 return True
         else:  # buy
             trigger = self._calculate_trigger_price(self._low_water_mark)
@@ -77,10 +77,10 @@ class TrailingStopOrder:
                 self._state.status = "triggered"
                 self._state.fill_price = current_price
                 self._state.fill_quantity = self.quantity
-                self._state.updated_at = datetime.now(timezone.utc)
+                self._state.updated_at = datetime.now(UTC)
                 return True
 
-        self._state.updated_at = datetime.now(timezone.utc)
+        self._state.updated_at = datetime.now(UTC)
         return False
 
     def _calculate_trigger_price(self, reference_price: float) -> float:
@@ -92,10 +92,9 @@ class TrailingStopOrder:
 
         if self.side == "sell":
             return reference_price - offset
-        else:
-            return reference_price + offset
+        return reference_price + offset
 
-    def get_trigger_price(self) -> Optional[float]:
+    def get_trigger_price(self) -> float | None:
         """Get current trigger price."""
         if self._high_water_mark is not None and self.side == "sell":
             return self._calculate_trigger_price(self._high_water_mark)
@@ -103,10 +102,10 @@ class TrailingStopOrder:
             return self._calculate_trigger_price(self._low_water_mark)
         return None
 
-    def get_high_water_mark(self) -> Optional[float]:
+    def get_high_water_mark(self) -> float | None:
         return self._high_water_mark
 
-    def get_low_water_mark(self) -> Optional[float]:
+    def get_low_water_mark(self) -> float | None:
         return self._low_water_mark
 
     @property
@@ -117,7 +116,7 @@ class TrailingStopOrder:
         if self._state.status in ("triggered", "filled"):
             return False
         self._state.status = "cancelled"
-        self._state.updated_at = datetime.now(timezone.utc)
+        self._state.updated_at = datetime.now(UTC)
         return True
 
 
@@ -136,7 +135,7 @@ class BracketOrder:
         entry_price: float,
         take_profit_price: float,
         stop_loss_price: float,
-        event_bus=None,
+        event_bus: Any = None,
     ):
         self.order_id = uuid.uuid4().hex[:12]
         self.symbol = symbol
@@ -163,26 +162,26 @@ class BracketOrder:
             self._state.fill_quantity = fill_quantity
             self._tp_status = "active"
             self._sl_status = "active"
-            self._state.updated_at = datetime.now(timezone.utc)
+            self._state.updated_at = datetime.now(UTC)
             return "place_tp_sl"
 
-        elif order_type == "take_profit":
+        if order_type == "take_profit":
             self._tp_status = "filled"
             self._sl_status = "cancelled"
             self._state.status = "completed"
-            self._state.updated_at = datetime.now(timezone.utc)
+            self._state.updated_at = datetime.now(UTC)
             return "cancel_sl"
 
-        elif order_type == "stop_loss":
+        if order_type == "stop_loss":
             self._sl_status = "filled"
             self._tp_status = "cancelled"
             self._state.status = "completed"
-            self._state.updated_at = datetime.now(timezone.utc)
+            self._state.updated_at = datetime.now(UTC)
             return "cancel_tp"
 
         return "none"
 
-    def validate(self) -> Tuple[bool, str]:
+    def validate(self) -> tuple[bool, str]:
         """Validate bracket order parameters."""
         if self.quantity <= 0:
             return False, "Quantity must be positive"
@@ -227,7 +226,7 @@ class BracketOrder:
         self._tp_status = "cancelled"
         self._sl_status = "cancelled"
         self._state.status = "cancelled"
-        self._state.updated_at = datetime.now(timezone.utc)
+        self._state.updated_at = datetime.now(UTC)
         return True
 
 
@@ -242,7 +241,7 @@ class OCOOrder:
         order_a_price: float,
         order_b_side: str,
         order_b_price: float,
-        event_bus=None,
+        event_bus: Any = None,
     ):
         self.order_id = uuid.uuid4().hex[:12]
         self.symbol = symbol
@@ -254,7 +253,7 @@ class OCOOrder:
         self._state = AdvancedOrderState()
         self._order_a_status: str = "pending"
         self._order_b_status: str = "pending"
-        self._filled_order: Optional[str] = None
+        self._filled_order: str | None = None
         self._event_bus = event_bus
         self._logger = logging.getLogger(__name__)
 
@@ -269,15 +268,15 @@ class OCOOrder:
             self._filled_order = "a"
             self._state.fill_price = fill_price
             self._state.fill_quantity = fill_quantity
-            self._state.updated_at = datetime.now(timezone.utc)
+            self._state.updated_at = datetime.now(UTC)
             return "b"
-        elif order_leg == "b":
+        if order_leg == "b":
             self._order_b_status = "filled"
             self._order_a_status = "cancelled"
             self._filled_order = "b"
             self._state.fill_price = fill_price
             self._state.fill_quantity = fill_quantity
-            self._state.updated_at = datetime.now(timezone.utc)
+            self._state.updated_at = datetime.now(UTC)
             return "a"
 
         return "none"
@@ -291,7 +290,7 @@ class OCOOrder:
         return "pending"
 
     @property
-    def filled_order(self) -> Optional[str]:
+    def filled_order(self) -> str | None:
         return self._filled_order
 
     def cancel(self) -> bool:
@@ -300,7 +299,7 @@ class OCOOrder:
         self._order_a_status = "cancelled"
         self._order_b_status = "cancelled"
         self._state.status = "cancelled"
-        self._state.updated_at = datetime.now(timezone.utc)
+        self._state.updated_at = datetime.now(UTC)
         return True
 
 
@@ -315,8 +314,8 @@ class OTOOrder:
         parent_price: float,
         child_side: str,
         child_price: float,
-        child_quantity: Optional[float] = None,
-        event_bus=None,
+        child_quantity: float | None = None,
+        event_bus: Any = None,
     ):
         self.order_id = uuid.uuid4().hex[:12]
         self.symbol = symbol
@@ -340,13 +339,17 @@ class OTOOrder:
         self._child_status = "active"
         self._state.fill_price = fill_price
         self._state.fill_quantity = fill_quantity
-        self._state.updated_at = datetime.now(timezone.utc)
+        self._state.updated_at = datetime.now(UTC)
         return True
 
-    def process_child_fill(self, fill_price: float, fill_quantity: float) -> None:
+    def process_child_fill(
+        self,
+        fill_price: float,  # noqa: ARG002 - kept for signature symmetry with process_parent_fill
+        fill_quantity: float,  # noqa: ARG002 - kept for signature symmetry with process_parent_fill
+    ) -> None:
         """Process child order fill."""
         self._child_status = "filled"
-        self._state.updated_at = datetime.now(timezone.utc)
+        self._state.updated_at = datetime.now(UTC)
 
     @property
     def status(self) -> str:
@@ -367,7 +370,7 @@ class OTOOrder:
             self._parent_status = "cancelled"
             self._child_status = "cancelled"
         self._state.status = "cancelled"
-        self._state.updated_at = datetime.now(timezone.utc)
+        self._state.updated_at = datetime.now(UTC)
         return True
 
 
@@ -383,8 +386,8 @@ class IcebergOrder:
         total_quantity: float,
         side: str,
         visible_quantity: float,
-        price: Optional[float] = None,
-        event_bus=None,
+        price: float | None = None,
+        event_bus: Any = None,
     ):
         self.order_id = uuid.uuid4().hex[:12]
         self.symbol = symbol
@@ -397,11 +400,11 @@ class IcebergOrder:
         self._remaining_quantity: float = total_quantity
         self._current_visible: float = min(visible_quantity, total_quantity)
         self._slice_count: int = 0
-        self._fills: List[Dict[str, Any]] = []
+        self._fills: list[dict[str, Any]] = []
         self._event_bus = event_bus
         self._logger = logging.getLogger(__name__)
 
-    def process_fill(self, fill_quantity: float, fill_price: float) -> Tuple[float, bool]:
+    def process_fill(self, fill_quantity: float, fill_price: float) -> tuple[float, bool]:
         """Process a fill of the visible portion.
 
         Returns (next_visible_quantity, is_complete).
@@ -415,7 +418,7 @@ class IcebergOrder:
             "slice": self._slice_count,
             "quantity": actual_fill,
             "price": fill_price,
-            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "timestamp": datetime.now(UTC).isoformat(),
         })
 
         is_complete = self._remaining_quantity <= 0
@@ -427,7 +430,7 @@ class IcebergOrder:
             self._state.status = "active"
 
         self._state.fill_quantity = self._filled_quantity
-        self._state.updated_at = datetime.now(timezone.utc)
+        self._state.updated_at = datetime.now(UTC)
         return (self._current_visible, is_complete)
 
     def get_next_slice(self) -> float:
@@ -462,9 +465,9 @@ class IcebergOrder:
         if self._remaining_quantity <= 0:
             return False
         self._state.status = "cancelled"
-        self._state.updated_at = datetime.now(timezone.utc)
+        self._state.updated_at = datetime.now(UTC)
         return True
 
-    def get_fill_history(self) -> List[Dict[str, Any]]:
+    def get_fill_history(self) -> list[dict[str, Any]]:
         """Get history of all fills."""
         return list(self._fills)
