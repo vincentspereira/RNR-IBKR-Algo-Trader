@@ -10,6 +10,10 @@ Provides the leakage-resistant research toolkit:
   walk-forward
 * :mod:`core_trading.research.overfitting` -- Deflated Sharpe, PBO, reality
   checks, out-of-sample lockbox
+* :mod:`core_trading.research.robustness_report` -- Phase 10.2 automated
+  per-strategy robustness battery (bootstrap Sharpe CI, DSR, PBO, White RC,
+  Hansen SPA, CPCV OOS distribution) with PROMOTE/REJECT verdict + ASCII
+  report + ``--demo`` CLI; the Phase 10 strategy-promotion gate
 """
 
 from core_trading.research.cross_validation import (
@@ -38,6 +42,16 @@ from core_trading.research.reproducibility import (
     ExperimentConfig,
     mlflow_run,
     set_seeds,
+)
+from core_trading.research.robustness_report import (
+    BootstrapCIResult,
+    CPCVDistribution,
+    GateResult,
+    RobustnessConfig,
+    RobustnessReport,
+    render_robustness_report,
+    run_robustness_report,
+    stationary_bootstrap_sharpe_ci,
 )
 from core_trading.research.stat_tests import (
     HalfLifeResult,
@@ -107,4 +121,13 @@ __all__ = [
     "hansens_spa_test",
     "OutOfSampleLockbox",
     "LockboxAlreadyOpenedError",
+    # robustness report (Phase 10.2)
+    "RobustnessConfig",
+    "RobustnessReport",
+    "GateResult",
+    "BootstrapCIResult",
+    "CPCVDistribution",
+    "run_robustness_report",
+    "render_robustness_report",
+    "stationary_bootstrap_sharpe_ci",
 ]
