@@ -14,6 +14,10 @@ Provides the leakage-resistant research toolkit:
   per-strategy robustness battery (bootstrap Sharpe CI, DSR, PBO, White RC,
   Hansen SPA, CPCV OOS distribution) with PROMOTE/REJECT verdict + ASCII
   report + ``--demo`` CLI; the Phase 10 strategy-promotion gate
+* :mod:`core_trading.research.signal_decay` -- Phase 13.1+13.4 signal decay
+  monitoring (rolling/expanding Sharpe, HEALTHY/WARN/RETIRE verdicts) and
+  retraining cadence registry (RetrainPolicy, due_for_retrain) with ASCII
+  report + ``--demo`` CLI
 """
 
 from core_trading.research.cross_validation import (
@@ -52,6 +56,19 @@ from core_trading.research.robustness_report import (
     render_robustness_report,
     run_robustness_report,
     stationary_bootstrap_sharpe_ci,
+)
+from core_trading.research.signal_decay import (
+    DEFAULT_RETRAIN_POLICIES,
+    DecayConfig,
+    DecayReport,
+    RetrainPolicy,
+    RollingSharpeSeries,
+    SignalVerdict,
+    assess_signal,
+    build_decay_report,
+    compute_rolling_metrics,
+    due_for_retrain,
+    render_decay_report,
 )
 from core_trading.research.stat_tests import (
     HalfLifeResult,
@@ -130,4 +147,16 @@ __all__ = [
     "run_robustness_report",
     "render_robustness_report",
     "stationary_bootstrap_sharpe_ci",
+    # signal decay (Phase 13.1 + 13.4)
+    "DecayConfig",
+    "SignalVerdict",
+    "RollingSharpeSeries",
+    "DecayReport",
+    "RetrainPolicy",
+    "DEFAULT_RETRAIN_POLICIES",
+    "due_for_retrain",
+    "compute_rolling_metrics",
+    "assess_signal",
+    "build_decay_report",
+    "render_decay_report",
 ]
