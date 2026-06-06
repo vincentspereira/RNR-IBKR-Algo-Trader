@@ -293,14 +293,17 @@ def build_families(quick: bool) -> list[tuple[str, str, Callable[[], object]]]:
                     ),
                 )
             )
+        # lookback must be >= n_assets (~90 in late windows) for the PCA fit;
+        # 252 also matches the formation warm-up, so scores go live exactly
+        # at the first OOS bar.
         for q in (0.2, 0.4):
             entries.append(
                 (
                     "pca_statarb",
-                    f"pca5_lb60_q{q}",
+                    f"pca5_lb252_q{q}",
                     lambda qq=q: WeightRuleStrategy(
                         lambda close: build_pca_statarb_weight_fn(
-                            close, n_factors=5, lookback=60, refit_every=5
+                            close, n_factors=5, lookback=252, refit_every=5
                         ),
                         {"quantile": qq},
                     ),
@@ -464,8 +467,12 @@ def main(argv: list[str] | None = None) -> int:
 
     OUT_DIR.mkdir(parents=True, exist_ok=True)
     if not args.quick:
-        trials.to_parquet(OUT_DIR / "trials_net.parquet")
-        print(f"trial matrix saved to {OUT_DIR / 'trials_net.parquet'}")
+        # Family-restricted runs must not clobber the canonical full-bank
+        # matrix (cumulative trial accounting depends on it).
+        suffix = f"_{args.family}" if args.family else ""
+        trials_path = OUT_DIR / f"trials_net{suffix}.parquet"
+        trials.to_parquet(trials_path)
+        print(f"trial matrix saved to {trials_path}")
 
     families = family_of(entries)
     table = summary_table(trials, families)
@@ -506,18 +513,44 @@ def main(argv: list[str] | None = None) -> int:
         "",
     ]
 
+    from core_trading.research.overfitting import deflated_sharpe_ratio
+
+    def _dsr_within(candidate: pd.Series, bank: pd.DataFrame) -> float:
+        """Advisory DSR computed against a restricted trial bank.
+
+        The gate's DSR deflates against the Sharpe VARIANCE of the supplied
+        trials; in a deliberately heterogeneous multi-family sweep that
+        variance reflects genuine cross-family differences, not null noise,
+        which inflates the expected-max benchmark. This advisory number uses
+        only the candidate's own family (the actual search neighbourhood).
+        The official verdict is still computed on the FULL bank.
+        """
+        mat = bank.to_numpy(dtype=float)
+        sd = mat.std(axis=0, ddof=1)
+        ts = np.divide(
+            mat.mean(axis=0), sd, out=np.zeros(mat.shape[1], dtype=float), where=sd > 0
+        )
+        result = deflated_sharpe_ratio(
+            candidate.to_numpy(dtype=float), n_trials=bank.shape[1], trial_sharpes=ts
+        )
+        return float(result.deflated_sharpe)
+
     verdicts: list[tuple[str, str, str, float]] = []
     sections: list[str] = []
     for fam in sorted(champions):
         name = champions[fam]
         candidate = trials[name]
         report = run_robustness_report(candidate, trial_returns=trials)
+        fam_cols = [c for c in trials.columns if families.get(c) == fam]
+        dsr_fam = _dsr_within(candidate, trials[fam_cols])
         verdicts.append((fam, name, report.verdict, sharpes[name]))
         sections.extend(
             [
                 f"## Family champion: {fam} -- {name}",
                 "",
                 f"Net Sharpe {sharpes[name]:.3f} over {candidate.size} OOS days",
+                f"DSR within family ({len(fam_cols)} trials, advisory): {dsr_fam:.4f} "
+                "-- the gate's DSR below deflates against the full multi-family bank",
                 "",
                 "### Era stability (net of costs)",
                 "",
