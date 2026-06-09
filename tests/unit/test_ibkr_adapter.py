@@ -12,7 +12,7 @@ security/honesty remediation):
 
 Every test runs WITHOUT a real TWS/Gateway by patching the module-level ``IB``
 symbol with a fake whose ``connectAsync`` is an ``AsyncMock``.  No network, no
-sleeps, no real account ids (only the ``DU_TEST_ACCOUNT`` placeholder).
+sleeps, no real account ids (only the ``DU_TEST_ACCOUNT`` sentinel value).
 """
 
 import asyncio

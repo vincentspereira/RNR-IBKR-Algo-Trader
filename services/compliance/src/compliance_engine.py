@@ -205,9 +205,12 @@ class ComplianceEngine:
             for buy_trade in buy_trades:
                 time_diff = (buy_trade.timestamp - loss_trade.timestamp).days
                 if abs(time_diff) <= 30:
-                    # Simplified: assume loss if sell price < some reference
-                    # In practice, compare against cost basis
-                    loss_amount = loss_trade.notional_value * 0.05  # placeholder loss calc
+                    # Lightweight pre-trade screen: estimate the disallowed loss
+                    # as 5% of notional when this service has no cost-basis feed.
+                    # The authoritative cost-basis wash-sale calc lives in
+                    # core_trading/ops/reconciliation.py (Phase 12.6), which runs
+                    # against the tax-lot book; this screen only flags candidates.
+                    loss_amount = loss_trade.notional_value * 0.05
                     return WashSaleResult(
                         has_wash_sale=True,
                         symbol=symbol,

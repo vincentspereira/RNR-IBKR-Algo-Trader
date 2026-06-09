@@ -1,0 +1,914 @@
+import logging
+import warnings
+from abc import ABC, abstractmethod
+from dataclasses import dataclass, field
+from datetime import datetime, timedelta
+from enum import Enum
+from typing import Any, Dict, List, Optional, Tuple, Union
+from functools import lru_cache, wraps
+import asyncio
+from collections import OrderedDict
+import time
+import numpy as np
+import pandas as pd
+
+# ""Performance-Optimized Multi-Factor Model Trading Strategies"
+
+# This module provides high-performance implementations of multi-factor models with
+# significant optimizations for algorithmic complexity, memory usage, and computational
+# efficiency. Key optimizations include:
+
+# - Vectorized batch operations replacing O(n²) loops
+# - Memory-efficient data structures with bounded caches
+# - Lazy loading and deferred initialization
+# - Optimized numerical algorithms using NumPy/SciPy efficiently
+# - Caching of intermediate calculations
+
+# Author: AI Assistant
+# Date: 17 October 2025
+# Version: 2.0.0 - Performance Optimized"
+
+
+
+
+# Lazy imports for performance - only import when needed
+_IMPORTS_LOADED = {}
+_SKLEARN_AVAILABLE = None
+_SCIPY_AVAILABLE = None
+_PYPFOPT_AVAILABLE = None
+
+# def _lazy_import(module_name: str, item_name: str = None):
+#     "Lazy import with caching to improve startup time."
+#     cache_key = f"{module_name}:{item_name}" if item_name else module_name
+
+#     if cache_key in _IMPORTS_LOADED:
+#         return _IMPORTS_LOADED[cache_key]
+
+#     try:
+#         if item_name:
+#             module = __import__(module_name, fromlist=[item_name])
+#             result = getattr(module, item_name)
+#         else:
+#             result = __import__(module_name)
+
+#         _IMPORTS_LOADED[cache_key] = result
+#         return result
+#     except ImportError:
+#         return None
+
+# def _check_sklearn():
+#     "Check if sklearn is available."
+#     global _SKLEARN_AVAILABLE
+#     if _SKLEARN_AVAILABLE is None:""
+#         _SKLEARN_AVAILABLE = _lazy_import("sklearn") is not None
+#     return _SKLEARN_AVAILABLE
+
+# def _check_scipy():
+#     "Check if scipy is available."
+#     global _SCIPY_AVAILABLE
+#     if _SCIPY_AVAILABLE is None:""
+#         _SCIPY_AVAILABLE = _lazy_import("scipy") is not None
+#     return _SCIPY_AVAILABLE
+
+# def _check_pypfopt():
+#     "Check if pypfopt is available."
+#     global _PYPFOPT_AVAILABLE
+#     if _PYPFOPT_AVAILABLE is None:""
+#         _PYPFOPT_AVAILABLE = _lazy_import("pypfopt") is not None
+#     return _PYPFOPT_AVAILABLE
+# "
+warnings.filterwarnings("ignore")
+
+
+# Bounded cache implementation for memory management"
+class BoundedCache:""
+#     "LRU cache with size limits to prevent memory leaks."
+
+#     def __init__(self, max_size: int = 1000, ttl: float = 3600):
+#         self.max_size = max_size
+#         self.ttl = ttl
+#         self.cache = OrderedDict()
+#         self.timestamps = {}
+
+#     def get(self, key: str):
+#         "Get value from cache with TTL check."
+#         if key in self.cache:
+            # Check TTL
+#             if time.time() - self.timestamps[key] > self.ttl:
+#                 self._remove(key)
+#                 return None
+
+            # Move to end (LRU)
+#             value = self.cache.pop(key)
+#             self.cache[key] = value
+#             return value
+#         return None
+
+#     def put(self, key: str, value: Any):
+#         "Put value in cache with size management."
+        # Remove if exists
+#         if key in self.cache:
+#             self.cache.pop(key)
+
+        # Add to end
+#         self.cache[key] = value
+#         self.timestamps[key] = time.time()
+
+        # Size management
+#         while len(self.cache) > self.max_size:
+#             oldest_key = next(iter(self.cache))
+#             self._remove(oldest_key)
+
+#     def _remove(self, key: str):
+#         "Remove item from cache."
+#         self.cache.pop(key, None)
+#         self.timestamps.pop(key, None)
+
+#     def clear(self):
+#         "Clear cache."
+#         self.cache.clear()
+#         self.timestamps.clear()
+
+
+# Performance monitoring decorator"
+# def performance_monitor(operation_name: str):
+#     "Decorator to monitor performance of operations."
+#     def decorator(func):
+#         @wraps(func)
+#         def wrapper(*args, **kwargs):
+#             "start_time = time.time()"
+#             try:
+#                 result = func(*args, **kwargs)
+# execution_time = time.time() - start_time"
+# logging.getLogger(f"{func.__module__}.performance").debug("
+#                     f"{operation_name}: {execution_time:.4f}s"
+# )
+#                 return result
+#             except Exception as e:
+# execution_time = time.time() - start_time"
+# logging.getLogger(f"{func.__module__}.performance").error("
+#                     f"{operation_name}: Failed after {execution_time:.4f}s - {e}"
+# )
+#                 raise
+#         return wrapper
+#     return decorator
+
+
+# Vectorized math operations for performance"
+class VectorizedMath:""
+#     "Optimized vectorized mathematical operations."
+
+#     @staticmethod
+#     @lru_cache(maxsize=128)
+#     def create_design_matrix(factors: np.ndarray, add_intercept: bool = True):
+#         "Create design matrix for regression with caching."
+#         if add_intercept:
+#             return np.column_stack([np.ones(len(factors)), factors])
+#         return factors
+
+#     @staticmethod
+#     def batch_ols_regression(X: np.ndarray, y: np.ndarray):
+
+# Batch OLS regression using vectorized operations.
+
+# Returns:
+# tuple: (coefficients, r_squared, residuals)"
+
+#         try:
+            # Use numpy.linalg.lstsq for performance
+#             coeffs, residuals, rank, s = np.linalg.lstsq(X, y, rcond=None)
+
+            # Calculate R-squared
+#             y_pred = X @ coeffs
+#             ss_tot = np.sum((y - np.mean(y)) ** 2)
+#             ss_res = np.sum((y - y_pred) ** 2)
+#             r_squared = 1 - (ss_res / ss_tot) if ss_tot > 0 else 0
+
+#             return coeffs, r_squared, residuals
+
+#         except np.linalg.LinAlgError:
+            # Fallback to pseudo-inverse
+#             try:
+#                 X_pinv = np.linalg.pinv(X)
+#                 coeffs = X_pinv @ y
+#                 y_pred = X @ coeffs
+#                 ss_tot = np.sum((y - np.mean(y)) ** 2)
+#                 ss_res = np.sum((y - y_pred) ** 2)
+#                 r_squared = 1 - (ss_res / ss_tot) if ss_tot > 0 else 0
+#                 return coeffs, r_squared, np.array([0])
+# except:
+#                 return np.zeros(X.shape[1]), 0, np.array([0])
+
+
+# Optimized data structures
+# @dataclass
+class OptimizedFactorData:""
+#     "Memory-efficient factor data storage."
+
+#     returns_matrix: np.ndarray = field(default_factory=lambda: np.array([]))
+#     symbols: List[str] = field(default_factory=list)
+#     dates: pd.DatetimeIndex = field(default_factory=pd.DatetimeIndex)
+#     factor_names: List[str] = field(default_factory=list)
+
+#     def __post_init__(self):
+#         "Validate and optimize data structure."
+#         if self.returns_matrix.size > 0:
+            # Ensure proper dimensions"
+#             if len(self.symbols) != self.returns_matrix.shape[1]:""
+#                 raise ValueError("Symbol count doesn't match matrix columns")'
+#             if len(self.dates) != self.returns_matrix.shape[0]:"'"'
+#                 raise ValueError("Date count doesn't match matrix rows")'
+
+
+class OptimizedBaseFactorModel(ABC):""
+
+# Performance-optimized base class for multi-factor models.
+
+# Key optimizations:
+# - Vectorized batch operations
+# - Memory-efficient data structures
+# - Lazy loading of dependencies
+# - Caching of expensive calculations"
+
+
+#     def __init__(self, config: 'FactorConfig' = None):
+#         "Initialize optimized factor model."
+#         self.config = config or self._get_default_config()
+#         self.logger = logging.getLogger(self.__class__.__name__)
+
+        # Performance caches
+#         self._factor_returns_cache = BoundedCache(max_size=100)
+#         self._factor_exposures_cache = BoundedCache(max_size=200)
+#         self._portfolio_metrics_cache = BoundedCache(max_size=50)
+
+        # Pre-allocate data structures
+#         self._factor_data = None
+#         self._last_calculation_time = 0
+#         self._cache_ttl = 300  # 5 minutes
+
+        # Lazy initialization flags
+#         self._indicators_initialized = False
+#         self._models_initialized = False
+
+#     def _get_default_config(self):
+#         "Get default configuration when none provided."
+        # Import here to avoid circular dependency
+#         from .multi_factor_models import FactorConfig
+#         return FactorConfig()
+# "
+#     @performance_monitor("calculate_factor_exposures")
+#     def calculate_factor_exposures(
+# self, market_data: Dict[str, pd.DataFrame]
+# ) -> Dict[str, Dict[str, float]]:"
+
+# Optimized factor exposure calculation using batch operations.
+
+# Returns:
+# Dictionary mapping symbols to factor exposures"
+
+        # Check cache first
+#         cache_key = self._generate_cache_key(market_data)
+#         cached_result = self._factor_exposures_cache.get(cache_key)
+#         if cached_result is not None:
+#             return cached_result
+
+        # Prepare data efficiently
+#         factor_data = self._prepare_factor_data(market_data)
+#         if factor_data is None:
+#             return {}
+
+        # Batch calculate exposures using vectorized operations
+#         exposures = self._batch_calculate_exposures(factor_data)
+
+        # Cache result
+#         self._factor_exposures_cache.put(cache_key, exposures)
+
+#         return exposures
+
+#     def _prepare_factor_data(self, market_data: Dict[str, pd.DataFrame]):
+
+# Prepare and optimize factor data structure.
+
+# Returns:
+# OptimizedFactorData or None if insufficient data"
+
+#         try:
+            # Filter symbols with sufficient data
+# valid_symbols = [
+# symbol for symbol, data in market_data.items()
+#                 if len(data) >= self.config.lookback_window
+# ]
+
+#             if len(valid_symbols) < 10:""
+#                 self.logger.warning("Insufficient valid symbols for factor analysis")
+#                 return None
+
+            # Extract returns efficiently
+#             returns_data = {}
+#             common_dates = None
+
+#             for symbol in valid_symbols:
+# data = market_data[symbol]"
+#                 returns = data["close"].pct_change().dropna()
+
+#                 if common_dates is None:
+#                     common_dates = returns.index
+#                 else:
+#                     common_dates = common_dates.intersection(returns.index)
+
+#                 returns_data[symbol] = returns
+
+#             if len(common_dates) < 30:
+#                 return None
+
+            # Create aligned returns matrix
+# returns_matrix = np.column_stack([
+#                 returns_data[symbol].reindex(common_dates).values
+#                 for symbol in valid_symbols
+# ])
+
+            # Get factor returns
+#             factor_returns = self._calculate_factor_returns_vectorized(market_data, common_dates)
+
+            # Combine with factor returns
+#             if factor_returns:
+# factor_matrix = np.column_stack([
+#                     factor_returns[factor].reindex(common_dates).fillna(0).values
+#                     for factor in self.get_factor_types()
+# ])
+
+                # Combine security returns with factor returns
+#                 combined_matrix = np.column_stack([returns_matrix, factor_matrix])
+#                 factor_names = valid_symbols + list(self.get_factor_types())
+#             else:
+#                 combined_matrix = returns_matrix
+#                 factor_names = valid_symbols
+
+#             return OptimizedFactorData(
+#                 returns_matrix=combined_matrix,
+#                 symbols=factor_names,
+#                 dates=common_dates,
+#                 factor_names=list(self.get_factor_types())
+# )
+
+#         except Exception as e:""
+#             self.logger.error(f"Error preparing factor data: {e}")
+#             return None
+
+#     def _batch_calculate_exposures(self, factor_data: OptimizedFactorData):
+
+# Batch calculate factor exposures using vectorized operations.
+
+# Args:
+# factor_data: Prepared factor data structure
+
+# Returns:
+# Dictionary of factor exposures"
+
+#         exposures = {}
+#         n_securities = len(self.get_security_symbols(factor_data))
+#         n_factors = len(self.get_factor_types())
+
+#         if n_factors == 0:
+#             return exposures
+
+#         try:
+            # Extract data for vectorized operations
+#             security_returns = factor_data.returns_matrix[:, :n_securities]
+#             factor_returns = factor_data.returns_matrix[:, n_securities:n_securities+n_factors]
+
+            # Add intercept column
+#             X_with_intercept = VectorizedMath.create_design_matrix(factor_returns, add_intercept=True)
+
+            # Batch regression for all securities
+#             coefficients_list = []
+#             r_squared_list = []
+
+#             for i in range(n_securities):
+#                 y = security_returns[:, i]
+#                 coeffs, r_squared, _ = VectorizedMath.batch_ols_regression(X_with_intercept, y)
+#                 coefficients_list.append(coeffs[1:])  # Skip intercept
+#                 r_squared_list.append(r_squared)
+
+            # Convert to dictionary format
+#             security_symbols = self.get_security_symbols(factor_data)
+#             factor_types = list(self.get_factor_types())
+
+#             for i, symbol in enumerate(security_symbols):
+#                 symbol_exposures = {}
+#                 for j, factor_type in enumerate(factor_types):
+#                     if j < len(coefficients_list[i]):
+#                         exposure = float(coefficients_list[i][j])
+#                         symbol_exposures[factor_type] = exposure
+
+#                 exposures[symbol] = symbol_exposures
+
+#             return exposures
+
+#         except Exception as e:""
+#             self.logger.error(f"Error in batch exposure calculation: {e}")
+#             return {}
+
+#     def _calculate_factor_returns_vectorized(
+# self, market_data: Dict[str, pd.DataFrame], dates: pd.DatetimeIndex
+# ) -> Dict[str, pd.Series]:"
+
+# Vectorized calculation of factor returns.
+
+# Args:
+# market_data: Market data dictionary
+# dates: Common date index
+
+# Returns:
+# Dictionary of factor return series"
+
+#         factor_returns = {}
+
+#         try:
+            # Market factor (equal-weighted)
+# market_returns = self._calculate_market_factor_vectorized(market_data, dates)'
+#             if market_returns is not None:''
+#                 factor_returns['market'] = market_returns
+
+            # Size factor
+# size_returns = self._calculate_size_factor_vectorized(market_data, dates)'
+#             if size_returns is not None:''
+#                 factor_returns['size'] = size_returns
+
+            # Value factor
+# value_returns = self._calculate_value_factor_vectorized(market_data, dates)'
+#             if value_returns is not None:''
+#                 factor_returns['value'] = value_returns
+
+            # Momentum factor
+# momentum_returns = self._calculate_momentum_factor_vectorized(market_data, dates)'
+#             if momentum_returns is not None:''
+#                 factor_returns['momentum'] = momentum_returns
+
+#         except Exception as e:""
+#             self.logger.error(f"Error calculating vectorized factor returns: {e}")
+
+#         return factor_returns
+
+#     def _calculate_market_factor_vectorized(
+# self, market_data: Dict[str, pd.DataFrame], dates: pd.DatetimeIndex
+# ) -> Optional[pd.Series]:"
+#         "Vectorized market factor calculation."
+#         try:''
+            # Check for benchmark first'
+#             if hasattr(self.config, 'benchmark_symbol') and self.config.benchmark_symbol in market_data:
+# benchmark_data = market_data[self.config.benchmark_symbol]"
+#                 benchmark_returns = benchmark_data["close"].pct_change().reindex(dates).fillna(0)
+#                 return benchmark_returns
+
+            # Equal-weighted market return
+#             returns_list = []
+#             for symbol, data in market_data.items():
+#                 if len(data) >= 30:""
+#                     returns = data["close"].pct_change().reindex(dates).fillna(0)
+#                     returns_list.append(returns)
+
+#             if returns_list:
+#                 market_returns = pd.concat(returns_list, axis=1).mean(axis=1)
+#                 return market_returns
+
+#         except Exception as e:""
+#             self.logger.error(f"Error calculating market factor: {e}")
+
+#         return None
+
+#     def _calculate_size_factor_vectorized(
+# self, market_data: Dict[str, pd.DataFrame], dates: pd.DatetimeIndex
+# ) -> Optional[pd.Series]:"
+#         "Vectorized size factor (SMB) calculation."
+#         try:
+            # Calculate market caps for all symbols at once
+#             market_caps = {}
+#             returns = {}
+
+#             for symbol, data in market_data.items():
+#                 if len(data) >= self.config.lookback_window:
+                    # Use rolling mean of price * volume as market cap proxy"
+# price_data = data["close"].reindex(dates)"
+#                     volume_data = data["volume"].reindex(dates)
+# '
+                    # Forward fill missing data'
+# price_data = price_data.ffill().fillna(method='bfill')'
+#                     volume_data = volume_data.ffill().fillna(method='bfill')
+
+#                     market_caps[symbol] = (price_data * volume_data).rolling(20).mean()
+#                     returns[symbol] = price_data.pct_change().fillna(0)
+
+#             if len(market_caps) < 10:
+#                 return None
+
+            # Create market cap matrix
+#             cap_matrix = pd.DataFrame(market_caps)
+
+            # Calculate median market cap
+#             median_cap = cap_matrix.median(axis=1)
+
+            # Classify as small or large cap
+#             small_cap_mask = cap_matrix.lt(median_cap, axis=0)
+#             large_cap_mask = cap_matrix.ge(median_cap, axis=0)
+
+            # Calculate returns for each group
+#             small_cap_returns = pd.DataFrame(returns).where(small_cap_mask).mean(axis=1)
+#             large_cap_returns = pd.DataFrame(returns).where(large_cap_mask).mean(axis=1)
+
+            # SMB factor
+#             smb_factor = small_cap_returns - large_cap_returns
+
+#             return smb_factor.fillna(0)
+
+#         except Exception as e:""
+#             self.logger.error(f"Error calculating size factor: {e}")
+#             return None
+
+#     def _calculate_value_factor_vectorized(
+# self, market_data: Dict[str, pd.DataFrame], dates: pd.DatetimeIndex
+# ) -> Optional[pd.Series]:"
+#         "Vectorized value factor (HML) calculation."
+#         try:
+            # Calculate value scores using price momentum (inverse relationship)
+#             value_scores = {}
+#             returns = {}
+
+#             for symbol, data in market_data.items():
+#                 if len(data) >= 252:  # Need 1 year for momentum calculation""
+#                     price_data = data["close"].reindex(dates)
+
+                    # 12-month momentum (skip most recent month)
+#                     if len(price_data) >= 252:
+#                         momentum_12m = price_data.pct_change(252).iloc[-21]  # 12 months ago, 1 month ago
+#                         value_scores[symbol] = -momentum_12m  # Inverse for value
+#                         returns[symbol] = price_data.pct_change().fillna(0)
+
+#             if len(value_scores) < 10:
+#                 return None
+
+            # Create value scores DataFrame
+#             value_df = pd.DataFrame(value_scores)
+
+            # Classify as high or low value (top/bottom 30%)
+#             high_value_threshold = value_df.quantile(0.7, axis=1)
+#             low_value_threshold = value_df.quantile(0.3, axis=1)
+
+#             high_value_mask = value_df.ge(high_value_threshold, axis=0)
+#             low_value_mask = value_df.le(low_value_threshold, axis=0)
+
+            # Calculate returns for each group
+#             high_value_returns = pd.DataFrame(returns).where(high_value_mask).mean(axis=1)
+#             low_value_returns = pd.DataFrame(returns).where(low_value_mask).mean(axis=1)
+
+            # HML factor
+#             hml_factor = high_value_returns - low_value_returns
+
+#             return hml_factor.fillna(0)
+
+#         except Exception as e:""
+#             self.logger.error(f"Error calculating value factor: {e}")
+#             return None
+
+#     def _calculate_momentum_factor_vectorized(
+# self, market_data: Dict[str, pd.DataFrame], dates: pd.DatetimeIndex
+# ) -> Optional[pd.Series]:"
+#         "Vectorized momentum factor (UMD) calculation."
+#         try:
+#             momentum_scores = {}
+#             returns = {}
+
+#             for symbol, data in market_data.items():
+#                 if len(data) >= 252:""
+#                     price_data = data["close"].reindex(dates)
+
+                    # 12-1 month momentum
+#                     if len(price_data) >= 252:
+#                         momentum_11m = price_data.pct_change(231).iloc[-21]  # 11 months ago, 1 month ago
+#                         momentum_scores[symbol] = momentum_11m
+#                         returns[symbol] = price_data.pct_change().fillna(0)
+
+#             if len(momentum_scores) < 10:
+#                 return None
+
+            # Create momentum scores DataFrame
+#             momentum_df = pd.DataFrame(momentum_scores)
+
+            # Classify as winners or losers (top/bottom 30%)
+#             winners_threshold = momentum_df.quantile(0.7, axis=1)
+#             losers_threshold = momentum_df.quantile(0.3, axis=1)
+
+#             winners_mask = momentum_df.ge(winners_threshold, axis=0)
+#             losers_mask = momentum_df.le(losers_threshold, axis=0)
+
+            # Calculate returns for each group
+#             winners_returns = pd.DataFrame(returns).where(winners_mask).mean(axis=1)
+#             losers_returns = pd.DataFrame(returns).where(losers_mask).mean(axis=1)
+
+            # UMD factor
+#             umd_factor = winners_returns - losers_returns
+
+#             return umd_factor.fillna(0)
+
+#         except Exception as e:""
+#             self.logger.error(f"Error calculating momentum factor: {e}")
+#             return None
+
+#     def _generate_cache_key(self, market_data: Dict[str, pd.DataFrame]):
+#         "Generate cache key for market data."
+        # Use hash of data shape and last dates for cache key
+#         shapes = tuple(len(data) for data in market_data.values())
+# last_dates = tuple(data.index[-1] if len(data) > 0 else None for data in market_data.values())"
+#         return f"{hash(shapes)}_{hash(last_dates)}"
+
+#     def get_security_symbols(self, factor_data: OptimizedFactorData):
+#         "Get security symbols from factor data."''
+#         if hasattr(self.config, 'benchmark_symbol'):
+            # Remove benchmark from securities if present
+#             return [s for s in factor_data.symbols if s != self.config.benchmark_symbol]
+#         return factor_data.symbols
+
+#     def get_factor_types(self):
+# "Get factor types for this model."'
+#         return ['market', 'size', 'value', 'momentum']
+# "
+#     @performance_monitor("calculate_portfolio_optimization")
+#     def optimize_portfolio(
+#         self,
+# expected_returns: pd.Series,
+#         covariance_matrix: pd.DataFrame
+# ) -> Dict[str, float]:"
+
+# Optimized portfolio optimization using vectorized operations.
+
+# Args:
+# expected_returns: Expected returns for each security
+# covariance_matrix: Covariance matrix of returns
+
+# Returns:
+# Optimized portfolio weights"
+
+#         try:
+#             n_assets = len(expected_returns)
+#             if n_assets == 0:
+#                 return {}
+
+            # Simple equal weights fallback for performance
+#             if not _check_pypfopt() or n_assets > 100:
+                # For large portfolios, use equal weights for performance
+#                 equal_weight = 1.0 / n_assets
+#                 return {symbol: equal_weight for symbol in expected_returns.index}
+
+            # Use PyPortfolioOpt for smaller portfolios
+#             try:
+#                 from pypfopt import EfficientFrontier
+#                 ef = EfficientFrontier(expected_returns, covariance_matrix)
+
+                # Add constraints
+#                 ef.add_constraint(lambda w: w >= 0)  # Long-only
+#                 ef.add_constraint(lambda w: w <= self.config.max_position_size)
+
+                # Optimize
+#                 weights = ef.max_sharpe(risk_free_rate=self.config.risk_free_rate)
+#                 return ef.clean_weights()
+
+#             except Exception:
+                # Fallback to equal weights
+#                 equal_weight = 1.0 / n_assets
+#                 return {symbol: equal_weight for symbol in expected_returns.index}
+
+#         except Exception as e:""
+#             self.logger.error(f"Error in portfolio optimization: {e}")
+#             return {}
+
+
+class OptimizedFamaFrenchThreeFactorModel(OptimizedBaseFactorModel):""
+# "Performance-optimized Fama-French 3-factor model.
+# "
+# "
+
+#     @performance_monitor("full_calculation")
+#     def calculate_factor_models(
+# self, market_data: Dict[str, pd.DataFrame]
+# ) -> Dict[str, Any]:"
+
+# Complete factor model calculation with performance optimizations.
+
+# Args:
+# market_data: Market data dictionary
+
+# Returns:
+# Dictionary with factor model results"
+
+#         try:
+#             start_time = time.time()
+
+            # Calculate factor exposures
+#             exposures = self.calculate_factor_exposures(market_data)
+
+            # Calculate factor returns
+# factor_returns = self._calculate_factor_returns_vectorized(
+#                 market_data, self._get_common_dates(market_data)
+# )
+
+            # Portfolio optimization
+#             if exposures and factor_returns:
+# portfolio_weights = self._optimize_portfolio_from_exposures(
+#                     exposures, factor_returns, market_data
+# )
+#             else:
+#                 portfolio_weights = {}
+
+# calculation_time = time.time() - start_time"
+#             self.logger.info(f"Factor model calculation completed in {calculation_time:.3f}s")
+# '
+#             return {''
+# 'exposures': exposures,'
+# 'factor_returns': factor_returns,'
+# 'portfolio_weights': portfolio_weights,'
+# 'calculation_time': calculation_time,'
+# 'n_securities': len(exposures),'
+# 'performance_metrics': self._calculate_performance_metrics(portfolio_weights, market_data)
+# }
+
+#         except Exception as e:""
+#             self.logger.error(f"Error in factor model calculation: {e}")''
+#             return {''
+# 'exposures': {},'
+# 'factor_returns': {},'
+# 'portfolio_weights': {},'
+# 'error': str(e)
+# }
+
+#     def _get_common_dates(self, market_data: Dict[str, pd.DataFrame]):
+#         "Get common date index across all securities."
+#         all_dates = []
+#         for data in market_data.values():
+#             if len(data) > 0:
+#                 all_dates.append(data.index)
+
+#         if not all_dates:
+#             return pd.DatetimeIndex([])
+
+        # Find intersection of all dates
+#         common_dates = all_dates[0]
+#         for dates in all_dates[1:]:
+#             common_dates = common_dates.intersection(dates)
+
+#         return common_dates
+
+#     def _optimize_portfolio_from_exposures(
+#         self,
+# exposures: Dict[str, Dict[str, float]],
+# factor_returns: Dict[str, pd.Series],
+#         market_data: Dict[str, pd.DataFrame]
+# ) -> Dict[str, float]:"
+#         "Optimize portfolio using factor exposures and returns."
+#         try:
+            # Calculate expected returns from factor model
+#             expected_returns = {}
+#             for symbol, symbol_exposures in exposures.items():
+#                 exp_return = 0.0
+#                 for factor_type, exposure in symbol_exposures.items():
+#                     if factor_type in factor_returns:
+#                         factor_return = factor_returns[factor_type].mean() * 252  # Annualized
+#                         exp_return += exposure * factor_return
+#                 expected_returns[symbol] = exp_return
+
+            # Convert to Series
+#             expected_returns_series = pd.Series(expected_returns)
+
+            # Calculate covariance matrix efficiently
+#             returns_data = {}
+#             for symbol in expected_returns.keys():
+#                 if symbol in market_data:""
+#                     returns_data[symbol] = market_data[symbol]["close"].pct_change().dropna()
+
+#             if len(returns_data) < 2:
+                # Equal weights fallback
+#                 n_assets = len(expected_returns)
+#                 return {symbol: 1.0/n_assets for symbol in expected_returns.keys()}
+
+#             returns_df = pd.DataFrame(returns_data).dropna()
+#             covariance_matrix = returns_df.cov() * 252  # Annualized
+
+            # Optimize portfolio
+#             return self.optimize_portfolio(expected_returns_series, covariance_matrix)
+
+#         except Exception as e:""
+#             self.logger.error(f"Error optimizing portfolio from exposures: {e}")
+#             return {}
+
+#     def _calculate_performance_metrics(
+# self, portfolio_weights: Dict[str, float], market_data: Dict[str, pd.DataFrame]
+# ) -> Dict[str, float]:"
+#         "Calculate portfolio performance metrics."
+#         if not portfolio_weights:
+#             return {}
+
+#         try:
+            # Calculate portfolio returns
+#             portfolio_returns = pd.Series(0.0, index=self._get_common_dates(market_data))
+
+#             for symbol, weight in portfolio_weights.items():
+#                 if symbol in market_data:""
+#                     returns = market_data[symbol]["close"].pct_change().reindex(portfolio_returns.index).fillna(0)
+#                     portfolio_returns += weight * returns
+
+#             if len(portfolio_returns) == 0:
+#                 return {}
+
+            # Calculate metrics
+#             total_return = (1 + portfolio_returns).prod() - 1
+#             volatility = portfolio_returns.std() * np.sqrt(252)
+#             sharpe_ratio = total_return / volatility if volatility > 0 else 0
+
+            # Max drawdown
+#             cumulative = (1 + portfolio_returns).cumprod()
+#             running_max = cumulative.expanding().max()
+#             drawdown = (cumulative - running_max) / running_max
+#             max_drawdown = drawdown.min()
+# '
+#             return {''
+# 'total_return': total_return,'
+# 'volatility': volatility,'
+# 'sharpe_ratio': sharpe_ratio,'
+# 'max_drawdown': max_drawdown,'
+# 'annualized_return': (1 + portfolio_returns.mean()) ** 252 - 1
+# }
+
+#         except Exception as e:""
+#             self.logger.error(f"Error calculating performance metrics: {e}")
+#             return {}
+
+# '
+# Factory function for optimized models'"'
+# def create_optimized_factor_model(model_type: str, config: 'FactorConfig' = None):
+
+# Factory function to create optimized factor models.
+
+# Args:
+# model_type: Type of factor model to create
+# config: Configuration object
+
+# Returns:
+# Optimized factor model instance"
+# "
+#     if model_type.lower() == "fama_french_3":
+#         return OptimizedFamaFrenchThreeFactorModel(config)
+#     else:""
+#         raise ValueError(f"Unsupported model type: {model_type}")
+
+
+# Performance comparison utility"
+# "
+
+# def compare_performance(original_model, optimized_model, market_data: Dict[str, pd.DataFrame]):
+
+# Compare performance between original and optimized models.
+
+# Args:
+# original_model: Original factor model
+# optimized_model: Optimized factor model
+# market_data: Test market data
+
+# Returns:
+# Performance comparison results"
+
+#     import time
+
+#     results = {}
+
+    # Test original model
+#     start_time = time.time()
+#     try:
+# original_result = original_model.calculate_factor_models(market_data)'
+# original_time = time.time() - start_time'
+# results['original_time'] = original_time'
+# results['original_success'] = True'
+#     except Exception as e:''
+# results['original_time'] = None'
+# results['original_success'] = False'
+#         results['original_error'] = str(e)
+
+    # Test optimized model
+#     start_time = time.time()
+#     try:
+# optimized_result = optimized_model.calculate_factor_models(market_data)'
+# optimized_time = time.time() - start_time'
+# results['optimized_time'] = optimized_time'
+# results['optimized_success'] = True'
+#     except Exception as e:''
+# results['optimized_time'] = None'
+# results['optimized_success'] = False'
+#         results['optimized_error'] = str(e)
+# '
+    # Calculate speedup'
+#     if results['original_time'] and results['optimized_time']:''
+# results['speedup'] = results['original_time'] / results['optimized_time']'
+# results['improvement_percent'] = (1 - results['optimized_time'] / results['original_time']) * 100'
+#     else:''
+# results['speedup'] = None'
+#         results['improvement_percent'] = None
+
+#     return results"'"'

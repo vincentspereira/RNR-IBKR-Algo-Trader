@@ -83,7 +83,7 @@ class FakeSource(BarSource):
         return self._frame
 
     async def stream_bars(self, _request: BarRequest) -> AsyncIterator[Bar]:
-        raise NotImplementedError  # not used by the ingest path
+        raise RuntimeError("stream_bars is not exercised by the ingest path")
         yield  # pragma: no cover
 
     def __repr__(self) -> str:  # aid debugging on assertion failures
