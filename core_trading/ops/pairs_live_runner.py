@@ -418,15 +418,20 @@ class PairsLiveRunner:
         self.store = store
         self.universe = list(universe)
         self.config = config or RunnerConfig()
-        port = strategy.config.portfolio
-        self.risk_manager = risk_manager or PairsRiskManager(
-            RiskLimits(
-                gross_leverage_cap=port.gross_leverage_cap,
-                per_pair_cap=5.0 * port.per_pair_cap,
-                sector_cap=0.40,
-                sector_check_min_gross=0.25,
+        if risk_manager is None:
+            # Default limits derive from the pairs portfolio config; callers
+            # whose strategy config has no ``portfolio`` (e.g. the TA-quant
+            # adapter) must inject an explicit risk manager.
+            port = strategy.config.portfolio
+            risk_manager = PairsRiskManager(
+                RiskLimits(
+                    gross_leverage_cap=port.gross_leverage_cap,
+                    per_pair_cap=5.0 * port.per_pair_cap,
+                    sector_cap=0.40,
+                    sector_check_min_gross=0.25,
+                )
             )
-        )
+        self.risk_manager = risk_manager
         self.sectors = sectors
 
     # ----------------------------------------------------------------- equity

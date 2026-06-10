@@ -68,8 +68,17 @@ def _load_paper_account_from_env_file() -> str:
     raise SystemExit("ERR: IBKR_ACCOUNT_ID_PAPER not set in .env")
 
 
+# Canonical (Yahoo-style) tickers whose IBKR symbol differs. BNY Mellon
+# rebranded BK -> BNY at IBKR (verified 2026-06-10: BK resolves to nothing,
+# BNY to one NYSE match); Yahoo still serves the history under BK.
+_IBKR_SYMBOL_ALIASES: dict[str, str] = {
+    "BK": "BNY",
+}
+
+
 def _ibkr_symbol(symbol: str) -> str:
     """Canonical -> IBKR ticker (class shares use a space: BRK-B -> 'BRK B')."""
+    symbol = _IBKR_SYMBOL_ALIASES.get(symbol, symbol)
     return symbol.replace("-", " ")
 
 

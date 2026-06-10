@@ -196,6 +196,29 @@ A daily-reports Task Scheduler job already exists per memory
 the current repo path, and add 6.1/6.3 if missing. `tools/daily_ops.py` is the
 pre-market/post-market ops driver (data freshness, connectivity, reconciliation).
 
+### 6.4 TAQuant paper book -- the 90-day clock (REGISTERED 2026-06-10)
+
+Task `IBKR-AlgoTrader TAQuant Paper Run` runs `tools/taquant_paper_run.py`
+weekdays at 20:30 UK (~15:30 ET) and appends to
+`logs/taquant_paper/<slot>/`. Three slots, separate ledgers, kill switches
+and promotion gates (decision record
+`docs/GO_NO_GO_RSI2_TREND_SURVIVORSHIP_2026-06-10.md`): `rsi2t15_trend200`
+(SP100), `rsi2t10_trend200_volt10` (SP100, vol-targeted),
+`rsi2t10_calm75` (ETF_CORE). TWS paper must be running and logged in at
+20:30 UK or the day records as SKIPPED (stretches the calendar, never
+corrupts the ledger).
+
+```powershell
+# daily ops
+./.venv/Scripts/python.exe tools/taquant_paper_run.py --status
+./.venv/Scripts/python.exe tools/taquant_paper_run.py --reset-halt --slot <slot>
+Get-Content logs/taquant_paper/scheduler.log -Tail 50
+```
+
+Known symbol quirks (handled in `tools/pairs_paper_run.py`): BNY Mellon is
+`BK` canonically/Yahoo but `BNY` at IBKR (alias map); WBA was delisted and
+removed from the static SP100 list 2026-06-10.
+
 ---
 
 ## 7. Kill-switch drill

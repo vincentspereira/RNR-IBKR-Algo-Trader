@@ -186,7 +186,8 @@ _SP100_SYMBOLS = (
     "USB",
     "V",
     "VZ",
-    "WBA",
+    # WBA removed 2026-06-10: Walgreens delisted (taken private); no security
+    # definition at IBKR and no Yahoo data under the old ticker.
     "WFC",
     "WMT",
     "XOM",
