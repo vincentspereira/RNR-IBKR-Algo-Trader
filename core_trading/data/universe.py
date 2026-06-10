@@ -350,10 +350,41 @@ _NIFTY50_SYMBOLS = (
 )
 
 
+# Core liquid US-listed ETFs with long histories (most launched 1993-2007).
+# Used as a survivorship-robust cross-validation universe: an index/sector
+# ETF cannot go to zero via single-name bankruptcy, and closing ETFs
+# liquidate at NAV rather than at a distressed price, so the dip-buying
+# survivorship mechanism that flatters single-stock backtests is structurally
+# absent. (The list itself is a present-day selection, so treat results as
+# survivorship-ROBUST, not survivorship-proof.)
+_ETF_CORE_SYMBOLS = (
+    # broad US equity
+    "SPY", "QQQ", "DIA", "IWM", "MDY", "IJR", "RSP", "VTI",
+    # S&P sector SPDRs (1998)
+    "XLB", "XLE", "XLF", "XLI", "XLK", "XLP", "XLU", "XLV", "XLY",
+    # industries
+    "SMH", "IBB", "XBI", "XHB", "XRT", "KRE", "GDX", "IYR", "IYT", "ITB", "OIH",
+    # international single-country / regional
+    "EFA", "EEM", "EWJ", "EWG", "EWU", "EWC", "EWA", "EWH", "EWS",
+    "EWY", "EWT", "EWZ", "EWW", "FXI", "ILF", "EPP",
+    # bonds
+    "TLT", "IEF", "SHY", "LQD", "AGG", "TIP", "HYG",
+    # commodities
+    "GLD", "SLV", "USO", "DBC",
+)
+
+
 SP100 = _snapshot(
     "SP100",
     "S&P 100 large-cap US equities (static snapshot 2026-05-28; not survivorship-free)",
     _SP100_SYMBOLS,
+)
+
+ETF_CORE = _snapshot(
+    "ETFCORE",
+    "Liquid long-history US-listed ETFs (static snapshot 2026-05-28; "
+    "survivorship-robust by construction -- see module comment)",
+    _ETF_CORE_SYMBOLS,
 )
 
 NASDAQ100 = _snapshot(
@@ -373,6 +404,7 @@ BUILTIN_UNIVERSES: dict[str, Universe] = {
     "SP100": SP100,
     "NDX": NASDAQ100,
     "NIFTY50": NIFTY50,
+    "ETFCORE": ETF_CORE,
 }
 
 

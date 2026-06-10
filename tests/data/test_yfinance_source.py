@@ -162,6 +162,48 @@ class TestFetchBars:
         assert set(["open", "high", "low", "close", "volume", "source"]).issubset(df.columns)
 
 
+class TestDropInvalid:
+    @staticmethod
+    def _frame_with_bad_bar(n: int = 5) -> pd.DataFrame:
+        fake = _make_single_symbol_frame("CFC", n=n)
+        # Yahoo-style malformed bar: high < low on one row.
+        fake.iloc[2, fake.columns.get_loc("High")] = 10.0
+        fake.iloc[2, fake.columns.get_loc("Low")] = 20.0
+        return fake
+
+    @pytest.mark.asyncio
+    async def test_strict_mode_rejects_malformed_bar(self) -> None:
+        src = YFinanceBarSource()
+        req = BarRequest(
+            symbols=("CFC",),
+            resolution=BarResolution.DAY_1,
+            start=_utc(2026, 5, 1),
+            end=_utc(2026, 5, 6),
+        )
+        with patch(
+            "core_trading.data.sources.yfinance_source.yf.download",
+            return_value=self._frame_with_bad_bar(),
+        ), pytest.raises(ValueError, match="high < low"):
+            await src.fetch_bars(req)
+
+    @pytest.mark.asyncio
+    async def test_drop_invalid_drops_only_bad_rows(self) -> None:
+        src = YFinanceBarSource(drop_invalid=True)
+        req = BarRequest(
+            symbols=("CFC",),
+            resolution=BarResolution.DAY_1,
+            start=_utc(2026, 5, 1),
+            end=_utc(2026, 5, 6),
+        )
+        with patch(
+            "core_trading.data.sources.yfinance_source.yf.download",
+            return_value=self._frame_with_bad_bar(),
+        ), pytest.warns(UserWarning, match="malformed bar"):
+            df = await src.fetch_bars(req)
+        assert len(df) == 4  # 5 rows minus the malformed one
+        BarSource.validate_dataframe(df)
+
+
 class TestStreamBars:
     @pytest.mark.asyncio
     async def test_streams_individual_bars(self) -> None:

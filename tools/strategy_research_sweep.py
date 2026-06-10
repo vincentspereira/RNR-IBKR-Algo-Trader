@@ -57,9 +57,51 @@ from pairs_research_pass import (  # noqa: E402
 )
 
 OUT_DIR = REPO_ROOT / "logs" / "strategy_sweep"
-SNAPSHOT = OUT_DIR / "ohlcv_yf.parquet"
 DEFAULT_START = "2005-01-01"
 FIELDS = ("open", "high", "low", "close", "volume")
+
+# Universe modes. "sp100" is the original static-snapshot behaviour (kept
+# for back-compat and for comparison against the survivorship-biased
+# baseline). "sp500pit" uses true point-in-time S&P 500 membership
+# (data/universe/sp500_ticker_start_end.csv) -- per window, only names that
+# were members on the first OOS bar are tradeable, optionally narrowed to
+# the top-N by formation-period dollar volume (an S&P-100-like large-cap
+# slice that is point-in-time correct). "etf" runs the survivorship-robust
+# ETF cross-validation universe.
+UNIVERSES = ("sp100", "sp500pit", "etf")
+_FETCH_CHUNK = 100
+
+
+def snapshot_path(universe: str) -> Path:
+    # sp100 keeps the original filename so existing snapshots stay valid.
+    if universe == "sp100":
+        return OUT_DIR / "ohlcv_yf.parquet"
+    return OUT_DIR / f"ohlcv_yf_{universe}.parquet"
+
+
+def universe_symbols(universe: str, start: str) -> list[str]:
+    """All symbols ever investable for ``universe`` from ``start`` onwards."""
+    import datetime as _dt
+
+    if universe == "sp100":
+        from core_trading.data.universe import SP100
+
+        return list(SP100.current_symbols())
+    if universe == "etf":
+        from core_trading.data.universe import ETF_CORE
+
+        return list(ETF_CORE.current_symbols())
+    # sp500pit: union of every membership spell that overlaps [start, today]
+    from core_trading.data.universe_history import load_sp500_pit
+
+    start_d = _dt.date.fromisoformat(start)
+    uni = load_sp500_pit()
+    symbols = {
+        m.symbol
+        for m in uni.memberships
+        if m.removed is None or m.removed >= start_d
+    }
+    return sorted(symbols)
 
 
 # ---------------------------------------------------------------------------
@@ -67,30 +109,49 @@ FIELDS = ("open", "high", "low", "close", "volume")
 # ---------------------------------------------------------------------------
 
 
-def fetch_ohlcv_snapshot(start: str) -> pd.DataFrame:
-    """Fetch adjusted OHLCV for the SP100 universe and cache it.
+def fetch_ohlcv_snapshot(start: str, universe: str = "sp100") -> pd.DataFrame:
+    """Fetch adjusted OHLCV for ``universe`` and cache it.
 
     Returns a wide frame with MultiIndex columns ``(field, symbol)`` for
     fields open/high/low/close/volume. OHLC are adjusted by the per-bar
     factor ``adjusted_close / close`` (standard back-adjustment) so that
     long-history levels are split/dividend consistent; volume is raw.
+
+    Symbols with no data (delisted names on free vendors) are reported and
+    dropped; for the PIT universe that gap is measured by
+    :func:`pit_coverage_table`, not ignored.
     """
     import datetime as _dt
 
     from core_trading.data.bars import BarResolution
     from core_trading.data.sources.yfinance_source import fetch_bars_sync
-    from core_trading.data.universe import SP100
 
-    symbols = list(SP100.current_symbols())
-    print(f"fetching {len(symbols)} symbols (OHLCV) from {start} via yfinance ...")
-    raw = fetch_bars_sync(
-        symbols,
-        _dt.date.fromisoformat(start),
-        _dt.date.today(),
-        resolution=BarResolution.DAY_1,
+    symbols = universe_symbols(universe, start)
+    print(
+        f"fetching {len(symbols)} symbols (OHLCV, universe={universe!r}) "
+        f"from {start} via yfinance ..."
     )
-    if raw.empty:
+    chunks: list[pd.DataFrame] = []
+    for i in range(0, len(symbols), _FETCH_CHUNK):
+        batch = symbols[i : i + _FETCH_CHUNK]
+        raw = fetch_bars_sync(
+            batch,
+            _dt.date.fromisoformat(start),
+            _dt.date.today(),
+            resolution=BarResolution.DAY_1,
+            drop_invalid=True,
+        )
+        if not raw.empty:
+            chunks.append(raw)
+        got = {str(s) for c in chunks for s in c.index.get_level_values("symbol").unique()}
+        print(
+            f"  batch {i // _FETCH_CHUNK + 1}/{-(-len(symbols) // _FETCH_CHUNK)}: "
+            f"{len(got)}/{len(symbols)} symbols have data",
+            flush=True,
+        )
+    if not chunks:
         raise SystemExit("ERR: yfinance returned no data")
+    raw = pd.concat(chunks).sort_index()
 
     factor = (raw["adjusted_close"] / raw["close"]).replace([np.inf, -np.inf], np.nan)
     wide_parts: dict[tuple[str, str], pd.Series] = {}
@@ -104,30 +165,70 @@ def fetch_ohlcv_snapshot(start: str) -> pd.DataFrame:
     panel.columns = pd.MultiIndex.from_tuples(panel.columns, names=["field", "symbol"])
 
     empty = [s for s in panel["close"].columns if panel[("close", s)].dropna().empty]
-    if empty:
-        print(f"WARN: no data for {', '.join(sorted(empty))}; dropped")
+    missing = sorted(set(symbols) - {str(s) for s in panel["close"].columns}) + sorted(empty)
+    if missing:
+        print(
+            f"WARN: no data for {len(missing)}/{len(symbols)} symbols "
+            f"(delisted on free vendor): {', '.join(missing[:20])}"
+            + (" ..." if len(missing) > 20 else "")
+        )
         panel = panel.drop(columns=[(f, s) for f in FIELDS for s in empty], errors="ignore")
 
     OUT_DIR.mkdir(parents=True, exist_ok=True)
-    panel.to_parquet(SNAPSHOT)
+    panel.to_parquet(snapshot_path(universe))
     close = panel["close"]
     print(
         f"snapshot: {close.shape[0]} sessions x {close.shape[1]} symbols x {len(FIELDS)} fields "
-        f"({close.index[0].date()} .. {close.index[-1].date()}) -> {SNAPSHOT}"
+        f"({close.index[0].date()} .. {close.index[-1].date()}) -> {snapshot_path(universe)}"
     )
     return panel
 
 
-def load_ohlcv(start: str, refetch: bool) -> pd.DataFrame:
-    if SNAPSHOT.exists() and not refetch:
-        panel = pd.read_parquet(SNAPSHOT)
+def load_ohlcv(start: str, refetch: bool, universe: str = "sp100") -> pd.DataFrame:
+    path = snapshot_path(universe)
+    if path.exists() and not refetch:
+        panel = pd.read_parquet(path)
         close = panel["close"]
         print(
-            f"loaded snapshot: {close.shape[0]} sessions x {close.shape[1]} symbols "
-            f"({close.index[0].date()} .. {close.index[-1].date()})"
+            f"loaded snapshot ({universe}): {close.shape[0]} sessions x "
+            f"{close.shape[1]} symbols ({close.index[0].date()} .. {close.index[-1].date()})"
         )
         return panel
-    return fetch_ohlcv_snapshot(start)
+    return fetch_ohlcv_snapshot(start, universe)
+
+
+def pit_coverage_table(close: pd.DataFrame, universe_obj: object) -> str:
+    """Per-year price-data coverage of true membership-days.
+
+    For each year: how many (member, business-day) cells does the panel
+    actually price? The complement is the survivorship hole that the
+    delisting stress test has to bound.
+    """
+    from core_trading.data.universe import Universe
+
+    assert isinstance(universe_obj, Universe)
+    have = close.notna()
+    lines = [
+        "| year | members (avg) | priced (avg) | coverage |",
+        "|------|---------------|--------------|----------|",
+    ]
+    for year, idx in have.groupby(have.index.year).groups.items():
+        # sample membership monthly (membership changes are infrequent)
+        days = list(idx)
+        sample = days[:: max(1, len(days) // 12)]
+        member_n: list[int] = []
+        priced_n: list[int] = []
+        for d in sample:
+            members = set(universe_obj.members_on(d.date()))
+            member_n.append(len(members))
+            cols = [c for c in close.columns if c in members]
+            priced_n.append(int(have.loc[d, cols].sum()) if cols else 0)
+        m = float(np.mean(member_n)) if member_n else 0.0
+        p = float(np.mean(priced_n)) if priced_n else 0.0
+        lines.append(
+            f"| {year} | {m:13.1f} | {p:12.1f} | {p / m if m else 0.0:7.1%} |"
+        )
+    return "\n".join(lines)
 
 
 def load_sectors(symbols: list[str]) -> dict[str, str]:
@@ -326,8 +427,18 @@ def sweep(
     min_trade: int,
     min_symbols: int,
     cost_model_name: str,
+    pit_universe: object | None = None,
+    top_n: int = 0,
 ) -> pd.DataFrame:
-    """Run every entry over the fixed skeleton; return the trial matrix."""
+    """Run every entry over the fixed skeleton; return the trial matrix.
+
+    When ``pit_universe`` is given (a vintage
+    :class:`~core_trading.data.universe.Universe`), each window's tradeable
+    set is restricted to names that were members on the first OOS bar of
+    that window -- point-in-time correct: no future membership knowledge is
+    used. ``top_n > 0`` further narrows to the top-N by median dollar
+    volume over the formation segment only (again look-ahead-free).
+    """
     from core_trading.backtest.engine import BacktestConfig, BacktestEngine
 
     n = ohlcv.shape[0]
@@ -336,6 +447,7 @@ def sweep(
     print(
         f"sweep: {len(starts)} windows of {formation}+{trading} bars over {n} sessions, "
         f"{len(entries)} configs, costs={cost_model_name!r}"
+        + (f", PIT universe + top{top_n or 'ALL'} dollar-volume" if pit_universe else "")
     )
     per_config: dict[str, list[pd.Series]] = {name: [] for _, name, _ in entries}
     failed: dict[str, str] = {}
@@ -346,6 +458,15 @@ def sweep(
     for wi, s in enumerate(starts):
         wide = ohlcv.iloc[s : s + formation + trading]
         symbols = valid_window_symbols(wide)
+        if pit_universe is not None:
+            oos_start = wide.index[formation].date()
+            members = set(pit_universe.members_on(oos_start))  # type: ignore[attr-defined]
+            symbols = [sym for sym in symbols if sym in members]
+        if top_n > 0 and len(symbols) > top_n:
+            dollar_vol = (
+                (wide["close"] * wide["volume"]).iloc[:formation].median().loc[symbols]
+            )
+            symbols = sorted(dollar_vol.nlargest(top_n).index.astype(str))
         if len(symbols) < min_symbols:
             skipped += 1
             done += len(entries)
@@ -433,21 +554,53 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--fetch-only", action="store_true")
     parser.add_argument("--quick", action="store_true", help="smoke: 3 configs, last ~3y")
     parser.add_argument("--family", default=None, help="restrict to one family")
+    parser.add_argument(
+        "--universe",
+        default="sp100",
+        choices=UNIVERSES,
+        help="sp100=static snapshot (survivorship-biased baseline), "
+        "sp500pit=point-in-time S&P 500 membership, etf=survivorship-robust ETFs",
+    )
+    parser.add_argument(
+        "--top-n",
+        type=int,
+        default=None,
+        help="PIT mode: keep top-N by formation dollar volume (default 100; 0=all members)",
+    )
     parser.add_argument("--formation", type=int, default=252)
     parser.add_argument("--trading", type=int, default=126)
     parser.add_argument("--min-trade", type=int, default=40)
-    parser.add_argument("--min-symbols", type=int, default=40)
+    parser.add_argument("--min-symbols", type=int, default=None)
     parser.add_argument("--cost-model", default="ibkr")
     parser.add_argument("--output", default=None)
     args = parser.parse_args(argv)
 
     if args.fetch_only:
-        fetch_ohlcv_snapshot(args.start)
+        fetch_ohlcv_snapshot(args.start, args.universe)
         return 0
 
-    ohlcv = load_ohlcv(args.start, args.refetch)
+    if args.min_symbols is None:
+        args.min_symbols = 20 if args.universe == "etf" else 40
+    if args.top_n is None:
+        args.top_n = 100 if args.universe == "sp500pit" else 0
+
+    pit_universe = None
+    coverage = ""
+    if args.universe == "sp500pit":
+        from core_trading.data.universe_history import load_sp500_pit
+
+        pit_universe = load_sp500_pit()
+
+    ohlcv = load_ohlcv(args.start, args.refetch, args.universe)
     if args.quick:
         ohlcv = ohlcv.iloc[-756:]
+
+    if pit_universe is not None:
+        coverage = pit_coverage_table(ohlcv["close"], pit_universe)
+        print()
+        print("PIT membership price-data coverage (free vendor):")
+        print(coverage)
+        print()
 
     entries = build_families(args.quick)
     if args.family:
@@ -463,13 +616,18 @@ def main(argv: list[str] | None = None) -> int:
         min_trade=args.min_trade,
         min_symbols=args.min_symbols,
         cost_model_name=args.cost_model,
+        pit_universe=pit_universe,
+        top_n=args.top_n,
     )
 
     OUT_DIR.mkdir(parents=True, exist_ok=True)
     if not args.quick:
         # Family-restricted runs must not clobber the canonical full-bank
-        # matrix (cumulative trial accounting depends on it).
-        suffix = f"_{args.family}" if args.family else ""
+        # matrix (cumulative trial accounting depends on it); ditto for
+        # non-default universes.
+        suffix = f"_{args.universe}" if args.universe != "sp100" else ""
+        if args.family:
+            suffix += f"_{args.family}"
         trials_path = OUT_DIR / f"trials_net{suffix}.parquet"
         trials.to_parquet(trials_path)
         print(f"trial matrix saved to {trials_path}")
@@ -492,20 +650,45 @@ def main(argv: list[str] | None = None) -> int:
             champions[fam] = name
 
     close = ohlcv["close"]
+    if args.universe == "sp100":
+        caveat = [
+            "CAVEAT: current-constituent SP100 universe (survivorship bias,",
+            "flatters results). PROMOTE = upper bound pending point-in-time",
+            "validation (--universe sp500pit / etf); REJECT is close to decisive.",
+        ]
+    elif args.universe == "sp500pit":
+        caveat = [
+            "Universe: POINT-IN-TIME S&P 500 membership (fja05680/sp500 dataset),",
+            f"top-{args.top_n or 'ALL'} by formation dollar volume per window.",
+            "Membership is vintage-correct (no late-joiner bias, fallen angels",
+            "included while listed). RESIDUAL bias: acquired/bankrupt names have",
+            "no free price data -- see coverage table; bound with",
+            "tools/delisting_stress_test.py.",
+            "",
+            "### PIT membership price-data coverage",
+            "",
+            coverage,
+        ]
+    else:
+        caveat = [
+            "Universe: survivorship-robust ETF cross-validation set. Index/sector",
+            "ETFs cannot go to zero via single-name bankruptcy, so the dip-buying",
+            "survivorship mechanism is structurally absent. An edge that holds",
+            "here is not a survivorship artifact.",
+        ]
     header: list[str] = [
         "# Strategy Validation Sweep -- long-history walk-forward",
         "",
         f"History    : {close.index[0].date()} .. {close.index[-1].date()} "
         f"({close.shape[0]} sessions, {close.shape[1]} symbols)",
+        f"Universe   : {args.universe}",
         f"Skeleton   : formation {args.formation} (warm-up), trading {args.trading} "
         "(contiguous OOS)",
         f"Costs      : {args.cost_model!r} (linear turnover charge, vectorised mode)",
         f"Trials     : {trials.shape[1]} configs across "
         f"{len(set(families.values()))} families (full sweep = trial bank)",
         "",
-        "CAVEAT: current-constituent SP100 universe (survivorship bias,",
-        "flatters results). PROMOTE = upper bound pending Norgate; REJECT",
-        "is close to decisive.",
+        *caveat,
         "",
         "## Top configs (net of costs)",
         "",
@@ -573,7 +756,7 @@ def main(argv: list[str] | None = None) -> int:
     out_path = (
         Path(args.output)
         if args.output
-        else OUT_DIR / f"sweep_report_{pd.Timestamp.utcnow():%Y%m%d_%H%M%S}.txt"
+        else OUT_DIR / f"sweep_report_{args.universe}_{pd.Timestamp.utcnow():%Y%m%d_%H%M%S}.txt"
     )
     out_path.write_text(full_text, encoding="utf-8")
     print()

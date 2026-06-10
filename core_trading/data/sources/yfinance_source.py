@@ -58,13 +58,25 @@ class YFinanceBarSource(BarSource):
         keeps behaviour predictable inside the async wrapper.
     progress:
         yfinance default is to print progress bars; we silence that.
+    drop_invalid:
+        Yahoo occasionally serves malformed bars (high < low, negative
+        volume), especially on delisted tickers. When ``True``, such rows
+        are dropped with a warning instead of failing validation for the
+        whole batch. Default ``False`` (strict) -- research bulk fetches
+        opt in.
     """
 
     _NAME = "yfinance"
 
-    def __init__(self, threads: bool = False, progress: bool = False) -> None:
+    def __init__(
+        self,
+        threads: bool = False,
+        progress: bool = False,
+        drop_invalid: bool = False,
+    ) -> None:
         self._threads = threads
         self._progress = progress
+        self._drop_invalid = drop_invalid
 
     @property
     def capabilities(self) -> BarSourceCapabilities:
@@ -197,6 +209,18 @@ class YFinanceBarSource(BarSource):
 
         raw = await asyncio.to_thread(_download)
         df = self._to_frame(raw, request.symbols, request.resolution)
+        if not df.empty and self._drop_invalid:
+            bad = (df["high"] < df["low"]) | (df["volume"] < 0)
+            if bad.any():
+                import warnings
+
+                warnings.warn(
+                    f"yfinance returned {int(bad.sum())} malformed bar(s) "
+                    f"(high<low or volume<0); dropped: "
+                    f"{df.index[bad].tolist()[:5]}",
+                    stacklevel=2,
+                )
+                df = df[~bad]
         if not df.empty:
             BarSource.validate_dataframe(df)
         return df
@@ -232,12 +256,15 @@ def fetch_bars_sync(
     start: datetime | date,
     end: datetime | date,
     resolution: BarResolution = BarResolution.DAY_1,
+    *,
+    drop_invalid: bool = False,
 ) -> pd.DataFrame:
     """Synchronous convenience wrapper for research notebooks.
 
     Equivalent to ``asyncio.run(YFinanceBarSource().fetch_bars(...))`` with
     sensible defaults. Use the async :class:`YFinanceBarSource` API directly
-    from production code.
+    from production code. ``drop_invalid=True`` tolerates Yahoo's occasional
+    malformed bars on delisted tickers (see :class:`YFinanceBarSource`).
     """
 
     def _to_utc(d: datetime | date) -> datetime:
@@ -251,4 +278,4 @@ def fetch_bars_sync(
         start=_to_utc(start),
         end=_to_utc(end) + timedelta(seconds=1),
     )
-    return asyncio.run(YFinanceBarSource().fetch_bars(request))
+    return asyncio.run(YFinanceBarSource(drop_invalid=drop_invalid).fetch_bars(request))
