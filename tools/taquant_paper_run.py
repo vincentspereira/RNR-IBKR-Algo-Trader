@@ -79,14 +79,20 @@ class SlotSpec:
     gross_cap_backstop: float  # risk-gate gross cap (mis-sizing backstop)
 
 
-# The three-slot book from the 2026-06-10 GO memo. per-symbol cap is 1.0 by
+# The paper book from the 2026-06-10 GO memo. per-symbol cap is 1.0 by
 # design: the equal-weight rule puts 100% of slot equity on a lone dipper --
 # that IS the validated behaviour, so the risk gate only backstops sizing
 # bugs (gross), fat daily losses, and trailing drawdown.
+#
+# ETF slot PARKED 2026-06-10: the memo's third slot (rsi2t10_calm75 on
+# ETF_CORE) is NOT tradeable on this account -- IBKR rejects US-domiciled
+# ETFs for UK retail clients under PRIIPs ("No Trading Permission ... no
+# KID", error 201; confirmed empirically by live paper rejections on DBC,
+# EEM). Restoring it requires a UCITS (LSE-listed) equivalent universe and
+# a fresh validation sweep on those tickers. Single stocks are unaffected.
 SLOTS: tuple[SlotSpec, ...] = (
     SlotSpec("rsi2t15_trend200", "SP100", 0.82, 1.10),
     SlotSpec("rsi2t10_trend200_volt10", "SP100", 0.77, 2.05),
-    SlotSpec("rsi2t10_calm75", "ETFCORE", 0.88, 1.10),
 )
 
 
@@ -302,6 +308,16 @@ async def _cmd_run(args: argparse.Namespace) -> int:
                 exit_code = max(exit_code, 1)
     finally:
         await adapter.disconnect()
+
+    if not args.dry_run:
+        # Refresh the static HTML report; a report failure must never be
+        # allowed to mark a successfully traded day as failed.
+        try:
+            from paper_report import generate_report
+
+            print(f"report refreshed: {generate_report()}")
+        except Exception as exc:
+            print(f"WARN: report generation failed: {type(exc).__name__}: {exc}")
     return exit_code
 
 

@@ -200,13 +200,17 @@ pre-market/post-market ops driver (data freshness, connectivity, reconciliation)
 
 Task `IBKR-AlgoTrader TAQuant Paper Run` runs `tools/taquant_paper_run.py`
 weekdays at 20:30 UK (~15:30 ET) and appends to
-`logs/taquant_paper/<slot>/`. Three slots, separate ledgers, kill switches
+`logs/taquant_paper/<slot>/`. Two slots, separate ledgers, kill switches
 and promotion gates (decision record
 `docs/GO_NO_GO_RSI2_TREND_SURVIVORSHIP_2026-06-10.md`): `rsi2t15_trend200`
-(SP100), `rsi2t10_trend200_volt10` (SP100, vol-targeted),
-`rsi2t10_calm75` (ETF_CORE). TWS paper must be running and logged in at
-20:30 UK or the day records as SKIPPED (stretches the calendar, never
-corrupts the ledger).
+(SP100) and `rsi2t10_trend200_volt10` (SP100, vol-targeted). TWS paper must
+be running and logged in at 20:30 UK or the day records as SKIPPED
+(stretches the calendar, never corrupts the ledger).
+
+The memo's third slot (`rsi2t10_calm75` on US ETFs) is **PARKED**: IBKR
+rejects US-domiciled ETFs for UK retail accounts under PRIIPs ("no KID",
+error 201 -- discovered via live paper rejections 2026-06-10). Restoring it
+requires the UCITS port (see the task list); single stocks are unaffected.
 
 ```powershell
 # daily ops
@@ -218,6 +222,66 @@ Get-Content logs/taquant_paper/scheduler.log -Tail 50
 Known symbol quirks (handled in `tools/pairs_paper_run.py`): BNY Mellon is
 `BK` canonically/Yahoo but `BNY` at IBKR (alias map); WBA was delisted and
 removed from the static SP100 list 2026-06-10.
+
+### 6.5 Dashboards (added 2026-06-10)
+
+Two views over the same ledgers, both read-only:
+
+```powershell
+# Live web dashboard (auto-refreshes every 5s; Ctrl+C to stop)
+./.venv/Scripts/python.exe tools/dashboard_server.py     # -> http://127.0.0.1:8642
+
+# Static HTML report (auto-regenerated after every live paper run)
+Invoke-Item logs/paper_report.html
+```
+
+Both show every book (daily slots, intraday lane, pairs) automatically:
+equity curve, total return, max drawdown, paper Sharpe, gross leverage,
+positions, recent orders/fills, kill-switch state, incidents, and 90-day
+promotion progress. The web dashboard never connects to TWS, so it can run
+permanently without burning a client id.
+
+### 6.6 Intraday experimental lane (added 2026-06-10)
+
+`tools/intraday_paper_run.py` trades the same three rsi2 configs on signal
+CHANGES during the session, using IBKR delayed quotes (free on paper, ~15
+min behind), instead of waiting for the close. Separate ledgers under
+`logs/intraday_paper/<slot>/`, smaller equity (10k/slot), order budget and
+churn guard.
+
+**This lane is an experiment, not the validated clock.** The research
+result that justified paper trading is signal-on-close execution; this lane
+exists to measure -- with data, after 90 days -- whether intraday execution
+helps or hurts. Never read its results into the daily slots' promotion.
+
+```powershell
+# one tick (smoke test), full session loop, status
+./.venv/Scripts/python.exe tools/intraday_paper_run.py --once --slot rsi2t10_calm75
+./.venv/Scripts/python.exe tools/intraday_paper_run.py            # loops until 15:55 ET
+./.venv/Scripts/python.exe tools/intraday_paper_run.py --status
+```
+
+Task `IBKR-AlgoTrader Intraday Paper Run` (weekdays 14:50 UK) starts the
+session loop; the process exits by itself at 15:55 ET.
+
+### 6.7 Strategy lab (added 2026-06-10)
+
+Author and evaluate your own strategies against the SAME validation bar the
+production candidates cleared:
+
+```powershell
+./.venv/Scripts/python.exe tools/strategy_lab.py list
+./.venv/Scripts/python.exe tools/strategy_lab.py chart    --config rsi2t15_trend200 --universe etf
+./.venv/Scripts/python.exe tools/strategy_lab.py backtest --config rsi2t15_trend200 --universe sp500pit
+./.venv/Scripts/python.exe tools/strategy_lab.py backtest --custom examples/custom_strategy_example.py
+```
+
+`chart` writes an interactive HTML (prices + entry/exit markers + equity +
+drawdown) to `logs/strategy_lab/`. `backtest` runs the full 2005+
+walk-forward and the robustness battery, deflating against the saved trial
+bank of the chosen universe (your idea is judged as the N+1-th trial).
+Promotion path: PASS on `sp500pit` -> add a slot in
+`tools/taquant_paper_run.py` -> 90-day paper gate -> live.
 
 ---
 

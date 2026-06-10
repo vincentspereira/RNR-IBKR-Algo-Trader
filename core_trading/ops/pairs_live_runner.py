@@ -72,6 +72,7 @@ __all__ = [
     "LedgerStore",
     "DayResult",
     "PairsLiveRunner",
+    "execute_market_orders",
 ]
 
 US_EASTERN = zoneinfo.ZoneInfo("America/New_York")
@@ -355,6 +356,79 @@ class DayResult:
 # ---------------------------------------------------------------------------
 
 
+async def execute_market_orders(
+    broker: BrokerLike,
+    orders: list[dict[str, Any]],
+    state: RunnerState,
+    run_date: str,
+    *,
+    fill_timeout_s: float,
+    poll_interval_s: float,
+) -> tuple[list[dict[str, Any]], list[str]]:
+    """Place market orders, poll fills, apply them to ``state`` cash/positions.
+
+    Shared by the daily and intraday runners. Positions and cash move only
+    on *observed* fills, so an unfilled or partially filled order leaves the
+    book consistent with the broker. Returns (fill records, incidents).
+    """
+    fills: list[dict[str, Any]] = []
+    incidents: list[str] = []
+    for order in orders:
+        response = await broker.place_order(dict(order))
+        if response.get("status") == "rejected":
+            incidents.append(
+                f"{run_date}: order rejected {order['side']} "
+                f"{order['quantity']} {order['symbol']}: "
+                f"{response.get('reason', 'no reason given')}"
+            )
+            continue
+        order_id = str(response.get("order_id"))
+        deadline = fill_timeout_s
+        filled_qty = 0.0
+        avg_price = 0.0
+        status = str(response.get("status", ""))
+        terminal = {"filled", "cancelled", "canceled", "rejected", "inactive"}
+        while deadline > 0:
+            st = await broker.get_order_status(order_id)
+            status = str(st.get("status", ""))
+            filled_qty = float(st.get("filled_quantity") or 0.0)
+            avg_price = float(st.get("avg_fill_price") or 0.0)
+            if status.lower() in terminal:
+                # Filled is success; the other terminal states will never
+                # fill, so burning the rest of the poll budget is pointless.
+                break
+            await asyncio.sleep(poll_interval_s)
+            deadline -= poll_interval_s
+        if filled_qty > 0:
+            sign = 1 if order["side"] == "buy" else -1
+            signed_qty = int(round(sign * filled_qty))
+            state.positions[order["symbol"]] = (
+                state.positions.get(order["symbol"], 0) + signed_qty
+            )
+            if state.positions[order["symbol"]] == 0:
+                del state.positions[order["symbol"]]
+            state.cash -= signed_qty * avg_price
+            fills.append(
+                {
+                    "date": run_date,
+                    "order_id": order_id,
+                    "symbol": order["symbol"],
+                    "side": order["side"],
+                    "quantity": abs(signed_qty),
+                    "avg_price": avg_price,
+                    "status": status,
+                }
+            )
+        if status.lower() != "filled":
+            incidents.append(
+                f"{run_date}: order {order_id} ({order['side']} "
+                f"{order['quantity']} {order['symbol']}) not fully filled "
+                f"within {fill_timeout_s:.0f}s (status={status}, "
+                f"filled={filled_qty})"
+            )
+    return fills, incidents
+
+
 def _round_shares(notional: float, price: float, min_fraction: float) -> int:
     """Whole-share count for a signed target notional at ``price``.
 
@@ -585,60 +659,14 @@ class PairsLiveRunner:
         partially filled order leaves the book consistent with the broker.
         Returns (fill records, incident strings).
         """
-        cfg = self.config
-        fills: list[dict[str, Any]] = []
-        incidents: list[str] = []
-        for order in orders:
-            response = await self.broker.place_order(dict(order))
-            if response.get("status") == "rejected":
-                incidents.append(
-                    f"{run_date}: order rejected {order['side']} "
-                    f"{order['quantity']} {order['symbol']}: "
-                    f"{response.get('reason', 'no reason given')}"
-                )
-                continue
-            order_id = str(response.get("order_id"))
-            deadline = cfg.fill_timeout_s
-            filled_qty = 0.0
-            avg_price = 0.0
-            status = str(response.get("status", ""))
-            while deadline > 0:
-                st = await self.broker.get_order_status(order_id)
-                status = str(st.get("status", ""))
-                filled_qty = float(st.get("filled_quantity") or 0.0)
-                avg_price = float(st.get("avg_fill_price") or 0.0)
-                if status.lower() == "filled":
-                    break
-                await asyncio.sleep(cfg.poll_interval_s)
-                deadline -= cfg.poll_interval_s
-            if filled_qty > 0:
-                sign = 1 if order["side"] == "buy" else -1
-                signed_qty = int(round(sign * filled_qty))
-                state.positions[order["symbol"]] = (
-                    state.positions.get(order["symbol"], 0) + signed_qty
-                )
-                if state.positions[order["symbol"]] == 0:
-                    del state.positions[order["symbol"]]
-                state.cash -= signed_qty * avg_price
-                fills.append(
-                    {
-                        "date": run_date,
-                        "order_id": order_id,
-                        "symbol": order["symbol"],
-                        "side": order["side"],
-                        "quantity": abs(signed_qty),
-                        "avg_price": avg_price,
-                        "status": status,
-                    }
-                )
-            if status.lower() != "filled":
-                incidents.append(
-                    f"{run_date}: order {order_id} ({order['side']} "
-                    f"{order['quantity']} {order['symbol']}) not fully filled "
-                    f"within {cfg.fill_timeout_s:.0f}s (status={status}, "
-                    f"filled={filled_qty})"
-                )
-        return fills, incidents
+        return await execute_market_orders(
+            self.broker,
+            orders,
+            state,
+            run_date,
+            fill_timeout_s=self.config.fill_timeout_s,
+            poll_interval_s=self.config.poll_interval_s,
+        )
 
     # -------------------------------------------------------------------- run
     async def run_once(
