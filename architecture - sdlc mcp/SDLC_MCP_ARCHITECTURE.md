@@ -16,7 +16,7 @@ Building a **production-grade, IDE-agnostic SDLC Agent MCP server** that combine
 
 ## Feature Extraction Matrix
 
-### From Claude Code (`C:\Users\Vincent_Pereira\Projects\Trading\IBKR - Algo Trader\claude`)
+### From Claude Code (`C:\Users\vince\Projects\Trading\IBKR - Algo Trader\claude`)
 
 | Feature                    | File                                                   | Usage in SDLC MCP                                                                                                  |
 | -------------------------- | ------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------ |
@@ -29,7 +29,7 @@ Building a **production-grade, IDE-agnostic SDLC Agent MCP server** that combine
 | **MCP Server**             | `global-routing/mcp_server.py`                         | 5 tools: route, recommendations, analytics, record_execution, list_agents                                          |
 | **REST API**               | `global-routing/api/global_api.py`                     | FastAPI endpoints for HTTP-based routing                                                                           |
 
-### From Enhanced Cognee (`C:\Users\Vincent_Pereira\Projects\AI Agents\enhanced-cognee`)
+### From RNR Enhanced Cognee (`C:\Users\vince\Projects\AI Agents\RNR Enhanced Cognee`)
 
 | Feature                     | File                                            | Usage in SDLC MCP                                  |
 | --------------------------- | ----------------------------------------------- | -------------------------------------------------- |

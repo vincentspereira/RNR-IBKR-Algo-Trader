@@ -344,7 +344,7 @@ Phase 5 with SDLC Agents (~1M tokens estimated):
 
 ```bash
 # Step 1: Clone SDLC Agent to separate workspace
-cd "C:\Users\Vincent_Pereira\Projects\AI Agents"
+cd "C:\Users\vince\Projects\AI Agents"
 # Already have it at: Multi-Agent System\agents\agent - sdlc ✅
 
 # Step 2: Set up virtual environment
@@ -364,11 +364,11 @@ python -m pytest -v --cov=. --cov-fail-under=90
 
 ```python
 # Create trading system context file
-# File: C:\Users\Vincent_Pereira\Projects\AI Agents\Multi-Agent System\agents\agent - sdlc\config\ibkr_trading_system_context.yaml
+# File: C:\Users\vince\Projects\AI Agents\Multi-Agent System\agents\agent - sdlc\config\ibkr_trading_system_context.yaml
 
 project:
   name: "IBKR Agentic AI Algorithmic Trading System"
-  repository: "C:\\Users\\Vincent_Pereira\\Projects\\Trading\\IBKR - Algo Trader"
+  repository: "C:\\Users\\vince\\Projects\\Trading\\IBKR - Algo Trader"
   version: "5.0"
   current_phase: "Phase 5"
 

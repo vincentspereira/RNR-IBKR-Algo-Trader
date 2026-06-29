@@ -92,7 +92,7 @@ choco install python311 -y
 
 ```powershell
 # Navigate to projects directory
-cd C:\Users\Vincent_Pereira\Projects\Trading
+cd C:\Users\vince\Projects\Trading
 
 # Already have the repo!
 cd "IBKR - Algo Trader"
@@ -106,7 +106,7 @@ ls
 **Create `.env` file:**
 
 ```bash
-# File: C:\Users\Vincent_Pereira\Projects\Trading\IBKR - Algo Trader\.env
+# File: C:\Users\vince\Projects\Trading\IBKR - Algo Trader\.env
 
 #-----------------------
 # Environment Configuration
@@ -181,7 +181,7 @@ OLLAMA_MODEL=llama3
 #----------------------
 # Cognee Memory
 # ----------------------
-COGNEE_DIR=C:\Users\Vincent_Pereira\Projects\AI Agents\enhanced-cognee
+COGNEE_DIR=C:\Users\vince\Projects\AI Agents\RNR Enhanced Cognee
 COGNEE_PORT=8000
 
 # ----------------------
@@ -409,7 +409,7 @@ networks:
 
 ```powershell
 # Navigate to project root
-cd "C:\Users\Vincent_Pereira\Projects\Trading\IBKR - Algo Trader"
+cd "C:\Users\vince\Projects\Trading\IBKR - Algo Trader"
 
 # Start all services
 docker-compose up -d
@@ -862,7 +862,7 @@ Production Trading: Move to cloud
 
    ```powershell
    # Download kubeconfig from DigitalOcean dashboard
-   $env:KUBECONFIG="C:\Users\Vincent_Pereira\.kube\config"
+   $env:KUBECONFIG="C:\Users\vince\.kube\config"
 
    # Verify connection
    kubectl get nodes

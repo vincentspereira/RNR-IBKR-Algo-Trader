@@ -43,7 +43,7 @@ This implementation plan outlines the comprehensive planning and architectural v
 
 Comprehensive review of both workspaces to understand existing capabilities, code quality, and integration requirements.
 
-#### [ANALYZE] Main Workspace: `C:\Users\Vincent_Pereira\Projects\Trading\IBKR - Algo Trader`
+#### [ANALYZE] Main Workspace: `C:\Users\vince\Projects\Trading\IBKR - Algo Trader`
 
 **Current Structure**:
 
@@ -86,7 +86,7 @@ Comprehensive review of both workspaces to understand existing capabilities, cod
 - [ ] Document existing microservices progress
 - [ ] Map existing integrations (IBKR, data providers)
 
-#### [ANALYZE] Secondary Workspace: `C:\Users\Vincent_Pereira\Projects\Trading\Financial Analysis Platform`
+#### [ANALYZE] Secondary Workspace: `C:\Users\vince\Projects\Trading\Financial Analysis Platform`
 
 **Current Structure**:
 

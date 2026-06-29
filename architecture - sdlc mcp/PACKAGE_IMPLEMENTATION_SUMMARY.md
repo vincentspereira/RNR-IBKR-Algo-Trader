@@ -169,7 +169,7 @@ result = execute_phase(
 ### 1. Push to GitHub
 
 ```bash
-cd "C:\Users\Vincent_Pereira\Projects\AI Agents\Multi-Agent System\agents\agent - sdlc"
+cd "C:\Users\vince\Projects\AI Agents\Multi-Agent System\agents\agent - sdlc"
 
 # Initialize git (if not already)
 git init
@@ -231,7 +231,7 @@ which sdlc-mcp-server  # Should show path
 ### 4. Test in IBKR Project
 
 ```bash
-cd "C:\Users\Vincent_Pereira\Projects\Trading\IBKR - Algo Trader"
+cd "C:\Users\vince\Projects\Trading\IBKR - Algo Trader"
 
 # Initialize
 sdlc init

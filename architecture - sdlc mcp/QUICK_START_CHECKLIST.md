@@ -30,7 +30,7 @@
 - [ ] Navigate to SDLC agent workspace:
   
   ```
-  cd "C:\Users\Vincent_Pereira\Projects\AI Agents\Multi-Agent System\agents\agent - sdlc"
+  cd "C:\Users\vince\Projects\AI Agents\Multi-Agent System\agents\agent - sdlc"
   ```
 - [ ] Create virtual environment:
   
@@ -197,10 +197,10 @@
 
 ### Resources
 
-- **SDLC Agent Documentation**: `C:\Users\Vincent_Pereira\Projects\AI Agents\Multi-Agent System\agents\agent - sdlc\README.md`
-- **Implementation Guide**: `C:\Users\Vincent_Pereira\Projects\AI Agents\Multi-Agent System\agents\agent - sdlc\IMPLEMENTATION_GUIDE.md`
-- **Integration Analysis**: `C:\Users\Vincent_Pereira\Projects\Trading\IBKR - Algo Trader\docs\sdlc integration\sdlc_integration_analysis.md`
-- **Clarifications**: `C:\Users\Vincent_Pereira\Projects\Trading\IBKR - Algo Trader\docs\sdlc integration\SDLC_INTEGRATION_CLARIFICATIONS.md`
+- **SDLC Agent Documentation**: `C:\Users\vince\Projects\AI Agents\Multi-Agent System\agents\agent - sdlc\README.md`
+- **Implementation Guide**: `C:\Users\vince\Projects\AI Agents\Multi-Agent System\agents\agent - sdlc\IMPLEMENTATION_GUIDE.md`
+- **Integration Analysis**: `C:\Users\vince\Projects\Trading\IBKR - Algo Trader\docs\sdlc integration\sdlc_integration_analysis.md`
+- **Clarifications**: `C:\Users\vince\Projects\Trading\IBKR - Algo Trader\docs\sdlc integration\SDLC_INTEGRATION_CLARIFICATIONS.md`
 
 ### Common Issues
 

@@ -3,7 +3,7 @@
 ## Analysis for Integration into Agentic AI ATS v5.0
 
 **Date**: 2025-01-20  
-**Source**: C:\Users\Vincent_Pereira\Projects\Trading\Financial Analysis Platform  
+**Source**: C:\Users\vince\Projects\Trading\Financial Analysis Platform  
 **Purpose**: Extract all features for ground-up rebuild in ATS
 
 ---

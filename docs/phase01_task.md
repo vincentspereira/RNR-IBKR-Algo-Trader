@@ -27,8 +27,8 @@ Complete comprehensive planning and architectural validation for building a prof
 ### Workspace Analysis
 
 - [/] **Review entire repository structure**
-  - [x] Main workspace: `C:\Users\Vincent_Pereira\Projects\Trading\IBKR - Algo Trader`
-  - [ ] Secondary workspace: `C:\Users\Vincent_Pereira\Projects\Trading\Financial Analysis Platform`
+  - [x] Main workspace: `C:\Users\vince\Projects\Trading\IBKR - Algo Trader`
+  - [ ] Secondary workspace: `C:\Users\vince\Projects\Trading\Financial Analysis Platform`
   - [ ] Document workspace integration strategy
 
 ### Core Trading Assets Analysis

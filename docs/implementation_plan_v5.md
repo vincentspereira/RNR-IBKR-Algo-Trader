@@ -2540,15 +2540,15 @@ DELETE /api/v1/fundamental/alerts/{id}
 ## File Locations
 
 **Implementation Plan**:
-    C:\Users\Vincent_Pereira\.gemini\antigravity\brain\85fc2505-94a7-4258-8e3b-bfd5cfb84a54\implementation_plan.md
-    C:\Users\Vincent_Pereira\Projects\Trading\IBKR - Algo Trader\docs\implementation_plan.md (copy)
+    C:\Users\vince\.gemini\antigravity\brain\85fc2505-94a7-4258-8e3b-bfd5cfb84a54\implementation_plan.md
+    C:\Users\vince\Projects\Trading\IBKR - Algo Trader\docs\implementation_plan.md (copy)
 
 **Task Breakdown**:
-    C:\Users\Vincent_Pereira\.gemini\antigravity\brain\85fc2505-94a7-4258-8e3b-bfd5cfb84a54\task.md
-    C:\Users\Vincent_Pereira\Projects\Trading\IBKR - Algo Trader\docs\task.md (copy)
+    C:\Users\vince\.gemini\antigravity\brain\85fc2505-94a7-4258-8e3b-bfd5cfb84a54\task.md
+    C:\Users\vince\Projects\Trading\IBKR - Algo Trader\docs\task.md (copy)
 
 **Review Document**:
-    C:\Users\Vincent_Pereira\Projects\Trading\IBKR - Algo Trader\docs\implementation_plan_review_v4.md
+    C:\Users\vince\Projects\Trading\IBKR - Algo Trader\docs\implementation_plan_review_v4.md
 
 ---
 

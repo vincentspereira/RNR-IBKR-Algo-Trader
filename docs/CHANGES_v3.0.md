@@ -303,7 +303,7 @@ This summary outlines all major changes made to the Agentic AI Algorithmic Tradi
 Both `implementation_plan.md` and `task.md` are now automatically copied to:
 
 ```
-C:\Users\Vincent_Pereira\Projects\Trading\IBKR - Algo Trader\docs\
+C:\Users\vince\Projects\Trading\IBKR - Algo Trader\docs\
 ```
 
 This ensures easy access and version tracking within the main project repository.

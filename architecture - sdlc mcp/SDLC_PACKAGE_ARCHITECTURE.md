@@ -28,7 +28,7 @@
 
 ```bash
 # One-time installation
-pip install -e "C:\Users\Vincent_Pereira\Projects\AI Agents\Multi-Agent System\agents\agent - sdlc"
+pip install -e "C:\Users\vince\Projects\AI Agents\Multi-Agent System\agents\agent - sdlc"
 
 # Makes 'sdlc' command available globally
 sdlc --version
@@ -237,7 +237,7 @@ sdlc execute --phase "Phase 5"
 
 ```bash
 # One command installs everything
-pip install -e "C:\Users\Vincent_Pereira\Projects\AI Agents\Multi-Agent System\agents\agent - sdlc"
+pip install -e "C:\Users\vince\Projects\AI Agents\Multi-Agent System\agents\agent - sdlc"
 
 # Provides both:
 sdlc --help                    # CLI
@@ -249,7 +249,7 @@ sdlc-mcp-server start          # MCP server
 **Scenario 1: Direct CLI Usage**
 
 ```bash
-cd "C:\Users\Vincent_Pereira\Projects\Trading\IBKR - Algo Trader"
+cd "C:\Users\vince\Projects\Trading\IBKR - Algo Trader"
 sdlc init
 sdlc execute --phase "Phase 5" --mode hybrid
 ```
@@ -289,7 +289,7 @@ from sdlc_agent import execute_phase
 result = execute_phase(
     phase="Phase 5",
     mode="hybrid",
-    project_root="C:/Users/Vincent_Pereira/Projects/Trading/IBKR - Algo Trader"
+    project_root="C:/Users/vince/Projects/Trading/IBKR - Algo Trader"
 )
 ```
 
@@ -536,7 +536,7 @@ if result.status == "completed":
 ### Challenge
 
 ```
-Original source: C:\Users\Vincent_Pereira\Projects\AI Agents\Multi-Agent System\agents\agent - sdlc
+Original source: C:\Users\vince\Projects\AI Agents\Multi-Agent System\agents\agent - sdlc
 Installed package: Python site-packages/sdlc_agent
 
 Question: How to sync updates?
@@ -546,7 +546,7 @@ Question: How to sync updates?
 
 ```bash
 # Install in editable mode
-pip install -e "C:\Users\Vincent_Pereira\Projects\AI Agents\Multi-Agent System\agents\agent - sdlc"
+pip install -e "C:\Users\vince\Projects\AI Agents\Multi-Agent System\agents\agent - sdlc"
 
 # This creates a LINK, not a copy:
 # site-packages/sdlc-agent.egg-link → points to original directory
@@ -733,7 +733,7 @@ C:\Users\...\agent - sdlc\
 
 ```bash
 # Editable install (changes immediately reflected)
-pip install -e "C:\Users\Vincent_Pereira\Projects\AI Agents\Multi-Agent System\agents\agent - sdlc"
+pip install -e "C:\Users\vince\Projects\AI Agents\Multi-Agent System\agents\agent - sdlc"
 
 # This provides:
 # - CLI: 'sdlc' command

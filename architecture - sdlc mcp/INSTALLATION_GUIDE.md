@@ -29,7 +29,7 @@ pip install git+https://github.com/VincentPereira/sdlc-agent.git
 
 ```bash
 # Initialize in your project
-cd "C:\Users\Vincent_Pereira\Projects\Trading\IBKR - Algo Trader"
+cd "C:\Users\vince\Projects\Trading\IBKR - Algo Trader"
 sdlc init
 
 # Execute a phase
@@ -215,7 +215,7 @@ update_notifications:
 ### Initialize Project
 
 ```bash
-cd "C:\Users\Vincent_Pereira\Projects\Trading\IBKR - Algo Trader"
+cd "C:\Users\vince\Projects\Trading\IBKR - Algo Trader"
 sdlc init
 ```
 

@@ -102,7 +102,7 @@ Build a fully functional Agentic AI-based Algorithmic Trading System for retail 
   - [ ] PyTorch 2.6.0+cu126 with CUDA 12.6
   - [ ] Verify GPU access in containers
 - [ ] Set up Cognee memory server
-  - [ ] Link to local directory: C:\Users\Vincent_Pereira\Projects\AI Agents\enhanced-cognee
+  - [ ] Link to local directory: C:\Users\vince\Projects\AI Agents\RNR Enhanced Cognee
   - [ ] Configure as MCP server
   - [ ] Test memory persistence
 - [ ] Configure Keycloak 26.0 for authentication
@@ -438,7 +438,7 @@ Build a fully functional Agentic AI-based Algorithmic Trading System for retail 
   - [ ] Implement document-based query handling
   - [ ] Test retrieval accuracy
 - [ ] Connect Cognee Memory MCP
-  - [ ] Link to local directory: C:\Users\Vincent_Pereira\Projects\AI Agents\enhanced-cognee
+  - [ ] Link to local directory: C:\Users\vince\Projects\AI Agents\RNR Enhanced Cognee
   - [ ] Register as MCP server
   - [ ] Implement conversation memory persistence
   - [ ] Test memory recall across sessions
@@ -1397,13 +1397,13 @@ Build a fully functional Agentic AI-based Algorithmic Trading System for retail 
 **Task Breakdown File**:
 
 ```
-C:\Users\Vincent_Pereira\.gemini\antigravity\brain\85fc2505-94a7-4258-8e3b-bfd5cfb84a54\task.md
+C:\Users\vince\.gemini\antigravity\brain\85fc2505-94a7-4258-8e3b-bfd5cfb84a54\task.md
 ```
 
 **Implementation Plan File**:
 
 ```
-C:\Users\Vincent_Pereira\.gemini\antigravity\brain\85fc2505-94a7-4258-8e3b-bfd5cfb84a54\implementation_plan.md
+C:\Users\vince\.gemini\antigravity\brain\85fc2505-94a7-4258-8e3b-bfd5cfb84a54\implementation_plan.md
 ```
 
 These files persist across sessions and can be accessed anytime. They are located in your Gemini workspace directory and serve as the authoritative source of truth for the project plan and task tracking.

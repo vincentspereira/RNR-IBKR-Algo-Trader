@@ -53,7 +53,7 @@ Build an **enterprise-grade, IDE-agnostic SDLC Agent MCP server** that combines:
 | MCP Server                               | ✅ Extracted | 🔴 Critical |
 | REST API                                 | ✅ Extracted | 🟢 Medium   |
 
-### From Enhanced Cognee
+### From RNR Enhanced Cognee
 
 | Feature                             | Status        | Priority    |
 | ----------------------------------- | ------------- | ----------- |
@@ -498,9 +498,9 @@ Build an **enterprise-grade, IDE-agnostic SDLC Agent MCP server** that combines:
 
 ### Source Codebases
 
-- **Claude Code**: `C:\Users\Vincent_Pereira\Projects\Trading\IBKR - Algo Trader\claude`
-- **Enhanced Cognee**: `C:\Users\Vincent_Pereira\Projects\AI Agents\enhanced-cognee`
-- **SDLC Agent**: `C:\Users\Vincent_Pereira\Projects\AI Agents\Multi-Agent System\agents\agent - sdlc`
+- **Claude Code**: `C:\Users\vince\Projects\Trading\IBKR - Algo Trader\claude`
+- **RNR Enhanced Cognee**: `C:\Users\vince\Projects\AI Agents\RNR Enhanced Cognee`
+- **SDLC Agent**: `C:\Users\vince\Projects\AI Agents\Multi-Agent System\agents\agent - sdlc`
 
 ### Reference Articles
 

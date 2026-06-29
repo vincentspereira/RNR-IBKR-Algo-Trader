@@ -261,7 +261,7 @@ Build a professional-grade, institutional-quality Agentic AI-based Algorithmic T
 
 ### Cognee Memory Server
 
-- [ ] Link to: C:\Users\Vincent_Pereira\Projects\AI Agents\enhanced-cognee
+- [ ] Link to: C:\Users\vince\Projects\AI Agents\RNR Enhanced Cognee
 - [ ] Configure as MCP server
 - [ ] Test memory persistence
 - [ ] Verify integration
@@ -670,7 +670,7 @@ Build a professional-grade, institutional-quality Agentic AI-based Algorithmic T
   * [ ] Implement document-based query handling
   * [ ] Test retrieval accuracy
 * [ ] Connect Cognee Memory MCP
-  * [ ] Link to local directory: C:\Users\Vincent_Pereira\Projects\AI Agents\enhanced-cognee
+  * [ ] Link to local directory: C:\Users\vince\Projects\AI Agents\RNR Enhanced Cognee
   * [ ] Register as MCP server
   * [ ] Implement conversation memory persistence
   * [ ] Test memory recall across sessions
@@ -3254,10 +3254,10 @@ Phase 22: Compliance & Regulatory Reporting (Week 33) - NEW
 ## File Locations
 
 **Task Breakdown File**:
-    C:\Users\Vincent_Pereira\.gemini\antigravity\brain\85fc2505-94a7-4258-8e3b-bfd5cfb84a54\task.md
+    C:\Users\vince\.gemini\antigravity\brain\85fc2505-94a7-4258-8e3b-bfd5cfb84a54\task.md
 
 **Implementation Plan File**:
-    C:\Users\Vincent_Pereira\.gemini\antigravity\brain\85fc2505-94a7-4258-8e3b-bfd5cfb84a54\implementation_plan.md
+    C:\Users\vince\.gemini\antigravity\brain\85fc2505-94a7-4258-8e3b-bfd5cfb84a54\implementation_plan.md
 
 These files persist across sessions and can be accessed anytime. They are located in your Gemini workspace directory and serve as the authoritative source of truth for the project plan and task tracking.
 

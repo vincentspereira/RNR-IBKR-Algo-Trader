@@ -143,7 +143,7 @@ kubectl apply -f sdlc-mcp-deployment.yaml
 
 ```bash
 # Clone repository
-cd "C:\Users\Vincent_Pereira\Projects\AI Agents\Multi-Agent System\agents\agent - sdlc"
+cd "C:\Users\vince\Projects\AI Agents\Multi-Agent System\agents\agent - sdlc"
 
 # Install as package (recommended)
 pip install -e .
@@ -277,7 +277,7 @@ print(f"Workflow: {result['workflow_template']}")
 ### Scenario: Implementing Phases 5-28 of IBKR Trading System
 
 **Project**: Agentic AI Algorithmic Trading System  
-**Location**: `C:\Users\Vincent_Pereira\Projects\Trading\IBKR - Algo Trader`  
+**Location**: `C:\Users\vince\Projects\Trading\IBKR - Algo Trader`  
 **Phases**: 5-28 (24 phases, ~40 weeks of work)
 
 ### Setup (One-Time Configuration)
@@ -286,7 +286,7 @@ print(f"Workflow: {result['workflow_template']}")
 
 ```bash
 # Navigate to IBKR project
-cd "C:\Users\Vincent_Pereira\Projects\Trading\IBKR - Algo Trader"
+cd "C:\Users\vince\Projects\Trading\IBKR - Algo Trader"
 
 # Initialize SDLC MCP for this project
 sdlc-mcp init

@@ -123,7 +123,7 @@ Build an **enterprise-grade, IDE-agnostic SDLC Agent MCP server** that combines:
 | Hybrid Routing (Internal + External) | ✅ Designed | 🔴 Critical |
 | 13 Capability Patterns | ✅ Designed | 🟡 High |
 
-### From Enhanced Cognee
+### From RNR Enhanced Cognee
 
 | Feature | Status | Priority |
 |---------|--------|----------|
@@ -820,7 +820,7 @@ From [ULTRATHINK_RECOMMENDATIONS.md](./ULTRATHINK_RECOMMENDATIONS.md):
 ### Source Directories
 
 - **SDLC Agent**: `C:\...\agent - sdlc` (IMPORT from here)
-- **Enhanced Cognee**: `C:\...\enhanced-cognee`
+- **RNR Enhanced Cognee**: `C:\...\RNR Enhanced Cognee`
 - **Documentation**: `C:\...\agent - sdlc\docs\architecture - sdlc mcp`
 
 ---
