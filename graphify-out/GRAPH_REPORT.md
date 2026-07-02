@@ -1,7 +1,7 @@
-# Graph Report - C:\Users\vince\Projects\Trading\IBKR - Algo Trader  (2026-06-10)
+# Graph Report - C:\Users\vince\Projects\Trading\IBKR - Algo Trader  (2026-07-02)
 
 ## Corpus Check
-- 536 files · ~5,392,381 words
+- 536 files · ~5,392,352 words
 - Verdict: corpus is large enough that graph structure adds value.
 
 ## Summary
@@ -4678,11 +4678,11 @@ Nodes (1): SDLC MCP Implementation Plan
 _Questions this graph is uniquely positioned to answer:_
 
 - **Why does `Broker adapter package.  The canonical broker adapter is ``core_trading.adapte` connect `Community 3` to `Community 0`, `Community 1`, `Community 2`, `Community 4`, `Community 5`, `Community 6`, `Community 7`, `Community 8`, `Community 9`, `Community 10`, `Community 11`, `Community 12`, `Community 13`, `Community 14`, `Community 15`, `Community 17`, `Community 18`, `Community 19`, `Community 20`, `Community 21`, `Community 22`, `Community 23`, `Community 24`, `Community 25`, `Community 26`, `Community 27`, `Community 28`, `Community 29`, `Community 30`, `Community 31`, `Community 33`, `Community 34`, `Community 35`, `Community 36`, `Community 38`, `Community 39`, `Community 40`, `Community 41`, `Community 42`, `Community 43`, `Community 45`, `Community 46`, `Community 47`, `Community 48`, `Community 49`, `Community 52`, `Community 54`, `Community 56`, `Community 61`, `Community 63`?**
-  _High betweenness centrality (0.507) - this node is a cross-community bridge._
+  _High betweenness centrality (0.486) - this node is a cross-community bridge._
 - **Why does `range()` connect `Community 12` to `Community 0`, `Community 1`, `Community 2`, `Community 3`, `Community 4`, `Community 5`, `Community 6`, `Community 7`, `Community 8`, `Community 9`, `Community 10`, `Community 11`, `Community 13`, `Community 14`, `Community 15`, `Community 16`, `Community 17`, `Community 18`, `Community 19`, `Community 20`, `Community 21`, `Community 22`, `Community 23`, `Community 24`, `Community 25`, `Community 27`, `Community 28`, `Community 29`, `Community 30`, `Community 31`, `Community 32`, `Community 33`, `Community 35`, `Community 36`, `Community 37`, `Community 38`, `Community 39`, `Community 40`, `Community 41`, `Community 42`, `Community 43`, `Community 44`, `Community 45`, `Community 46`, `Community 47`, `Community 49`, `Community 50`, `Community 51`, `Community 54`, `Community 56`, `Community 61`?**
-  _High betweenness centrality (0.140) - this node is a cross-community bridge._
-- **Why does `VaRConfig` connect `Community 18` to `Community 0`, `Community 3`, `Community 7`?**
-  _High betweenness centrality (0.020) - this node is a cross-community bridge._
+  _High betweenness centrality (0.148) - this node is a cross-community bridge._
+- **Why does `IBKRAdapter` connect `Community 2` to `Community 1`, `Community 4`, `Community 5`, `Community 6`, `Community 9`, `Community 14`?**
+  _High betweenness centrality (0.032) - this node is a cross-community bridge._
 - **Are the 492 inferred relationships involving `Broker adapter package.  The canonical broker adapter is ``core_trading.adapte` (e.g. with `AlmgrenChrissImpact` and `BorrowModel`) actually correct?**
   _`Broker adapter package.  The canonical broker adapter is ``core_trading.adapte` has 492 INFERRED edges - model-reasoned connections that need verification._
 - **Are the 408 inferred relationships involving `IBKRAdapter` (e.g. with `AdapterConfig` and `AdapterType`) actually correct?**
