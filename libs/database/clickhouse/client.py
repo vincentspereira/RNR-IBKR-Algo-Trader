@@ -27,7 +27,7 @@ class ClickHouseClient:
         
         self.client = Client(
             host=self.host,
-            port=9000,  # Native protocol port
+            port=self.port,  # native protocol (9000 default); honors config/ctor
             user='default',
             password=config.database.clickhouse_password,
             database=config.database.clickhouse_db,

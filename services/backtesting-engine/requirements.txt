@@ -1,7 +1,7 @@
-nautilus_trader
-vectorbt
+# NOTE: this service is a stub (idle loop, ~31 lines) and is NOT in the active
+# paper-trading path. nautilus_trader / vectorbt / TA-Lib removed: absent from the
+# root lock file and would break the Docker image build. The real backtest engine
+# lives in core_trading/backtest and is driven via the root pyproject deps.
 pandas
 numpy
-TA-Lib
-clickhouse-connect
 kafka-python

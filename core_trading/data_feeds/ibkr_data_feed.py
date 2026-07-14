@@ -17,7 +17,10 @@ try:
     IBKR_AVAILABLE = True
 except ImportError:
     IBKR_AVAILABLE = False
-    logging.warning("ib_insync not available - IBKR data feed will be simulated")
+    logging.warning(
+        "ib_insync not available - IBKR data feed CANNOT provide live market data; "
+        "connect() will raise. Install with: pip install ib_insync>=0.9.86"
+    )
 
 from core_trading.adapters.base import (
     AdapterConfig,
@@ -113,6 +116,15 @@ class IBKRDataFeed(BaseDataFeedAdapter):
 
     async def connect(self) -> bool:
         """Connect via the IBKR adapter."""
+        # Defense in depth: never allow a "connected" data feed without ib_insync.
+        # The broker adapter enforces the same rule; we re-check here so a missing
+        # ib_insync fails loudly at the data-feed boundary instead of silently
+        # yielding empty market data.
+        if not IBKR_AVAILABLE:
+            raise RuntimeError(
+                "ib_insync is not installed - IBKR data feed cannot provide live "
+                "market data. Install with: pip install ib_insync>=0.9.86"
+            )
         if not self._adapter.is_connected:
             success = await self._adapter.connect()
             if not success:

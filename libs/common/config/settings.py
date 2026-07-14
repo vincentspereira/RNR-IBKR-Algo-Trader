@@ -17,13 +17,21 @@ class DatabaseConfig(BaseSettings):
     
     # ClickHouse
     clickhouse_host: str = Field(default="localhost", description="ClickHouse host")
-    clickhouse_port: int = Field(default=8123, description="ClickHouse HTTP port")
+    clickhouse_port: int = Field(default=9000, description="ClickHouse native protocol port (clickhouse-driver)")
     clickhouse_password: str = Field(..., description="ClickHouse password")
     clickhouse_db: str = Field(default="trading", description="ClickHouse database")
     
     # Neo4j
     neo4j_uri: str = Field(default="bolt://localhost:7687", description="Neo4j URI")
     neo4j_password: str = Field(..., description="Neo4j password")
+
+    # ArcadeDB (knowledge graph) — Apache-2.0; the DEPLOYED infra runs ArcadeDB,
+    # not Neo4j. HTTP API on 2480. Defaults match docker-compose so get_config()
+    # loads without extra env vars. See libs/database/arcadedb.
+    arcadedb_url: str = Field(default="http://localhost:2480", description="ArcadeDB HTTP base URL")
+    arcadedb_user: str = Field(default="root", description="ArcadeDB user (root by default)")
+    arcadedb_password: str = Field(default="ChangeMeInProduction123!", description="ArcadeDB password")
+    arcadedb_database: str = Field(default="trading", description="ArcadeDB database name")
     
     # Redis
     redis_host: str = Field(default="localhost", description="Redis host")

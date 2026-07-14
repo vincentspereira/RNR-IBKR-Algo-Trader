@@ -7,6 +7,7 @@ from libs.database.postgres import PostgreSQLClient
 from libs.database.redis import RedisClient
 from libs.database.clickhouse import ClickHouseClient
 from libs.database.neo4j import Neo4jClient
+from libs.database.arcadedb import ArcadeDBClient
 from libs.database.qdrant import QdrantClient
 
 
@@ -37,8 +38,16 @@ def clickhouse_client() -> ClickHouseClient:
 
 @pytest.fixture
 def neo4j_client() -> Neo4jClient:
-    """Provide Neo4j client for testing."""
+    """Provide Neo4j client for testing (real Neo4j only; deployed infra uses ArcadeDB)."""
     client = Neo4jClient()
+    yield client
+    client.close()
+
+
+@pytest.fixture
+def arcadedb_client() -> ArcadeDBClient:
+    """Provide ArcadeDB client for testing (the deployed graph backend)."""
+    client = ArcadeDBClient()
     yield client
     client.close()
 

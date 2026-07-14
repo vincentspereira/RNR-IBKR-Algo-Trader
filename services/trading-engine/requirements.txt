@@ -1,8 +1,15 @@
-nautilus_trader
+# Trading engine runtime deps. Lock-consistent with the root pyproject.toml /
+# poetry.lock (single source of truth). nautilus_trader removed: not imported by
+# this service and absent from the lock file (it broke the Docker image build).
+# For a fully reproducible image, prefer `poetry install` / `pip install .` from
+# the repo root (this subset exists for the slim per-service Dockerfile).
 ib_insync
 kafka-python
 pandas
 numpy
 pydantic
-loguru
+pydantic-settings
+sqlalchemy
+asyncpg
+structlog
 scipy

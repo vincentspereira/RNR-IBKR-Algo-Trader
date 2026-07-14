@@ -268,6 +268,42 @@ services:
           memory: 1G
     restart: unless-stopped
 
+  # ==================== METRICS EXPORTERS ====================
+  # PostgreSQL does not serve Prometheus metrics on 5432; this sidecar exposes
+  # them on 9187. Prometheus scrapes postgres-exporter:9187 (see prometheus.yml).
+  postgres-exporter:
+    image: prometheuscommunity/postgres-exporter:v0.15.0
+    container_name: trading-postgres-exporter
+    hostname: postgres-exporter
+    networks:
+      - trading_network
+    environment:
+      DATA_SOURCE_NAME: "postgresql://${POSTGRES_USER:-trading_user}:${POSTGRES_PASSWORD:-ChangeMeInProduction123!}@postgres:5432/trading?sslmode=disable"
+    ports:
+      - "9187:9187"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: unless-stopped
+
+  # Valkey does not serve Prometheus metrics on 6379; redis-exporter is
+  # wire-compatible with Valkey and exposes cache metrics on 9121.
+  redis-exporter:
+    image: oliver006/redis_exporter:v1.59.0
+    container_name: trading-redis-exporter
+    hostname: redis-exporter
+    networks:
+      - trading_network
+    environment:
+      REDIS_ADDR: "redis://valkey:6379"
+      REDIS_PASSWORD: "${VALKEY_PASSWORD:-ChangeMeInProduction123!}"
+    ports:
+      - "9121:9121"
+    depends_on:
+      valkey:
+        condition: service_started
+    restart: unless-stopped
+
   # Grafana pinned at 9.5.x — last Apache-2.0 release. 10.x moved to AGPL-3.0.
   # Future migration: Perses (Apache-2.0, CNCF) when its Prometheus + ClickHouse data
   # source maturity reaches feature parity with Grafana dashboards.

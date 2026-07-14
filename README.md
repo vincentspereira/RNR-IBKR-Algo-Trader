@@ -3,18 +3,17 @@
 ![Build Status](https://img.shields.io/badge/build-passing-brightgreen)
 ![Test Coverage](https://img.shields.io/badge/coverage->95%25-brightgreen)
 ![License](https://img.shields.io/badge/license-Proprietary-blue)
-![Python](https://img.shields.io/badge/python-3.11+-blue)
+![Python](https://img.shields.io/badge/python-3.12+-blue)
 ![Docker](https://img.shields.io/badge/docker-24.0+-blue)
-![Phase](https://img.shields.io/badge/phase-4%2F28-yellow)
-![Progress](https://img.shields.io/badge/progress-12.7%25-orange)
+![Phase](https://img.shields.io/badge/phase-paper%20trading-yellow)
 
-> **Professional-grade, institutional-quality Agentic AI-based Algorithmic Trading System** for retail traders using Interactive Brokers TWS platform.
+> **Personal-use quantitative trading system** for retail traders using Interactive Brokers TWS, built around an evidence-driven, risk-first workflow (see `docs/QUANT_TRADING_MASTER_PLAN.md`).
 
 ---
 
-## 🎯 Overview
+## Overview
 
-A complete algorithmic trading platform featuring **28 microservices**, **5 specialized databases**, **AI-powered strategy development**, **comprehensive fundamental analysis**, and **advanced options trading**. Built with institutional-grade performance targets: **<100μs latency**, **>95% test coverage**, and **SOC 2 compliance readiness**.
+A modular algorithmic trading platform: a **production-functional trading-engine service** (IBKR adapter, execution, risk gates, kill switch) backed by shared `core_trading` and `libs` packages and a polyglot database stack (PostgreSQL, ClickHouse, ArcadeDB, Valkey, Qdrant). Several additional services exist as libraries or are under construction; the count is **not** "28 microservices". Personal-use scope — see the master plan for the honest status, the 90-day paper-trading gate, and the realistic timeline.
 
 ### 🌟 **What Makes This Unique?**
 
@@ -451,9 +450,9 @@ Proprietary and confidential. All rights reserved.
 
 ## 📊 Project Status
 
-**Current Phase**: **Phase 5 - Data Pipeline & Event Architecture** 🚀  
-**Timeline**: 55 weeks (42 weeks development + 90 days paper trading)  
-**Completion**: 12.7% (7/55 weeks)
+**Current Phase**: Paper trading — the trading-engine service is live against IBKR (paper account); the 90-day clock is running for the validated rsi2/trend strategies. See `docs/OPERATOR_SETUP_RUNBOOK.md`.  
+**Roadmap**: Phases 0–13 in `docs/QUANT_TRADING_MASTER_PLAN.md` (data → research → signals → portfolio → risk → execution → paper → live).  
+**Status**: architecturally mature, operationally mid-build — see the master plan's honest current-state assessment rather than a fixed completion percentage.
 
 ### Phase Progress
 
@@ -489,7 +488,7 @@ Proprietary and confidential. All rights reserved.
 
 ### What Sets This Apart?
 
-1. **Institutional-Grade Architecture** - 28 microservices, 5 databases, event-driven design
+1. **Risk-First Architecture** - trading-engine service + shared `core_trading`/`libs`, pre-trade risk gates, kill switch, circuit breakers, polyglot persistence
 2. **Multi-Factor Alpha** - Combine technical, fundamental, ML signals for superior returns
 3. **AI-Powered Development** - Natural language strategy creation, intelligent guidance
 4. **Comprehensive Fundamental Analysis** - 50+ ratios, earnings analysis, insider trading
@@ -506,4 +505,4 @@ Proprietary and confidential. All rights reserved.
 
 ---
 
-_Last Updated: 2025-11-20 | Version: 5.0 | Phase: 4/28 | Progress: 12.7%_
+_Last Updated: 2026-07-14 | Phase: paper trading | For honest status, phases, and timeline see `docs/QUANT_TRADING_MASTER_PLAN.md` and `docs/OPERATOR_SETUP_RUNBOOK.md`._

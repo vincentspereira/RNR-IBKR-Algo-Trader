@@ -27,33 +27,41 @@ scrape_configs:
       - targets: ["localhost:9090"]
 
   # Databases
+  # PostgreSQL does not expose Prometheus metrics on 5432; scrape the
+  # postgres-exporter sidecar (see docker-compose) on 9187 instead.
   - job_name: "postgres"
     static_configs:
-      - targets: ["postgres:5432"]
+      - targets: ["postgres-exporter:9187"]
         labels:
           database: "trading"
           role: "transactional"
 
+  # ClickHouse exposes Prometheus-format metrics on its HTTP port at /metrics.
   - job_name: "clickhouse"
+    metrics_path: /metrics
     static_configs:
-      - targets: ["clickhouse:9363"]
+      - targets: ["clickhouse:8123"]
         labels:
           database: "trading"
           role: "analytics"
 
-  - job_name: "redis"
+  # Valkey does not expose Prometheus metrics on 6379; scrape the
+  # redis-exporter sidecar (wire-compatible with Valkey) on 9121.
+  - job_name: "valkey"
     static_configs:
-      - targets: ["redis:6379"]
+      - targets: ["redis-exporter:9121"]
         labels:
           database: "trading"
           role: "cache"
 
-  # Event Bus
-  - job_name: "kafka"
-    static_configs:
-      - targets: ["kafka:9092"]
-        labels:
-          component: "event-bus"
+  # Event Bus — Confluent cp-kafka does not expose Prometheus metrics on 9092.
+  # To collect Kafka metrics, add a JMX exporter sidecar and target it, e.g.
+  # bitnami/jmx-exporter on kafka-jmx-exporter:9404.
+  # - job_name: "kafka"
+  #   static_configs:
+  #     - targets: ["kafka-jmx-exporter:9404"]
+  #       labels:
+  #         component: "event-bus"
 
   # Monitoring Stack
   - job_name: "grafana"

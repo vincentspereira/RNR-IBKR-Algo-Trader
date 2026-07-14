@@ -3,7 +3,7 @@ from typing import Optional, AsyncGenerator
 from contextlib import asynccontextmanager
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine, async_sessionmaker
 from sqlalchemy.orm import declarative_base
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, text
 from sqlalchemy.pool import NullPool
 
 from libs.common.config import get_config
@@ -92,7 +92,8 @@ class PostgreSQLClient:
         """
         try:
             async with self.engine.connect() as conn:
-                await conn.execute("SELECT 1")
+                # SQLAlchemy 2.0 requires an executable object, not a raw string.
+                await conn.execute(text("SELECT 1"))
             return True
         except Exception as e:
             logger.error("health_check_failed", error=str(e))
