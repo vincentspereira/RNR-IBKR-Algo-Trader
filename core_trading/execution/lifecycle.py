@@ -51,7 +51,7 @@ Design principles
   wall-clock reads occur on any legal-transition path.  Where a default
   timestamp is convenient (event construction), it is injectable so tests stay
   deterministic.
-* **ASCII only**: all rendered output is 7-bit ASCII for Windows cp1252
+* **ASCII only**: all rendered output is 7-bit ASCII for terminal portability
   consoles, ops email bodies and log files.
 
 References
@@ -931,7 +931,7 @@ def _fmt_value(value: float | None) -> str:
 def render_reconciliation(report: ReconciliationReport) -> str:
     """Render a :class:`ReconciliationReport` as an ASCII-only summary string.
 
-    All output is 7-bit ASCII -- suitable for Windows cp1252 consoles, ops
+    All output is 7-bit ASCII -- suitable for terminal-portable consoles, ops
     email bodies and log files.
 
     Parameters

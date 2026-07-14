@@ -810,7 +810,7 @@ def render_attribution_report(
 ) -> str:
     """Render all attribution results as a single ASCII-only report string.
 
-    All output is 7-bit ASCII (``ord < 128``), suitable for Windows cp1252
+    All output is 7-bit ASCII (``ord < 128``), suitable for terminal portability
     consoles, ops email bodies, and log files.  Mirrors the renderer pattern
     of :func:`core_trading.risk.daily_report.render_daily_risk_report_markdown`.
 

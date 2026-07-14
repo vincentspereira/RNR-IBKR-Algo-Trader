@@ -33,13 +33,13 @@ this repo.  This script benches only the deterministic, in-process compute.
 
 Usage
 -----
-``.venv/Scripts/python.exe tools/benchmarks.py``
+``.venv/bin/python tools/benchmarks.py``
     Run all benchmarks and print the ASCII table to stdout.
 
-``.venv/Scripts/python.exe tools/benchmarks.py --output PATH``
+``.venv/bin/python tools/benchmarks.py --output PATH``
     Also write the table to ``PATH``.
 
-``.venv/Scripts/python.exe tools/benchmarks.py --repeats N --bars M``
+``.venv/bin/python tools/benchmarks.py --repeats N --bars M``
     Override the repeat count and the synthetic-panel bar count.
 """
 from __future__ import annotations

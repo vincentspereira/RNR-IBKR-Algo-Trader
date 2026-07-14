@@ -1,6 +1,6 @@
 """Daily TA-quant paper-trading run -- the 90-day clock for the rsi2 book.
 
-The Windows Task Scheduler entrypoint for the validated three-slot paper
+The cron entrypoint for the validated three-slot paper
 book (decision record: ``docs/GO_NO_GO_RSI2_TREND_SURVIVORSHIP_2026-06-10.md``):
 
 | slot                     | universe | net Sharpe (validated) | gross cap |
@@ -25,12 +25,12 @@ long-only books it is active-position-count // 2. Use ``gross_leverage``
 and the order list as the real diagnostics.
 
 Run manually:
-    .venv/Scripts/python.exe tools/taquant_paper_run.py            # live paper run
-    .venv/Scripts/python.exe tools/taquant_paper_run.py --dry-run  # no orders, no ledger
-    .venv/Scripts/python.exe tools/taquant_paper_run.py --status   # ledgers + promotion
-    .venv/Scripts/python.exe tools/taquant_paper_run.py --slot rsi2t10_calm75 --dry-run
-    .venv/Scripts/python.exe tools/taquant_paper_run.py --reset-halt --slot <slot>
-    .venv/Scripts/python.exe tools/taquant_paper_run.py --resolve-incidents --slot <slot>
+    .venv/bin/python tools/taquant_paper_run.py            # live paper run
+    .venv/bin/python tools/taquant_paper_run.py --dry-run  # no orders, no ledger
+    .venv/bin/python tools/taquant_paper_run.py --status   # ledgers + promotion
+    .venv/bin/python tools/taquant_paper_run.py --slot rsi2t10_calm75 --dry-run
+    .venv/bin/python tools/taquant_paper_run.py --reset-halt --slot <slot>
+    .venv/bin/python tools/taquant_paper_run.py --resolve-incidents --slot <slot>
 """
 from __future__ import annotations
 

@@ -12,7 +12,7 @@
 
 ```bash
 # On your laptop
-pip install -e "C:\Users\vince\Projects\AI Agents\Multi-Agent System\agents\agent - sdlc"
+pip install -e "/home/vincentspereira/Projects/AI Agents/Multi-Agent System/agents/agent - sdlc"
 ```
 
 **Issues**:
@@ -32,7 +32,7 @@ pip install -e "C:\Users\vince\Projects\AI Agents\Multi-Agent System\agents\agen
 
 ```bash
 # Your existing SDLC agent becomes a git repository
-cd "C:\Users\vince\Projects\AI Agents\Multi-Agent System\agents\agent - sdlc"
+cd "/home/vincentspereira/Projects/AI Agents/Multi-Agent System/agents/agent - sdlc"
 git init
 git add .
 git commit -m "Initial SDLC agent package"
@@ -104,7 +104,7 @@ pip install git+https://github.com/VincentPereira/sdlc-agent.git@v2.1.0
 
 ```bash
 # Build package
-cd "C:\Users\vince\Projects\AI Agents\Multi-Agent System\agents\agent - sdlc"
+cd "/home/vincentspereira/Projects/AI Agents/Multi-Agent System/agents/agent - sdlc"
 python -m build
 
 # Upload to PyPI
@@ -333,7 +333,7 @@ docker run -it sdlc-agent sdlc execute --phase "Phase 5"
 
 ```bash
 # One-time setup
-cd "C:\Users\vince\Projects\AI Agents\Multi-Agent System\agents\agent - sdlc"
+cd "/home/vincentspereira/Projects/AI Agents/Multi-Agent System/agents/agent - sdlc"
 git init
 git remote add origin https://github.com/VincentPereira/sdlc-agent.git
 

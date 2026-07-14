@@ -1,7 +1,7 @@
 # SDLC MCP Documentation Update Summary
 
 **Date**: 2025-11-21  
-**Location**: `C:\Users\vince\Projects\AI Agents\Multi-Agent System\agents\agent - sdlc\docs\architecture - sdlc mcp\`
+**Location**: `/home/vincentspereira/Projects/AI Agents/Multi-Agent System/agents/agent - sdlc/docs/architecture - sdlc mcp/`
 
 ---
 
@@ -136,4 +136,4 @@ All documentation corrections completed. The SDLC MCP is now ready to begin Phas
 
 ---
 
-**Location**: `C:\Users\vince\Projects\AI Agents\Multi-Agent System\agents\agent - sdlc\`
+**Location**: `/home/vincentspereira/Projects/AI Agents/Multi-Agent System/agents/agent - sdlc/`

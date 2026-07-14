@@ -7,8 +7,8 @@
 This is the **single runnable checklist** for the operational steps that code
 cannot do for you: rotate credentials, run Docker, ingest data, verify the
 dashboard, connect TWS, schedule the daily jobs, and rehearse the kill switch.
-Every command is copy-pasteable PowerShell from the repo root. All CLI output
-is plain ASCII (Windows cp1252-safe).
+Every command is copy-pasteable bash from the repo root. All CLI output
+is plain ASCII (terminal-portable).
 
 > Scope note. This runbook gets the *infrastructure and plumbing* live. It does
 > NOT pick a strategy. As of 2026-06-09 there is no validated paper-trading
@@ -27,13 +27,14 @@ unattended (~30-60 min), then the 90-day paper clock is wall-clock.
 | Requirement | Why | Check |
 | --- | --- | --- |
 | Docker Desktop running | ClickHouse + Grafana + Prometheus | `docker info` |
-| Python 3.12 venv at `.venv` | every CLI command below | `./.venv/Scripts/python.exe --version` |
+| Python 3.12 venv at `.venv` | every CLI command below | `.venv/bin/python --version` |
 | IBKR TWS (paper login), API enabled, port 7497 | broker connectivity | TWS running, "Enable ActiveX and Socket Clients" on |
 | Git clean working tree | so you can `git diff` your config changes | `git status` |
 
-If Python 3.12 is not the venv interpreter, stop and fix that first (system
-Python is 3.14, too new for the pinned deps -- see memory
-`project_python_deps_state.md`).
+If Python 3.12 is not the venv interpreter, stop and fix that first.
+On WSL2/Ubuntu the system Python is 3.12.3 (ideal). Recreate the venv with
+`python3.12 -m venv .venv` (a Windows `.venv\Scripts\` venv is NOT portable
+to Linux -- see memory `project_python_deps_state.md`).
 
 ---
 
@@ -52,9 +53,9 @@ and a clean `.env` established before anything connects to IBKR.
 
 ### 1.2 Establish a clean `.env`
 
-```powershell
+```bash
 # Create your private .env from the template (never commit it)
-Copy-Item .env.example .env
+cp .env.example .env
 
 # Confirm .env is gitignored (should print a match)
 git check-ignore .env
@@ -77,12 +78,12 @@ Also change every `ChangeMeInProduction123!` database password and set
 
 ### 1.3 Verify no secret is hardcoded in tracked source
 
-```powershell
+```bash
 # Should return NOTHING. If it prints a real DU/U account id, stop and scrub it.
-git grep -nE "DU[0-9]{6,}|U[0-9]{6,}" -- "*.py" | Select-String -NotMatch "DU_TEST_ACCOUNT"
+git grep -nE "DU[0-9]{6,}|U[0-9]{6,}" -- "*.py" | grep -v "DU_TEST_ACCOUNT"
 
 # Confirm the no-stubs / hygiene gate is green
-./.venv/Scripts/python.exe tools/check_no_stubs.py
+.venv/bin/python tools/check_no_stubs.py
 ```
 
 Expected: `[no_stubs] OK -- no violations detected`.
@@ -99,7 +100,7 @@ the master plan; it is not required to begin paper trading on localhost.
 
 ## 2. Bring up storage + dashboards
 
-```powershell
+```bash
 # Starts ClickHouse, Grafana 9.5.x, Prometheus
 docker compose up -d clickhouse grafana prometheus
 docker ps    # all three healthy after ~30s
@@ -119,12 +120,12 @@ between `.env` and your shell.
 
 ## 3. Ingest 5 years of daily bars (free source)
 
-```powershell
+```bash
 # Smoke test: fetch + validate two symbols, store nothing
-./.venv/Scripts/python.exe -m core_trading.data.ingest --symbols AAPL,MSFT --years 1 --dry-run
+.venv/bin/python -m core_trading.data.ingest --symbols AAPL,MSFT --years 1 --dry-run
 
 # Real backfill: S&P 100, 5 years daily, validated + stored (idempotent)
-./.venv/Scripts/python.exe -m core_trading.data.ingest --universe SP100 --years 5
+.venv/bin/python -m core_trading.data.ingest --universe SP100 --years 5
 ```
 
 Exit codes: `0` OK; `1` quality gate failed (read the `[ERROR]`/`[WARN]`
@@ -157,9 +158,9 @@ fresh so that clock can run.
 
 With TWS running (paper account, API enabled, port 7497):
 
-```powershell
+```bash
 # Cross-validate data: pull a sample from IBKR alongside the yfinance rows
-./.venv/Scripts/python.exe -m core_trading.data.ingest --symbols AAPL,MSFT,SPY --years 1 --source ibkr
+.venv/bin/python -m core_trading.data.ingest --symbols AAPL,MSFT,SPY --years 1 --source ibkr
 ```
 
 The data session uses client id 7, distinct from the trading adapter, so it can
@@ -174,31 +175,32 @@ fallback), order acks, fills, and the position reconciles.
 
 ---
 
-## 6. Schedule the daily jobs (Windows Task Scheduler)
+## 6. Schedule the daily jobs (cron)
 
 Three unattended jobs. Run each command once interactively first to confirm it
-works, then wrap in a Task Scheduler action (Program: the venv python; Arguments:
-the `-m ...`/script path; Start in: the repo root).
+works, then add each as a cron job (`crontab -e`) running the venv python from
+the repo root, e.g. `0 23 * * 1-5 .venv/bin/python -m core_trading.data.ingest --universe SP100 --years 0.1`.
 
-```powershell
+```bash
 # 6.1 Daily data top-up (run ~23:00 UTC, after US close). 36 days re-fetched, dedup'd.
-./.venv/Scripts/python.exe -m core_trading.data.ingest --universe SP100 --years 0.1
+.venv/bin/python -m core_trading.data.ingest --universe SP100 --years 0.1
 
 # 6.2 Daily risk report (VaR/ES + stress + liquidity)
-./.venv/Scripts/python.exe -m core_trading.risk.daily_report --output logs/risk/risk_$(Get-Date -f yyyyMMdd).md
+.venv/bin/python -m core_trading.risk.daily_report --output logs/risk/risk_$(date +%Y%m%d).md
 
 # 6.3 Daily TCA report (once trading; --demo proves the pipeline pre-trade)
-./.venv/Scripts/python.exe -m core_trading.execution.tca --demo
+.venv/bin/python -m core_trading.execution.tca --demo
 ```
 
-A daily-reports Task Scheduler job already exists per memory
-(`project_paper_trading_blockers.md`); confirm it points at the venv python and
-the current repo path, and add 6.1/6.3 if missing. `tools/daily_ops.py` is the
+A daily-reports cron job already exists per memory
+(`project_paper_trading_blockers.md`); confirm it points at the venv python and the current repo path,
+and add 6.1/6.3 if missing (the Windows Task Scheduler entries do not exist on
+WSL2 -- recreate them as cron jobs). `tools/daily_ops.py` is the
 pre-market/post-market ops driver (data freshness, connectivity, reconciliation).
 
 ### 6.4 TAQuant paper book -- the 90-day clock (REGISTERED 2026-06-10)
 
-Task `IBKR-AlgoTrader TAQuant Paper Run` runs `tools/taquant_paper_run.py`
+A cron job (formerly the Windows task `IBKR-AlgoTrader TAQuant Paper Run`) runs `tools/taquant_paper_run.py`
 weekdays at 20:30 UK (~15:30 ET) and appends to
 `logs/taquant_paper/<slot>/`. Two slots, separate ledgers, kill switches
 and promotion gates (decision record
@@ -212,11 +214,11 @@ rejects US-domiciled ETFs for UK retail accounts under PRIIPs ("no KID",
 error 201 -- discovered via live paper rejections 2026-06-10). Restoring it
 requires the UCITS port (see the task list); single stocks are unaffected.
 
-```powershell
+```bash
 # daily ops
-./.venv/Scripts/python.exe tools/taquant_paper_run.py --status
-./.venv/Scripts/python.exe tools/taquant_paper_run.py --reset-halt --slot <slot>
-Get-Content logs/taquant_paper/scheduler.log -Tail 50
+.venv/bin/python tools/taquant_paper_run.py --status
+.venv/bin/python tools/taquant_paper_run.py --reset-halt --slot <slot>
+tail -n 50 logs/taquant_paper/scheduler.log
 ```
 
 Known symbol quirks (handled in `tools/pairs_paper_run.py`): BNY Mellon is
@@ -227,12 +229,12 @@ removed from the static SP100 list 2026-06-10.
 
 Two views over the same ledgers, both read-only:
 
-```powershell
+```bash
 # Live web dashboard (auto-refreshes every 5s; Ctrl+C to stop)
-./.venv/Scripts/python.exe tools/dashboard_server.py     # -> http://127.0.0.1:8642
+.venv/bin/python tools/dashboard_server.py     # -> http://127.0.0.1:8642
 
 # Static HTML report (auto-regenerated after every live paper run)
-Invoke-Item logs/paper_report.html
+xdg-open logs/paper_report.html
 ```
 
 Both show every book (daily slots, intraday lane, pairs) automatically:
@@ -254,26 +256,26 @@ result that justified paper trading is signal-on-close execution; this lane
 exists to measure -- with data, after 90 days -- whether intraday execution
 helps or hurts. Never read its results into the daily slots' promotion.
 
-```powershell
+```bash
 # one tick (smoke test), full session loop, status
-./.venv/Scripts/python.exe tools/intraday_paper_run.py --once --slot rsi2t10_calm75
-./.venv/Scripts/python.exe tools/intraday_paper_run.py            # loops until 15:55 ET
-./.venv/Scripts/python.exe tools/intraday_paper_run.py --status
+.venv/bin/python tools/intraday_paper_run.py --once --slot rsi2t10_calm75
+.venv/bin/python tools/intraday_paper_run.py            # loops until 15:55 ET
+.venv/bin/python tools/intraday_paper_run.py --status
 ```
 
-Task `IBKR-AlgoTrader Intraday Paper Run` (weekdays 14:50 UK) starts the
-session loop; the process exits by itself at 15:55 ET.
+A cron job (weekdays 14:50 UK) starts the session loop; the process exits by
+itself at 15:55 ET. (Recreate the Windows Task Scheduler entry as a cron job.)
 
 ### 6.7 Strategy lab (added 2026-06-10)
 
 Author and evaluate your own strategies against the SAME validation bar the
 production candidates cleared:
 
-```powershell
-./.venv/Scripts/python.exe tools/strategy_lab.py list
-./.venv/Scripts/python.exe tools/strategy_lab.py chart    --config rsi2t15_trend200 --universe etf
-./.venv/Scripts/python.exe tools/strategy_lab.py backtest --config rsi2t15_trend200 --universe sp500pit
-./.venv/Scripts/python.exe tools/strategy_lab.py backtest --custom examples/custom_strategy_example.py
+```bash
+.venv/bin/python tools/strategy_lab.py list
+.venv/bin/python tools/strategy_lab.py chart    --config rsi2t15_trend200 --universe etf
+.venv/bin/python tools/strategy_lab.py backtest --config rsi2t15_trend200 --universe sp500pit
+.venv/bin/python tools/strategy_lab.py backtest --custom examples/custom_strategy_example.py
 ```
 
 `chart` writes an interactive HTML (prices + entry/exit markers + equity +
@@ -292,10 +294,10 @@ risk. It lives in the pre-trade gate (`core_trading/risk/pretrade.py`) and the
 paper-trading driver (`core_trading/ops/pairs_paper_trading.py`); the runner
 exposes it operationally:
 
-```powershell
+```bash
 # Halt: clear/raise via the runner's controls
-./.venv/Scripts/python.exe tools/pairs_paper_run.py --status         # show ledger + halt state
-./.venv/Scripts/python.exe tools/pairs_paper_run.py --reset-halt     # clear the kill switch after review
+.venv/bin/python tools/pairs_paper_run.py --status         # show ledger + halt state
+.venv/bin/python tools/pairs_paper_run.py --reset-halt     # clear the kill switch after review
 ```
 
 Drill monthly: trip the switch, confirm no new orders are admitted by the
@@ -310,12 +312,12 @@ Do NOT start this until a strategy clears robustness validation on clean data.
 As of 2026-06-09 the pairs pilot is REJECTED and rsi2/trend is pending Norgate
 survivorship validation. When a strategy passes:
 
-```powershell
+```bash
 # Dry run first: compute and print orders, place/persist nothing
-./.venv/Scripts/python.exe tools/pairs_paper_run.py --dry-run
+.venv/bin/python tools/pairs_paper_run.py --dry-run
 
 # Live paper run (places paper orders via TWS, persists the ledger)
-./.venv/Scripts/python.exe tools/pairs_paper_run.py --equity 25000
+.venv/bin/python tools/pairs_paper_run.py --equity 25000
 ```
 
 The runner is generic across strategies via the Strategy seam (the `pairs_`
@@ -352,10 +354,10 @@ from "upper bound pending survivorship correction" into a decisive go/no-go.
 
 ## Quick reference -- daily operator loop (once paper trading)
 
-```powershell
+```bash
 # pre-market: data fresh? broker up? positions reconciled?
-./.venv/Scripts/python.exe tools/daily_ops.py
+.venv/bin/python tools/daily_ops.py
 # intraday: monitor Grafana PnL/risk panels; trip kill switch on anomaly
-# post-market: risk report + TCA + reconciliation auto-run via Task Scheduler
-./.venv/Scripts/python.exe tools/pairs_paper_run.py --status
+# post-market: risk report + TCA + reconciliation auto-run via cron
+.venv/bin/python tools/pairs_paper_run.py --status
 ```

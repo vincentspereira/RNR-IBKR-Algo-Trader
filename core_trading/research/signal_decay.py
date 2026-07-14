@@ -720,7 +720,7 @@ def _fmt_float(value: float | None, width: int = 8, decimals: int = 4) -> str:
 def render_decay_report(report: DecayReport) -> str:
     """Render a :class:`DecayReport` as an ASCII-only string.
 
-    All output is 7-bit ASCII (``ord < 128``), suitable for Windows cp1252
+    All output is 7-bit ASCII (``ord < 128``), suitable for terminal portability
     consoles, ops email bodies, and log files.  Mirrors the renderer pattern of
     :func:`core_trading.research.robustness_report.render_robustness_report`.
 

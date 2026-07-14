@@ -31,8 +31,8 @@ membership filter and top-N dollar-volume slice as the PIT sweep, and the
 Sharpe degradation vs the unstressed PIT baseline is reported.
 
 Run:
-    .venv/Scripts/python.exe tools/delisting_stress_test.py
-    .venv/Scripts/python.exe tools/delisting_stress_test.py --configs rsi2t15_trend200
+    .venv/bin/python tools/delisting_stress_test.py
+    .venv/bin/python tools/delisting_stress_test.py --configs rsi2t15_trend200
 """
 from __future__ import annotations
 

@@ -1,0 +1,52 @@
+# Normalize all text files to LF line endings in the repository,
+# regardless of which OS checks them out. Prevents CRLF/LF churn
+# when the repo is worked on across Windows and WSL2/Linux.
+* text=auto eol=lf
+
+# ---- Binary files: never normalize ----
+*.png   binary
+*.jpg   binary
+*.jpeg  binary
+*.gif   binary
+*.bmp   binary
+*.ico   binary
+*.webp  binary
+*.svg   text
+*.pdf   binary
+*.doc   binary
+*.docx  binary
+*.xls   binary
+*.xlsx  binary
+*.ppt   binary
+*.pptx  binary
+*.zip   binary
+*.gz    binary
+*.tar   binary
+*.tgz   binary
+*.7z    binary
+*.parquet binary
+*.feather binary
+*.npy   binary
+*.npz   binary
+*.pkl   binary
+*.pickle binary
+*.db    binary
+*.sqlite binary
+*.sqlite3 binary
+*.so    binary
+*.dylib binary
+*.dll   binary
+*.exe   binary
+*.class binary
+*.jar   binary
+*.coverage binary
+*.pyc   binary
+
+# Shell scripts need executable LF text
+*.sh    text eol=lf
+*.bash  text eol=lf
+
+# Windows-only scripts keep CRLF
+*.ps1   text eol=crlf
+*.bat   text eol=crlf
+*.cmd   text eol=crlf

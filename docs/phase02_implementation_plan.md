@@ -34,7 +34,7 @@ Phase 2 focuses on creating comprehensive, production-ready documentation for th
 
 ### Component 1: Core Documentation Updates
 
-#### [MODIFY] [README.md](file:///C:/Users/vince/Projects/Trading/IBKR%20-%20Algo%20Trader/README.md)
+#### [MODIFY] [README.md](file:////home/vincentspereira/Projects/Trading/RNR-IBKR-Algo-Trader/README.md)
 
 **Current State**: Basic overview, minimal setup instructions  
 **Target State**: Comprehensive system documentation with quick start guide

@@ -10,7 +10,7 @@ Safety rails:
   for the adapter; account IDs are masked in all output.
 
 Run:
-    .venv/Scripts/python.exe tools/tws_smoke_test.py
+    .venv/bin/python tools/tws_smoke_test.py
 """
 from __future__ import annotations
 

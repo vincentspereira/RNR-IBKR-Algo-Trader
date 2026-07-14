@@ -1,4 +1,4 @@
-"""Data feeds package for the IBKR Algo Trader.
+"""Data feeds package for the RNR-IBKR-Algo-Trader.
 
 Provides real-time and historical market data via IBKR,
 time-series storage via ClickHouse, Redis caching, and data normalization.

@@ -27,8 +27,8 @@ Complete comprehensive planning and architectural validation for building a prof
 ### Workspace Analysis
 
 - [/] **Review entire repository structure**
-  - [x] Main workspace: `C:\Users\vince\Projects\Trading\IBKR - Algo Trader`
-  - [ ] Secondary workspace: `C:\Users\vince\Projects\Trading\Financial Analysis Platform`
+  - [x] Main workspace: `/home/vincentspereira/Projects/Trading/RNR-IBKR-Algo-Trader`
+  - [ ] Secondary workspace: `/home/vincentspereira/Projects/Trading/Financial Analysis Platform`
   - [ ] Document workspace integration strategy
 
 ### Core Trading Assets Analysis
@@ -55,7 +55,7 @@ Complete comprehensive planning and architectural validation for building a prof
   - [ ] Analyze database models
   - [ ] Document API endpoints
   - [ ] Review frontend components (if applicable)
-  - [ ] Identify integration points with IBKR Algo Trader
+  - [ ] Identify integration points with RNR-IBKR-Algo-Trader
   - [ ] Document 8 new enhanced capabilities needed for Phase 15.5
 
 ### Architecture Documentation Review

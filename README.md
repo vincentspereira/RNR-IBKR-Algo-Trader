@@ -136,8 +136,8 @@ graph TB
 
 ```bash
 # 1. Clone repository
-git clone https://github.com/yourusername/IBKR-Algo-Trader.git
-cd "IBKR - Algo Trader"
+git clone https://github.com/vincentspereira/RNR-IBKR-Algo-Trader.git
+cd "RNR-IBKR-Algo-Trader"
 
 # 2. Configure environment
 cp .env.example .env
@@ -305,7 +305,7 @@ python scripts/deploy_strategy.py --mode paper --strategy "my-first-strategy"
 ## 🏗️ Project Structure
 
 ```
-IBKR - Algo Trader/
+RNR-IBKR-Algo-Trader/
 ├── services/                    # 28 Microservices
 │   ├── trading-engine/         # NautilusTrader integration
 │   ├── market-data/            # Multi-source data aggregation
@@ -411,7 +411,7 @@ We welcome contributions! Please see [CONTRIBUTING.md](CONTRIBUTING.md) for guid
 
 ```bash
 # 1. Fork and clone repository
-git clone https://github.com/yourusername/IBKR-Algo-Trader.git
+git clone https://github.com/vincentspereira/RNR-IBKR-Algo-Trader.git
 
 # 2. Create feature branch
 git checkout -b feature/my-new-feature
@@ -444,8 +444,8 @@ Proprietary and confidential. All rights reserved.
 
 - 📖 [Documentation](docs/)
 - ❓ [FAQ](docs/faq/)
-- 🐛 [Issue Tracker](https://github.com/yourusername/IBKR-Algo-Trader/issues)
-- 💬 [Discussions](https://github.com/yourusername/IBKR-Algo-Trader/discussions)
+- 🐛 [Issue Tracker](https://github.com/vincentspereira/RNR-IBKR-Algo-Trader/issues)
+- 💬 [Discussions](https://github.com/vincentspereira/RNR-IBKR-Algo-Trader/discussions)
 
 ---
 

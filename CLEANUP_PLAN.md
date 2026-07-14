@@ -92,7 +92,7 @@ Future infrastructure migration targets, deferred:
 After any further cleanup:
 
 ```bash
-cd "C:\Users\vince\Projects\Trading\IBKR - Algo Trader"
+cd "/home/vincentspereira/Projects/Trading/RNR-IBKR-Algo-Trader"
 
 # Check nothing imports a deleted module
 python -c "import core_trading.adapters.ibkr_adapter; print('OK')"

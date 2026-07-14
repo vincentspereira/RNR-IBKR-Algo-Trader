@@ -1,6 +1,6 @@
 # API Schema Documentation
 
-## OpenAPI Specs for IBKR Algo-Trader Microservices
+## OpenAPI Specs for RNR-IBKR-Algo-Trader Microservices
 
 This directory contains OpenAPI specifications for the 28 microservices.
 

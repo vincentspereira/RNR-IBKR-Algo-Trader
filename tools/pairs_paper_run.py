@@ -1,6 +1,6 @@
 """Daily pairs paper-trading run (master plan Phase 4.10 -- the 90-day clock).
 
-The Windows Task Scheduler entrypoint for the live paper pilot. Invoked at
+The cron entrypoint for the live paper pilot. Invoked at
 20:30 UK time Mon-Fri (about 25 minutes before the US close most of the
 year), it:
 
@@ -16,11 +16,11 @@ cleanly -- a skipped day stretches the calendar but never corrupts the
 ledger.
 
 Run manually:
-    .venv/Scripts/python.exe tools/pairs_paper_run.py            # live paper run
-    .venv/Scripts/python.exe tools/pairs_paper_run.py --dry-run  # no orders, no ledger
-    .venv/Scripts/python.exe tools/pairs_paper_run.py --status   # ledger + promotion summary
-    .venv/Scripts/python.exe tools/pairs_paper_run.py --reset-halt
-    .venv/Scripts/python.exe tools/pairs_paper_run.py --resolve-incidents
+    .venv/bin/python tools/pairs_paper_run.py            # live paper run
+    .venv/bin/python tools/pairs_paper_run.py --dry-run  # no orders, no ledger
+    .venv/bin/python tools/pairs_paper_run.py --status   # ledger + promotion summary
+    .venv/bin/python tools/pairs_paper_run.py --reset-halt
+    .venv/bin/python tools/pairs_paper_run.py --resolve-incidents
 """
 from __future__ import annotations
 
@@ -325,7 +325,7 @@ async def _cmd_run(args: argparse.Namespace) -> int:
             return 0
         # Market orders placed outside regular hours queue silently at IBKR
         # and fill at the NEXT open -- diverging from the ledger's close-price
-        # marks. This matters for Task Scheduler catch-up runs: a machine that
+        # marks. This matters for cron catch-up runs: a machine that
         # was off at 20:30 UK may fire the job late in the evening.
         t = now_et.time()
         if not (_dt.time(9, 40) <= t <= _dt.time(15, 55)):

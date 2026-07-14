@@ -172,7 +172,7 @@ The most critical documentation has been created:
 ## File Structure Created
 
 ```
-IBKR - Algo Trader/
+RNR-IBKR-Algo-Trader/
 ├── README.md                                    ✅ Updated
 ├── docs/
 │   ├── phase02_task.md                          ✅ New

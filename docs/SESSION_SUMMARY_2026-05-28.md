@@ -10,9 +10,9 @@
 ## Deliverables completed
 
 ### 1. Python 3.12 toolchain (Phase 0)
-- Python 3.12.10 already installed at `C:\Users\vince\AppData\Local\Programs\Python\Python312\`
-- Poetry 2.4.1 installed via `py -3.12 -m pip install --user poetry`
-- Poetry binary at `C:\Users\vince\AppData\Roaming\Python\Scripts\poetry.exe`
+- Python 3.12.10 already installed at `/home/vincentspereira/AppData/Local/Programs/Python/Python312/`
+- Poetry 2.4.1 installed via `python3.12 -m pip install --user poetry`
+- Poetry binary at `/home/vincentspereira/AppData/Roaming/Python/Scripts/poetry.exe`
 - Existing `.venv` was already on Python 3.12.10
 - `pyproject.toml` Python pin updated `^3.11` -> `^3.12`
 - mypy / black / ruff targets set to py312

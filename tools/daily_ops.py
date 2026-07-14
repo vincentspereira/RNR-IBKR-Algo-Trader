@@ -1,6 +1,6 @@
 """Daily operations report runner (Phase 7/9 DOD operator wiring).
 
-Designed to be invoked nightly by Windows Task Scheduler (22:30 local,
+Designed to be invoked nightly by cron (22:30 local,
 with catch-up if the machine was off). Produces, under
 ``logs/reports/YYYY-MM-DD/``:
 
@@ -24,7 +24,7 @@ root and flags it in ``status.txt`` -- the cue to ask Claude to
 "recalibrate the impact models on the real fills".
 
 Run manually:
-    .venv/Scripts/python.exe tools/daily_ops.py
+    .venv/bin/python tools/daily_ops.py
 """
 from __future__ import annotations
 

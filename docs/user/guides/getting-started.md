@@ -52,10 +52,10 @@
 
 ```bash
 # Clone the repository
-git clone https://github.com/yourusername/IBKR-Algo-Trader.git
+git clone https://github.com/vincentspereira/RNR-IBKR-Algo-Trader.git
 
 # Navigate to directory
-cd "IBKR - Algo Trader"
+cd "RNR-IBKR-Algo-Trader"
 ```
 
 ### Step 2: Configure Environment

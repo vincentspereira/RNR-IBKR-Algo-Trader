@@ -1,6 +1,6 @@
 # AI Agent Operational Guide
 
-> **This document provides operational guidance for AI agents working on the IBKR Algo-Trader repository.**
+> **This document provides operational guidance for AI agents working on the RNR-IBKR-Algo-Trader repository.**
 
 ---
 
@@ -45,7 +45,7 @@ docker-compose build                      # Build Docker images
 ## Project Structure
 
 ```
-IBKR-Algo-Trader/
+RNR-IBKR-Algo-Trader/
 ├── services/              # 28 microservices
 ├── libs/                  # Shared libraries (common, core, quant, database, etc.)
 ├── core_trading/          # Legacy assets (109 Python files)
@@ -507,7 +507,7 @@ pytest tests/ --pdb
 
 1. **Set up environment**:
    ```bash
-   cd IBKR-Algo-Trader
+   cd RNR-IBKR-Algo-Trader
    poetry install
    docker-compose up -d
    ```

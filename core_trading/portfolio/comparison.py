@@ -261,7 +261,7 @@ def comparison_report(comparison: MethodComparison) -> str:
     Returns
     -------
     str
-        Multi-line ASCII report (no Unicode -- cp1252-safe).
+        Multi-line ASCII report (no Unicode -- terminal-portable).
     """
     m = comparison.metrics
     header = (

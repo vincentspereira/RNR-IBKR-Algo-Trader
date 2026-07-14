@@ -28,7 +28,7 @@
 
 ```bash
 # One-time installation
-pip install -e "C:\Users\vince\Projects\AI Agents\Multi-Agent System\agents\agent - sdlc"
+pip install -e "/home/vincentspereira/Projects/AI Agents/Multi-Agent System/agents/agent - sdlc"
 
 # Makes 'sdlc' command available globally
 sdlc --version
@@ -47,7 +47,7 @@ Python site-packages/
     └── core/
 
 # Anywhere on your system:
-$ sdlc execute --project "IBKR Algo Trader" --phase "Phase 5"
+$ sdlc execute --project "RNR-IBKR-Algo-Trader" --phase "Phase 5"
 ```
 
 #### Pros ✅
@@ -237,7 +237,7 @@ sdlc execute --phase "Phase 5"
 
 ```bash
 # One command installs everything
-pip install -e "C:\Users\vince\Projects\AI Agents\Multi-Agent System\agents\agent - sdlc"
+pip install -e "/home/vincentspereira/Projects/AI Agents/Multi-Agent System/agents/agent - sdlc"
 
 # Provides both:
 sdlc --help                    # CLI
@@ -249,7 +249,7 @@ sdlc-mcp-server start          # MCP server
 **Scenario 1: Direct CLI Usage**
 
 ```bash
-cd "C:\Users\vince\Projects\Trading\IBKR - Algo Trader"
+cd "/home/vincentspereira/Projects/Trading/RNR-IBKR-Algo-Trader"
 sdlc init
 sdlc execute --phase "Phase 5" --mode hybrid
 ```
@@ -289,7 +289,7 @@ from sdlc_agent import execute_phase
 result = execute_phase(
     phase="Phase 5",
     mode="hybrid",
-    project_root="C:/Users/vince/Projects/Trading/IBKR - Algo Trader"
+    project_root="/home/vincentspereira/Projects/Trading/RNR-IBKR-Algo-Trader"
 )
 ```
 
@@ -521,7 +521,7 @@ hub = SDLCOrchestrationHub()
 result = hub.execute_phase(
     phase_name="Phase 5",
     mode="hybrid",
-    project_path="C:/Users/.../IBKR - Algo Trader"
+    project_path="C:/Users/.../RNR-IBKR-Algo-Trader"
 )
 
 # Check status
@@ -536,7 +536,7 @@ if result.status == "completed":
 ### Challenge
 
 ```
-Original source: C:\Users\vince\Projects\AI Agents\Multi-Agent System\agents\agent - sdlc
+Original source: /home/vincentspereira/Projects/AI Agents/Multi-Agent System/agents/agent - sdlc
 Installed package: Python site-packages/sdlc_agent
 
 Question: How to sync updates?
@@ -546,7 +546,7 @@ Question: How to sync updates?
 
 ```bash
 # Install in editable mode
-pip install -e "C:\Users\vince\Projects\AI Agents\Multi-Agent System\agents\agent - sdlc"
+pip install -e "/home/vincentspereira/Projects/AI Agents/Multi-Agent System/agents/agent - sdlc"
 
 # This creates a LINK, not a copy:
 # site-packages/sdlc-agent.egg-link → points to original directory
@@ -733,7 +733,7 @@ C:\Users\...\agent - sdlc\
 
 ```bash
 # Editable install (changes immediately reflected)
-pip install -e "C:\Users\vince\Projects\AI Agents\Multi-Agent System\agents\agent - sdlc"
+pip install -e "/home/vincentspereira/Projects/AI Agents/Multi-Agent System/agents/agent - sdlc"
 
 # This provides:
 # - CLI: 'sdlc' command
@@ -841,7 +841,7 @@ Once you approve this architecture, I will:
 4. ✅ Create MCP configuration helper script
 5. ✅ Create update notification system
 6. ✅ Test installation and usage
-7. ✅ Create configuration for IBKR Algo Trader project
+7. ✅ Create configuration for RNR-IBKR-Algo-Trader project
 8. ✅ Run pilot with Phase 5
 
 **Ready to proceed with this architecture?**

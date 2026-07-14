@@ -1,7 +1,7 @@
 # SDLC MCP Enhancement - Documentation Summary
 
 **Generated**: 2025-11-21  
-**Location**: `C:\Users\vince\Projects\Trading\IBKR - Algo Trader\docs\sdlc integration\`  
+**Location**: `/home/vincentspereira/Projects/Trading/RNR-IBKR-Algo-Trader/docs/sdlc integration/`  
 **Status**: ✅ Complete
 
 ---
@@ -91,8 +91,8 @@
 
 ### File Locations
 
-- [x] All files copied to: `C:\Users\vince\Projects\Trading\IBKR - Algo Trader\docs\sdlc integration\`
-- [x] Files accessible from IBKR Algo Trader project
+- [x] All files copied to: `/home/vincentspereira/Projects/Trading/RNR-IBKR-Algo-Trader/docs/sdlc integration/`
+- [x] Files accessible from RNR-IBKR-Algo-Trader project
 - [x] Markdown rendering verified
 - [x] No broken links
 

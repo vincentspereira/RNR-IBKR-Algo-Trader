@@ -143,7 +143,7 @@ kubectl apply -f sdlc-mcp-deployment.yaml
 
 ```bash
 # Clone repository
-cd "C:\Users\vince\Projects\AI Agents\Multi-Agent System\agents\agent - sdlc"
+cd "/home/vincentspereira/Projects/AI Agents/Multi-Agent System/agents/agent - sdlc"
 
 # Install as package (recommended)
 pip install -e .
@@ -277,7 +277,7 @@ print(f"Workflow: {result['workflow_template']}")
 ### Scenario: Implementing Phases 5-28 of IBKR Trading System
 
 **Project**: Agentic AI Algorithmic Trading System  
-**Location**: `C:\Users\vince\Projects\Trading\IBKR - Algo Trader`  
+**Location**: `/home/vincentspereira/Projects/Trading/RNR-IBKR-Algo-Trader`  
 **Phases**: 5-28 (24 phases, ~40 weeks of work)
 
 ### Setup (One-Time Configuration)
@@ -286,7 +286,7 @@ print(f"Workflow: {result['workflow_template']}")
 
 ```bash
 # Navigate to IBKR project
-cd "C:\Users\vince\Projects\Trading\IBKR - Algo Trader"
+cd "/home/vincentspereira/Projects/Trading/RNR-IBKR-Algo-Trader"
 
 # Initialize SDLC MCP for this project
 sdlc-mcp init
@@ -308,12 +308,12 @@ sdlc-mcp analyze-project .
 sdlc-mcp configure --confirm
 ```
 
-This creates: `IBKR - Algo Trader/.sdlc/config.yaml`
+This creates: `RNR-IBKR-Algo-Trader/.sdlc/config.yaml`
 
 #### 2. Configure IDE to Use SDLC MCP
 
 ```json
-// IBKR - Algo Trader/.vscode/settings.json
+// RNR-IBKR-Algo-Trader/.vscode/settings.json
 {
   "mcp.servers": {
     "sdlc": {

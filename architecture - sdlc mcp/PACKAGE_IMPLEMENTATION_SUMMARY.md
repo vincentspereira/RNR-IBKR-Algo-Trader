@@ -56,7 +56,7 @@ Created a **universal, IDE-agnostic SDLC Agent package** that can be used across
 Works in **any project directory**:
 
 ```bash
-cd "C:\Users\...\IBKR - Algo Trader"
+cd "C:\Users\...\RNR-IBKR-Algo-Trader"
 sdlc init  # Creates .sdlc/config.yaml for this project
 
 cd "C:\Users\...\WebApp"
@@ -121,7 +121,7 @@ pip install git+https://github.com/VincentPereira/sdlc-agent.git
 ### Scenario 1: CLI in Terminal
 
 ```bash
-cd "C:\Users\...\IBKR - Algo Trader"
+cd "C:\Users\...\RNR-IBKR-Algo-Trader"
 sdlc init
 sdlc execute "Phase 5: Data Pipeline" --mode hybrid
 ```
@@ -158,7 +158,7 @@ coordinator = get_agent_coordinator()
 result = execute_phase(
     phase="Phase 5",
     mode="hybrid",
-    project_root="C:/Users/.../IBKR - Algo Trader"
+    project_root="C:/Users/.../RNR-IBKR-Algo-Trader"
 )
 ```
 
@@ -169,7 +169,7 @@ result = execute_phase(
 ### 1. Push to GitHub
 
 ```bash
-cd "C:\Users\vince\Projects\AI Agents\Multi-Agent System\agents\agent - sdlc"
+cd "/home/vincentspereira/Projects/AI Agents/Multi-Agent System/agents/agent - sdlc"
 
 # Initialize git (if not already)
 git init
@@ -231,7 +231,7 @@ which sdlc-mcp-server  # Should show path
 ### 4. Test in IBKR Project
 
 ```bash
-cd "C:\Users\vince\Projects\Trading\IBKR - Algo Trader"
+cd "/home/vincentspereira/Projects/Trading/RNR-IBKR-Algo-Trader"
 
 # Initialize
 sdlc init

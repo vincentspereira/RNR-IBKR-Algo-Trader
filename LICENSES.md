@@ -1,4 +1,4 @@
-# Dependency License Audit -- IBKR Algo Trader
+# Dependency License Audit -- RNR-IBKR-Algo-Trader
 
 **Audit date:** 2026-05-21
 **Auditor:** Automated dependency review

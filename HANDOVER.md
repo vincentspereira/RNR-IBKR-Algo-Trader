@@ -13,13 +13,13 @@
 In the new terminal:
 
 ```
-cd "C:\Users\vince\Projects\Trading\IBKR - Algo Trader"
+cd "/home/vincentspereira/Projects/Trading/RNR-IBKR-Algo-Trader"
 claude
 ```
 
 Then paste this kickoff prompt:
 
-> Read HANDOVER.md and continue the IBKR Algo Trader paper-trading work. We're picking up from session 2026-05-21. The priority is implementing the 6 critical blockers in PRODUCTION_PUNCH_LIST.md so we can place a real paper trade against TWS on port 7497. Status of the environment: Python 3.12 venv at .venv is set up with paper-trading deps installed; docker-compose has been updated to swap Neo4j → ArcadeDB and Redis → Valkey; the credential leak is partially fixed (hardcoded account ID removed from source). I want to use TWS (not IB Gateway) since I'll use TWS for live trading. Start by reading HANDOVER.md fully, then begin work on PUNCH_LIST blocker B2 (the 5-minute fix) followed by B1, B3, B5, B6.
+> Read HANDOVER.md and continue the RNR-IBKR-Algo-Trader paper-trading work. We're picking up from session 2026-05-21. The priority is implementing the 6 critical blockers in PRODUCTION_PUNCH_LIST.md so we can place a real paper trade against TWS on port 7497. Status of the environment: Python 3.12 venv at .venv is set up with paper-trading deps installed; docker-compose has been updated to swap Neo4j → ArcadeDB and Redis → Valkey; the credential leak is partially fixed (hardcoded account ID removed from source). I want to use TWS (not IB Gateway) since I'll use TWS for live trading. Start by reading HANDOVER.md fully, then begin work on PUNCH_LIST blocker B2 (the 5-minute fix) followed by B1, B3, B5, B6.
 
 The new session will read this file and the memory store, then resume.
 
@@ -42,11 +42,15 @@ The new session will read this file and the memory store, then resume.
 
 ### Environment
 
-- **Python 3.12.10** installed via `winget install Python.Python.3.12 --scope user`. Available as `py -3.12`.
-- **`.venv/`** created at project root using Python 3.12. Activate with `.\.venv\Scripts\Activate.ps1` (PowerShell) or `.venv/Scripts/activate.bat` (cmd).
+- **Python 3.12** -- on WSL2/Ubuntu the system Python is 3.12.3 (no install
+  needed; on Windows it was `winget install Python.Python.3.12 --scope user`).
+- **`.venv/`** -- recreate on WSL2 with `python3.12 -m venv .venv` then `source
+  .venv/bin/activate`. The previous Windows venv (`.venv\Scripts\Activate.ps1`)
+  is NOT portable to Linux and must be rebuilt.
 - **Paper-trading dependencies installed.** Verified via smoke test:
   - `ib_insync` 0.9.86 ✓
-  - `talib` 0.6.8 ✓ (TA-Lib binary wheel installed cleanly on Python 3.12 + Windows)
+  - `talib` 0.6.8 ✓ (on Linux install the TA-Lib C library first -- `sudo apt
+    install libta-lib0` or build from source -- then `pip install TA-Lib`)
   - `pandas` 3.0.3, `numpy` 2.4.6, `pyarrow` 24.0.0
   - `pydantic` 2.13.4, `fastapi` 0.136.1, `sqlalchemy` 2.0.49
   - `redis` 7.4.0 (wire-compatible with Valkey)
@@ -129,7 +133,7 @@ Read in this order — they're already short and self-contained:
 5. **CLEANUP_PLAN.md** — the broker roadmap and infrastructure migration targets
 6. **`.archive/2026-05-21_dead_adapters/README.md`** — only if you need to restore an archived file
 
-Memory files at `C:\Users\vince\.claude\projects\C--Users-vince-Projects-Trading-IBKR---Algo-Trader\memory\` will auto-load and provide cross-session context.
+Memory files at `/home/vincentspereira/.claude/projects/-home-vincentspereira-Projects-Trading-RNR-IBKR-Algo-Trader/memory/` will auto-load and provide cross-session context.
 
 ## TL;DR for restart
 

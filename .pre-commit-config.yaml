@@ -1,4 +1,4 @@
-# Pre-commit hooks for IBKR Algo-Trader
+# Pre-commit hooks for RNR-IBKR-Algo-Trader
 # Run: pre-commit install
 # Use: pre-commit run --all-files
 
@@ -51,8 +51,8 @@ repos:
     hooks:
       - id: black
         name: Format Python code (Black)
-        language_version: python3.11
-        args: ['--line-length=100', '--target-version=py311']
+        language_version: python3.12
+        args: ['--line-length=100', '--target-version=py312']
 
   # Import sorting with isort
   - repo: https://github.com/pycqa/isort
@@ -68,9 +68,9 @@ repos:
     hooks:
       - id: mypy
         name: Type check (mypy)
-        language_version: python3.11
+        language_version: python3.12
         args:
-          - '--python-version=3.11'
+          - '--python-version=3.12'
           - '--warn-return-any'
           - '--warn-unused-configs'
           - '--disallow-untyped-defs'

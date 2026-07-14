@@ -30,13 +30,13 @@
 - [ ] Navigate to SDLC agent workspace:
   
   ```
-  cd "C:\Users\vince\Projects\AI Agents\Multi-Agent System\agents\agent - sdlc"
+  cd "/home/vincentspereira/Projects/AI Agents/Multi-Agent System/agents/agent - sdlc"
   ```
 - [ ] Create virtual environment:
   
   ```
   python -m venv .venv_sdlc
-  .venv_sdlc\Scripts\activate
+  source .venv_sdlc/bin/activate
   ```
 - [ ] Install dependencies:
   
@@ -197,10 +197,10 @@
 
 ### Resources
 
-- **SDLC Agent Documentation**: `C:\Users\vince\Projects\AI Agents\Multi-Agent System\agents\agent - sdlc\README.md`
-- **Implementation Guide**: `C:\Users\vince\Projects\AI Agents\Multi-Agent System\agents\agent - sdlc\IMPLEMENTATION_GUIDE.md`
-- **Integration Analysis**: `C:\Users\vince\Projects\Trading\IBKR - Algo Trader\docs\sdlc integration\sdlc_integration_analysis.md`
-- **Clarifications**: `C:\Users\vince\Projects\Trading\IBKR - Algo Trader\docs\sdlc integration\SDLC_INTEGRATION_CLARIFICATIONS.md`
+- **SDLC Agent Documentation**: `/home/vincentspereira/Projects/AI Agents/Multi-Agent System/agents/agent - sdlc/README.md`
+- **Implementation Guide**: `/home/vincentspereira/Projects/AI Agents/Multi-Agent System/agents/agent - sdlc/IMPLEMENTATION_GUIDE.md`
+- **Integration Analysis**: `/home/vincentspereira/Projects/Trading/RNR-IBKR-Algo-Trader/docs/sdlc integration/sdlc_integration_analysis.md`
+- **Clarifications**: `/home/vincentspereira/Projects/Trading/RNR-IBKR-Algo-Trader/docs/sdlc integration/SDLC_INTEGRATION_CLARIFICATIONS.md`
 
 ### Common Issues
 

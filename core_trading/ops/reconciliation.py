@@ -1063,7 +1063,7 @@ def render_reconciliation_report(
 ) -> str:
     """Render the reconciliation report and optional wash-sale report as ASCII.
 
-    All output is 7-bit ASCII (``ord < 128``), suitable for Windows cp1252
+    All output is 7-bit ASCII (``ord < 128``), suitable for terminal portability
     consoles, ops email bodies, and log files.
 
     Parameters

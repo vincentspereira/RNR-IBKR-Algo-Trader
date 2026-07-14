@@ -20,8 +20,8 @@ Two ways to author a strategy:
    will catch egregious leaks, but the first line of defence is you.
 
 Try it:
-    .venv/Scripts/python.exe tools/strategy_lab.py chart    --custom examples/custom_strategy_example.py
-    .venv/Scripts/python.exe tools/strategy_lab.py backtest --custom examples/custom_strategy_example.py --universe etf
+    .venv/bin/python tools/strategy_lab.py chart    --custom examples/custom_strategy_example.py
+    .venv/bin/python tools/strategy_lab.py backtest --custom examples/custom_strategy_example.py --universe etf
 """
 from __future__ import annotations
 

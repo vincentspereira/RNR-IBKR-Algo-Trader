@@ -1,4 +1,4 @@
-# IBKR Algo Trader - Comprehensive Production Readiness Audit
+# RNR-IBKR-Algo-Trader - Comprehensive Production Readiness Audit
 
 **Date:** April 6, 2026
 **Auditor:** Claude Opus 4.6

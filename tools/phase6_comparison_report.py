@@ -6,7 +6,7 @@ idiosyncratic noise, 756 daily bars ~ 3 years), runs
 ``docs/PHASE6_METHOD_COMPARISON.md``.
 
 Usage:
-    ./.venv/Scripts/python.exe tools/phase6_comparison_report.py
+    .venv/bin/python tools/phase6_comparison_report.py
 """
 from __future__ import annotations
 

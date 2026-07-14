@@ -51,9 +51,9 @@ Methodology
   OOS stability -- all of it net of costs.
 
 Run:
-    .venv/Scripts/python.exe tools/pairs_research_pass.py              # full pass
-    .venv/Scripts/python.exe tools/pairs_research_pass.py --quick      # smoke (tiny grid, short history)
-    .venv/Scripts/python.exe tools/pairs_research_pass.py --fetch-only # refresh the price snapshot and exit
+    .venv/bin/python tools/pairs_research_pass.py              # full pass
+    .venv/bin/python tools/pairs_research_pass.py --quick      # smoke (tiny grid, short history)
+    .venv/bin/python tools/pairs_research_pass.py --fetch-only # refresh the price snapshot and exit
 """
 from __future__ import annotations
 

@@ -15,7 +15,7 @@ This implementation plan outlines the comprehensive planning and architectural v
 
 ### Key Objectives
 
-1. **Comprehensive Workspace Review** - Analyze both IBKR Algo Trader (main) and Financial Analysis Platform (Phase 15.5 integration)
+1. **Comprehensive Workspace Review** - Analyze both RNR-IBKR-Algo-Trader (main) and Financial Analysis Platform (Phase 15.5 integration)
 2. **Architecture Definition** - Define all 28 microservices boundaries, database schemas, and Kafka topic hierarchy
 3. **Integration Strategy** - Plan migration of 109 existing Python files from `core_trading` and integration of Financial Analysis Platform
 4. **Documentation** - Create ADRs, architecture diagrams, sequence diagrams, and API specifications
@@ -43,7 +43,7 @@ This implementation plan outlines the comprehensive planning and architectural v
 
 Comprehensive review of both workspaces to understand existing capabilities, code quality, and integration requirements.
 
-#### [ANALYZE] Main Workspace: `C:\Users\vince\Projects\Trading\IBKR - Algo Trader`
+#### [ANALYZE] Main Workspace: `/home/vincentspereira/Projects/Trading/RNR-IBKR-Algo-Trader`
 
 **Current Structure**:
 
@@ -86,7 +86,7 @@ Comprehensive review of both workspaces to understand existing capabilities, cod
 - [ ] Document existing microservices progress
 - [ ] Map existing integrations (IBKR, data providers)
 
-#### [ANALYZE] Secondary Workspace: `C:\Users\vince\Projects\Trading\Financial Analysis Platform`
+#### [ANALYZE] Secondary Workspace: `/home/vincentspereira/Projects/Trading/Financial Analysis Platform`
 
 **Current Structure**:
 

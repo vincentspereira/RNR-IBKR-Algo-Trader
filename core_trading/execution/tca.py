@@ -936,7 +936,7 @@ def _render_worst_fills(report: DailyTCAReport) -> str:
 def render_report(report: DailyTCAReport) -> str:
     """Render a :class:`DailyTCAReport` as an ASCII-only markdown string.
 
-    All output is 7-bit ASCII (``ord < 128``) -- suitable for Windows cp1252
+    All output is 7-bit ASCII (``ord < 128``) -- suitable for terminal portability
     consoles, ops emails and log files.  No unicode box characters are used.
 
     Parameters

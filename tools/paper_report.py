@@ -10,8 +10,8 @@ a CDN; without internet the tables and numbers still render (charts show a
 fallback note).
 
 Run:
-    .venv/Scripts/python.exe tools/paper_report.py
-    .venv/Scripts/python.exe tools/paper_report.py --output logs/paper_report.html
+    .venv/bin/python tools/paper_report.py
+    .venv/bin/python tools/paper_report.py --output logs/paper_report.html
 """
 from __future__ import annotations
 

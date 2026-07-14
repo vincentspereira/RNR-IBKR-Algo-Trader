@@ -1,7 +1,7 @@
 """Cross-sectional momentum factor signal (Phase 5.C.4).
 
 This module is the canonical implementation of cross-sectional momentum for the
-IBKR Algo Trader quant library.  It operates on MULTI-ASSET PANELS -- a
+RNR-IBKR-Algo-Trader quant library.  It operates on MULTI-ASSET PANELS -- a
 different data shape from the single-series signal modules in the stochastic
 and pairs packages.
 

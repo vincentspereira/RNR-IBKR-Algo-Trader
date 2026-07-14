@@ -80,7 +80,7 @@ class TestDashboardAPI:
         """create_app should return a FastAPI application."""
         from fastapi import FastAPI
         assert isinstance(app, FastAPI)
-        assert app.title == "IBKR Algo Trader Dashboard"
+        assert app.title == "RNR-IBKR-Algo-Trader Dashboard"
 
     # --- GET endpoints -------------------------------------------------
 

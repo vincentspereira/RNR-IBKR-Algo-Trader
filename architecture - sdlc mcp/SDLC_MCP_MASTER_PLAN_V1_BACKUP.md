@@ -498,9 +498,9 @@ Build an **enterprise-grade, IDE-agnostic SDLC Agent MCP server** that combines:
 
 ### Source Codebases
 
-- **Claude Code**: `C:\Users\vince\Projects\Trading\IBKR - Algo Trader\claude`
-- **RNR Enhanced Cognee**: `C:\Users\vince\Projects\AI Agents\RNR Enhanced Cognee`
-- **SDLC Agent**: `C:\Users\vince\Projects\AI Agents\Multi-Agent System\agents\agent - sdlc`
+- **Claude Code**: `/home/vincentspereira/Projects/Trading/RNR-IBKR-Algo-Trader/claude`
+- **RNR Enhanced Cognee**: `/home/vincentspereira/Projects/AI Agents/RNR Enhanced Cognee`
+- **SDLC Agent**: `/home/vincentspereira/Projects/AI Agents/Multi-Agent System/agents/agent - sdlc`
 
 ### Reference Articles
 

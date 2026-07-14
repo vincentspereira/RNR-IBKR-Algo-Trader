@@ -29,7 +29,7 @@ pip install git+https://github.com/VincentPereira/sdlc-agent.git
 
 ```bash
 # Initialize in your project
-cd "C:\Users\vince\Projects\Trading\IBKR - Algo Trader"
+cd "/home/vincentspereira/Projects/Trading/RNR-IBKR-Algo-Trader"
 sdlc init
 
 # Execute a phase
@@ -79,7 +79,7 @@ coordinator = get_agent_coordinator()
 result = execute_phase(
     phase="Phase 5",
     mode="hybrid",
-    project_root="C:/Users/.../IBKR - Algo Trader"
+    project_root="C:/Users/.../RNR-IBKR-Algo-Trader"
 )
 ```
 
@@ -215,7 +215,7 @@ update_notifications:
 ### Initialize Project
 
 ```bash
-cd "C:\Users\vince\Projects\Trading\IBKR - Algo Trader"
+cd "/home/vincentspereira/Projects/Trading/RNR-IBKR-Algo-Trader"
 sdlc init
 ```
 

@@ -5,7 +5,7 @@
 are operational milestones gated on elapsed calendar time and a live IBKR paper
 account (see "What is pending" at the bottom).
 **Owner:** Vincent S. Pereira (single operator)
-**Scope:** Personal-use IBKR Algo Trader. Not for the MAS commercial product.
+**Scope:** Personal-use RNR-IBKR-Algo-Trader. Not for the MAS commercial product.
 
 This runbook is the operating procedure for the Phase 4 pilot defined in
 `docs/QUANT_TRADING_MASTER_PLAN.md` section 4. It documents the daily loop, the

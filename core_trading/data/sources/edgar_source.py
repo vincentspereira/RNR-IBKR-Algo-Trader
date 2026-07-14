@@ -65,7 +65,7 @@ _CONCEPT_MAP: dict[str, tuple[str, StatementType]] = {
     "PaymentsToAcquirePropertyPlantAndEquipment": ("capex", StatementType.CASH_FLOW),
 }
 
-_DEFAULT_USER_AGENT = "IBKR-Algo-Trader research contact@example.com"
+_DEFAULT_USER_AGENT = "RNR-IBKR-Algo-Trader research contact@example.com"
 
 
 class EdgarFundamentalSource(FundamentalSource):

@@ -2,7 +2,7 @@
 
 **Author:** Vincent S. Pereira
 **Date:** 2026-05-27
-**Repo:** IBKR Algo Trader (personal use)
+**Repo:** RNR-IBKR-Algo-Trader (personal use)
 **Status:** Planning — supersedes prior strategy-roadmap fragments
 **Scope:** Convert the current paper-trading skeleton into a genuinely quantitative system covering data, research, signal generation, portfolio construction, risk, money management, execution, backtesting, paper trading, and live trading.
 
@@ -1752,7 +1752,7 @@ Risk management is what makes quant work, not signal quality. Treat this phase a
       (`risk/daily_report.py`: VaR/ES + all six historical scenarios +
       hypothetical shocks + liquidity sections, ASCII markdown renderer;
       `python -m core_trading.risk.daily_report --demo|--output <path>`;
-      cron/Task Scheduler wiring is an operator item)
+      cron wiring is an operator item)
 - [x] Circuit breakers fire correctly in simulation
       (`tests/risk/test_circuit_breakers.py`: deterministic equity replays —
       10% strategy pause, 15%/25% graduated de-risk/halt at exact bars,
@@ -1796,7 +1796,7 @@ upgrade both `vol_forecast` covariance and `correlation_regime` timing~~
 (CLOSED 2026-06-05: `risk/dcc_garch.py` shipped -- `dcc_forward_covariance`
 is the documented drop-in upgrade for the CCC covariance, and
 `dcc_correlation_series` feeds correlation_regime-style monitoring);
-operator wiring of `daily_report` into cron/Task Scheduler; live
+operator wiring of `daily_report` into cron; live
 `PortfolioState` feed for the pre-trade gate (currently caller-supplied,
 by design).
 
@@ -1966,7 +1966,7 @@ Already exists (Community 15). Extend with:
       total IS; markouts at 1s/10s/1m/5m/1h/EOD; ASCII renderer + CLI
       `python -m core_trading.execution.tca --demo [--output]`;
       DOD test builds the report from simulated fills end-to-end.
-      Cron/Task Scheduler wiring = operator item, same as the Phase 7
+      cron wiring = operator item, same as the Phase 7
       daily risk report.)
 - [x] Market impact models calibrated on actual fills — calibration
       pipeline (`calibrate_impact` log-linearised square-root OLS;
@@ -2012,7 +2012,7 @@ two ACParams namespaces (scheduler vs impact) disambiguated as
 `ImpactACParams` at the package surface.
 
 Open follow-ons (operator items, not Phase 9 gaps): TWS paper smoke
-test to run algorithms live; cron/Task Scheduler wiring for daily TCA
+test to run algorithms live; cron wiring for daily TCA
 + reconciliation; impact recalibration once >= 1 month of real fills
 exists; venue analytics warm-up needs live routing data (IBKR
 SMART-only initially, so multi-venue scoring stays dormant until more
@@ -2070,7 +2070,7 @@ Ongoing gates:
 - [ ] Daily ops dashboard shows live-vs-backtest divergence
       (`ops/divergence.py` comparator + z>2 alert shipped; the daily
       live feed + shadow backtest wiring activates with paper trading
-      via the nightly Task Scheduler job)
+      via the nightly cron job)
 
 #### Phase 10 build-out status (2026-06-05)
 

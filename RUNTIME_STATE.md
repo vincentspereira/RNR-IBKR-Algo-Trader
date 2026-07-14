@@ -1,7 +1,8 @@
-# Runtime State — IBKR Algo Trader
+# Runtime State — RNR-IBKR-Algo-Trader
 
 **Captured:** 2026-05-21
-**Host:** Lenovo Legion 5 Pro 16ACH6H (Ryzen 7 5800H, 64 GB RAM, RTX 3060, Windows 11, 1 TB SSD with 450 GB free)
+**Host:** Lenovo Legion 5 Pro 16ACH6H (Ryzen 7 5800H, 64 GB RAM, RTX 3060,
+Windows 11 with WSL2/Ubuntu 24.04 as the dev environment, 1 TB SSD with 450 GB free)
 
 ## Current State (TL;DR)
 
@@ -75,7 +76,11 @@ Your laptop is **more than sufficient** for paper trading and small-account live
 
 The **real risks** on a laptop are operational, not hardware:
 
-1. **Power & sleep events** — Windows can suspend during a live position. Mitigate with `powercfg /change standby-timeout-ac 0` and disable USB selective suspend.
+1. **Power & sleep events** — WSL2 runs under the Windows host, which can still
+   suspend during a live position. Mitigate on the WINDOWS side (not WSL):
+   `powercfg /change standby-timeout-ac 0` in Windows PowerShell, and disable USB
+   selective suspend. (Inside WSL itself, `systemd-notify --watchdog` cannot
+   prevent host sleep.)
 2. **Windows Update reboots** — schedule outside trading hours; set active hours.
 3. **Network blips** — IBKR's API drops on routine WAN events. You need a working reconnection manager (the graphify hyperedge says it exists at `core_trading/connections/reconnection_manager.py` — to be verified).
 4. **Single point of failure** — laptop dies = positions exposed without monitoring.

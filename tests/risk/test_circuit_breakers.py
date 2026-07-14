@@ -984,7 +984,7 @@ class TestEdgeCases:
         assert evts == []
 
     def test_event_message_is_ascii_only(self) -> None:
-        """All event messages must be ASCII (Windows cp1252 safety)."""
+        """All event messages must be ASCII (terminal-portable safety)."""
         cfg = BreakerConfig(
             strategy_dd_threshold=0.10,
             portfolio_derisk_threshold=0.15,

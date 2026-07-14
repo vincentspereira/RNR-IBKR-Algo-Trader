@@ -8,7 +8,7 @@
 Three independent reasons. Any one of them is sufficient to walk away.
 
 1. **License is a hostile dual-license**, not a permissive AGPL. Commercial fee is USD 10,200/year, liquidated damages USD 50K–250K, India-jurisdiction. The phrase *"cloning/forking doesn't grant commercial rights"* explicitly defeats the "merge into MAS" plan.
-2. **Architecture mismatch.** FinceptTerminal v4 is a **C++20 / Qt6 native desktop application** with Python embedded as a sub-runtime. IBKR Algo Trader is a Python microservices system with a Next.js web front-end. There is no clean "module" you can import.
+2. **Architecture mismatch.** FinceptTerminal v4 is a **C++20 / Qt6 native desktop application** with Python embedded as a sub-runtime. RNR-IBKR-Algo-Trader is a Python microservices system with a Next.js web front-end. There is no clean "module" you can import.
 3. **Feature overlap is total, not complementary.** It already does what your repo aims to do — its own broker integrations (including IBKR), its own AI-agent framework, its own QuantLib bindings, its own backtester. Merging means duplicating two competing systems, not enriching one.
 
 ## License Confirmation (from upstream `LICENSE`)

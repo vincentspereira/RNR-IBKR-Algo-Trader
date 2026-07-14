@@ -28,7 +28,7 @@ Design notes:
   :class:`~core_trading.data.storage.BarStore` runs in no-op mode and the CLI
   reports ``stored 0 rows`` -- fetch and validation still execute, so the
   command doubles as a vendor smoke test.
-* All output is ASCII (Windows cp1252 console).
+* All output is ASCII (terminal-portable console).
 """
 from __future__ import annotations
 

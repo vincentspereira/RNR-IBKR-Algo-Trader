@@ -1,7 +1,7 @@
 # Phase 6 Kickoff -- Session Handover Brief
 
 **Date:** 2026-06-04
-**Repo:** `C:\Users\vince\Projects\Trading\IBKR - Algo Trader` (git: origin = vincentspereira/IBKR-Algo-Trader, branch master)
+**Repo:** `/home/vincentspereira/Projects/Trading/RNR-IBKR-Algo-Trader` (git: origin = vincentspereira/RNR-IBKR-Algo-Trader, branch master)
 **HEAD at handover:** `0ee0bbb`
 
 ---
@@ -40,14 +40,14 @@ Build `core_trading/portfolio/` with these modules:
 2. Textbook / parameter-recovery tests on synthetic data with known truth (e.g. HRP must recover de Prado's worked example; risk parity must produce equal risk contributions to tolerance; MVO with shrinkage must beat raw-sample-cov MVO out of sample on a synthetic panel).
 3. 100% coverage on new modules; `-W error` clean.
 4. ruff clean + mypy strict clean (run in PACKAGE mode: `mypy -p core_trading.portfolio` -- file-path mode false-errors with "source file found twice") + `tools/check_no_stubs.py` clean.
-5. ASCII-only everywhere (Windows cp1252 -- no Unicode in code, output, or commits).
+5. ASCII-only everywhere (terminal-portable -- no Unicode in code, output, or commits).
 6. One coherent batch = one commit (`git commit -F <tempfile>`, trailers: `Authored By: Vincent S. Pereira <vincentspereira@outlook.com>` then `Co-Authored-By: Claude ...`), then ALWAYS `git push origin master`. NEVER push to upstream. Never commit `graphify-out/`.
 
 ## 4. Toolchain recipes and traps (cost hours if ignored)
 
-- **Python:** ALWAYS `./.venv/Scripts/python.exe` (3.12). PATH python is 3.14 and breaks deps.
+- **Python:** ALWAYS `.venv/bin/python` (3.12). PATH python is 3.14 and breaks deps.
 - **Test recipe** (root `tests/conftest.py` is a flaky landmine -- numpy double-load + torch DLL crash; skip it for self-contained unit tests):
-  `./.venv/Scripts/python.exe -c "import numpy; import sys, pytest; sys.exit(pytest.main(['tests/portfolio','--noconftest','-W','error','-W','ignore:unclosed event loop:ResourceWarning','-W','ignore:unclosed <socket.socket:ResourceWarning','--cov=core_trading.portfolio.<mod>','--cov-report=term-missing','-q','-p','no:cacheprovider']))"`
+  `.venv/bin/python -c "import numpy; import sys, pytest; sys.exit(pytest.main(['tests/portfolio','--noconftest','-W','error','-W','ignore:unclosed event loop:ResourceWarning','-W','ignore:unclosed <socket.socket:ResourceWarning','--cov=core_trading.portfolio.<mod>','--cov-report=term-missing','-q','-p','no:cacheprovider']))"`
   The two extra `-W` ignores MUST come after `-W error` (pytest-asyncio 0.21 leaks event loops; ini filters cannot override command-line -W).
 - **If anything imports torch in tests:** pre-import it too (`import numpy; import torch; ...`) or c10.dll fatally crashes on Windows.
 - **mypy on big packages is slow** (~4 min) -- use a generous timeout.

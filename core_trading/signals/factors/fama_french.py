@@ -1,7 +1,7 @@
 """Fama-French multi-factor model (Phase 5.C.1).
 
 This module is the canonical implementation of the Fama-French factor
-construction for the IBKR Algo Trader quant library.  It derives the classic
+construction for the RNR-IBKR-Algo-Trader quant library.  It derives the classic
 1993 three-factor model (MKT, SMB, HML) extended to the 2015 five-factor model
 (adding RMW and CMA) plus the UMD momentum factor, yielding a six-factor set.
 

@@ -29,10 +29,10 @@ Methodology (inherited from tools/pairs_research_pass.py)
   point-in-time constituents (Norgate); REJECT is close to decisive.
 
 Run:
-    .venv/Scripts/python.exe tools/strategy_research_sweep.py                # full sweep
-    .venv/Scripts/python.exe tools/strategy_research_sweep.py --quick       # smoke
-    .venv/Scripts/python.exe tools/strategy_research_sweep.py --fetch-only  # refresh snapshot
-    .venv/Scripts/python.exe tools/strategy_research_sweep.py --family ta_quant
+    .venv/bin/python tools/strategy_research_sweep.py                # full sweep
+    .venv/bin/python tools/strategy_research_sweep.py --quick       # smoke
+    .venv/bin/python tools/strategy_research_sweep.py --fetch-only  # refresh snapshot
+    .venv/bin/python tools/strategy_research_sweep.py --family ta_quant
 """
 from __future__ import annotations
 

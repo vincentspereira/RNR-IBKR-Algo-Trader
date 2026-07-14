@@ -1,4 +1,4 @@
-"""Shared pytest fixtures for the IBKR Algo Trader test suite.
+"""Shared pytest fixtures for the RNR-IBKR-Algo-Trader test suite.
 
 Import strategy:
 - Project root is on sys.path for `core_trading` imports.

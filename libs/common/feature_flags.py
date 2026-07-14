@@ -1,7 +1,7 @@
 """Feature Flag Management Module.
 
 This module provides a simple, production-ready feature flag system
-for the IBKR Algo-Trader project.
+for the RNR-IBKR-Algo-Trader project.
 """
 
 import json

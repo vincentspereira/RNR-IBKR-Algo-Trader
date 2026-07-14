@@ -25,7 +25,7 @@ Use **mono-repo** strategy with all 28 services in single repository.
 ### Repository Structure
 
 ```
-IBKR - Algo Trader/
+RNR-IBKR-Algo-Trader/
 ├── services/
 │   ├── trading-engine/
 │   ├── market-data/

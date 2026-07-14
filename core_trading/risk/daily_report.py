@@ -4,7 +4,7 @@
 This module is a *pure generator* -- it does not touch the clock, filesystem,
 or any live data source.  The recommended scheduling approaches are:
 
-* **Windows Task Scheduler** (operator task):
+* **cron** (operator task):
       Create a "Daily Trigger" action that runs
       ``python -m core_trading.risk.daily_report --output <path>``
       once per trading day after market close.  The operator is responsible for
@@ -529,7 +529,7 @@ def render_daily_risk_report_markdown(report: DailyRiskReport) -> str:
     :mod:`core_trading.risk.liquidity` for their respective sections, and
     prepends a VaR/ES table.
 
-    All output is 7-bit ASCII (ord < 128) -- suitable for Windows cp1252
+    All output is 7-bit ASCII (ord < 128) -- suitable for terminal portability
     consoles, ops email bodies, and log files.
 
     Parameters

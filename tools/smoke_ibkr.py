@@ -14,7 +14,7 @@ It verifies:
 The script never sends orders. It is read-only.
 
 Usage:
-    .venv/Scripts/python.exe tools/smoke_ibkr.py
+    .venv/bin/python tools/smoke_ibkr.py
 """
 from __future__ import annotations
 

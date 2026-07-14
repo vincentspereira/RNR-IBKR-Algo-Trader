@@ -17,16 +17,16 @@ infrastructure and feeding it. This runbook is the checklist.
 | Requirement | Why | Check |
 | --- | --- | --- |
 | Docker Desktop running | ClickHouse + Grafana containers | `docker info` |
-| Python 3.12 venv at `.venv` | all CLI commands below | `./.venv/Scripts/python.exe --version` |
+| Python 3.12 venv at `.venv` | all CLI commands below | `.venv/bin/python --version` |
 | (optional) IBKR TWS or Gateway, paper login | IBKR bar source + cross-validation | TWS running, API enabled on port 7497 |
 
-ASCII note: all CLI output is plain ASCII (Windows cp1252-safe).
+ASCII note: all CLI output is plain ASCII (terminal-portable).
 
 ---
 
 ## 1. Bring up storage + dashboards
 
-```powershell
+```bash
 # From the repo root. Starts ClickHouse, Prometheus, Grafana 9.5.x, etc.
 docker compose up -d clickhouse grafana prometheus
 docker ps   # all three should be healthy after ~30s
@@ -44,12 +44,12 @@ docker ps   # all three should be healthy after ~30s
 
 ## 2. Ingest 5 years of daily bars (free source)
 
-```powershell
+```bash
 # Smoke test first: fetch + validate two symbols, do not store
-./.venv/Scripts/python.exe -m core_trading.data.ingest --symbols AAPL,MSFT --years 1 --dry-run
+.venv/bin/python -m core_trading.data.ingest --symbols AAPL,MSFT --years 1 --dry-run
 
 # The real run: S&P 100, 5 years of daily bars, validated and stored
-./.venv/Scripts/python.exe -m core_trading.data.ingest --universe SP100 --years 5
+.venv/bin/python -m core_trading.data.ingest --universe SP100 --years 5
 ```
 
 Exit codes: `0` OK; `1` quality gate failed (read the `[ERROR]`/`[WARN]`
@@ -87,9 +87,9 @@ symbology differs occasionally (e.g. `BRK-B`); fix the symbol in
 
 With TWS running (paper account, API enabled, port 7497):
 
-```powershell
+```bash
 # Pull the same window from IBKR for a sample and store it
-./.venv/Scripts/python.exe -m core_trading.data.ingest --symbols AAPL,MSFT,SPY --years 1 --source ibkr
+.venv/bin/python -m core_trading.data.ingest --symbols AAPL,MSFT,SPY --years 1 --source ibkr
 ```
 
 * The bars land with `source='ibkr'` next to the yfinance rows -- the
@@ -106,12 +106,12 @@ With TWS running (paper account, API enabled, port 7497):
 
 After the initial backfill, a daily run keeps the store current:
 
-```powershell
-./.venv/Scripts/python.exe -m core_trading.data.ingest --universe SP100 --years 0.1
+```bash
+.venv/bin/python -m core_trading.data.ingest --universe SP100 --years 0.1
 ```
 
 (36 days re-fetched; idempotent storage dedups the overlap.) Schedule via
-Task Scheduler at ~23:00 UTC after the US close if desired.
+cron at ~23:00 UTC after the US close if desired.
 
 ---
 

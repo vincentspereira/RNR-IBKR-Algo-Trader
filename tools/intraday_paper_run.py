@@ -12,10 +12,10 @@ signal-on-close execution; this lane measures, with its own ledgers under
 Keep both running and compare the two lanes' ledgers after the clock ends.
 
 Run (any time during US RTH; exits by itself at 15:55 ET):
-    .venv/Scripts/python.exe tools/intraday_paper_run.py
-    .venv/Scripts/python.exe tools/intraday_paper_run.py --once          # one tick, then exit
-    .venv/Scripts/python.exe tools/intraday_paper_run.py --slot rsi2t10_calm75
-    .venv/Scripts/python.exe tools/intraday_paper_run.py --status
+    .venv/bin/python tools/intraday_paper_run.py
+    .venv/bin/python tools/intraday_paper_run.py --once          # one tick, then exit
+    .venv/bin/python tools/intraday_paper_run.py --slot rsi2t10_calm75
+    .venv/bin/python tools/intraday_paper_run.py --status
 """
 from __future__ import annotations
 

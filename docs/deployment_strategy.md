@@ -67,35 +67,28 @@ Phase 3 (12+ months):     Laptop + Selective Cloud → $100-300/month
 
 #### Step 1: Install Core Software
 
-```powershell
-# Install Chocolatey (Windows package manager)
-Set-ExecutionPolicy Bypass -Scope Process -Force
-[System.Net.ServicePointManager]::SecurityProtocol = [System.Net.ServicePointManager]::SecurityProtocol -bor 3072
-iex ((New-Object System.Net.WebClient).DownloadString('https://community.chocolatey.org/install.ps1'))
+```bash
+# Core packages on WSL2/Ubuntu 24.04 (Docker, Git, Python 3.12 venv/pip, build tools)
+sudo apt update
+sudo apt install -y docker.io git python3-venv python3-pip build-essential
+sudo usermod -aG docker $USER   # log out and back in for the docker group to take effect
 
-# Install Docker Desktop
-choco install docker-desktop -y
+# VS Code: install the .deb from https://code.visualstudio.com/download
+#   (or: sudo snap install code --classic)
 
-# Install VS Code
-choco install vscode -y
-
-# Install Git
-choco install git -y
-
-# Install Python 3.11
-choco install python311 -y
-
-# Restart PowerShell for PATH updates
+# Poetry (project build tool)
+python3 -m pip install --user pipx && python3 -m pipx ensurepath
+pipx install poetry
 ```
 
 #### Step 2: Clone Repository
 
-```powershell
+```bash
 # Navigate to projects directory
-cd C:\Users\vince\Projects\Trading
+cd /home/vincentspereira/Projects/Trading
 
 # Already have the repo!
-cd "IBKR - Algo Trader"
+cd "RNR-IBKR-Algo-Trader"
 
 # Verify structure
 ls
@@ -106,7 +99,7 @@ ls
 **Create `.env` file:**
 
 ```bash
-# File: C:\Users\vince\Projects\Trading\IBKR - Algo Trader\.env
+# File: /home/vincentspereira/Projects/Trading/RNR-IBKR-Algo-Trader/.env
 
 #-----------------------
 # Environment Configuration
@@ -181,7 +174,7 @@ OLLAMA_MODEL=llama3
 #----------------------
 # Cognee Memory
 # ----------------------
-COGNEE_DIR=C:\Users\vince\Projects\AI Agents\RNR Enhanced Cognee
+COGNEE_DIR=/home/vincentspereira/Projects/AI Agents/RNR Enhanced Cognee
 COGNEE_PORT=8000
 
 # ----------------------
@@ -407,9 +400,9 @@ networks:
 
 #### Step 5: Start Infrastructure
 
-```powershell
+```bash
 # Navigate to project root
-cd "C:\Users\vince\Projects\Trading\IBKR - Algo Trader"
+cd "/home/vincentspereira/Projects/Trading/RNR-IBKR-Algo-Trader"
 
 # Start all services
 docker-compose up -d
@@ -428,7 +421,7 @@ docker-compose logs postgres
 
 #### Step 6: Install Ollama and Download Model
 
-```powershell
+```bash
 # Pull LLaMA model
 docker exec -it trading_ollama ollama pull llama3
 
@@ -441,12 +434,12 @@ curl http://localhost:11434/api/generate -d '{
 
 #### Step 7: Set Up Python Environment
 
-```powershell
+```bash
 # Create virtual environment
 python -m venv venv
 
 # Activate
-.\venv\Scripts\Activate
+source venv/bin/activate
 
 # Install dependencies
 pip install --upgrade pip
@@ -489,7 +482,7 @@ pip install torch==2.6.0+cu126 -f https://download.pytorch.org/whl/torch_stable.
 
 #### Step 9: Initialize Databases
 
-```powershell
+```bash
 # Run database migrations
 python scripts/init_databases.py
 
@@ -503,7 +496,7 @@ docker exec -it trading_postgres psql -U trading_user -d trading_db -c "\dt"
 
 **Health Check Script**:
 
-```powershell
+```bash
 # Run health check
 python scripts/health_check.py
 
@@ -691,7 +684,7 @@ Before moving to Phase 2:
 
 **Install Prometheus + Grafana on Laptop:**
 
-```powershell
+```bash
 # Add to docker-compose.yml
 
   prometheus:
@@ -854,15 +847,15 @@ Production Trading: Move to cloud
 
 2. **Install kubectl**:
 
-   ```powershell
-   choco install kubernetes-cli -y
+   ```bash
+   sudo apt install -y kubectl
    ```
 
 3. **Connect to Cluster**:
 
-   ```powershell
+   ```bash
    # Download kubeconfig from DigitalOcean dashboard
-   $env:KUBECONFIG="C:\Users\vince\.kube\config"
+   export KUBECONFIG="/home/vincentspereira/.kube/config"
 
    # Verify connection
    kubectl get nodes
@@ -920,7 +913,7 @@ spec:
 
 **Deploy**:
 
-```powershell
+```bash
 kubectl apply -f k8s/trading-engine.yaml
 kubectl get pods
 kubectl logs -f deployment/trading-engine
@@ -995,7 +988,7 @@ spec:
 
 **Data Migration**:
 
-```powershell
+```bash
 # 1. Export databases from laptop
 docker exec trading_postgres pg_dump -U trading_user trading_db > backup.sql
 
@@ -1009,7 +1002,7 @@ docker exec -i trading_postgres psql -U trading_user trading_db < /opt/trading/b
 
 **Configuration Migration**:
 
-```powershell
+```bash
 # Copy environment files
 scp .env docker-compose.yml root@<vps-ip>:/opt/trading/
 
@@ -1021,7 +1014,7 @@ scp -r ./config root@<vps-ip>:/opt/trading/
 
 **Create Docker Images**:
 
-```powershell
+```bash
 # Build images
 docker build -t your-registry/trading-engine:latest ./services/trading-engine
 docker build -t your-registry/risk-manager:latest ./services/risk-manager
@@ -1033,7 +1026,7 @@ docker push your-registry/risk-manager:latest
 
 **Deploy to Kubernetes**:
 
-```powershell
+```bash
 # Apply all configurations
 kubectl apply -f k8s/
 
@@ -1058,7 +1051,7 @@ Error: Cannot start service postgres: driver failed programming external connect
 
 **Solution**:
 
-```powershell
+```bash
 # Check if ports are in use
 netstat -ano | findstr :5432
 
@@ -1075,7 +1068,7 @@ netstat -ano | findstr :5432
 
 **Solution**:
 
-```powershell
+```bash
 # Check memory usage
 docker stats
 
@@ -1109,7 +1102,7 @@ Error: No space left on device
 
 **Solution**:
 
-```powershell
+```bash
 # Check Kafka logs size
 docker exec trading_kafka du -sh /var/lib/kafka/data
 

@@ -1,6 +1,6 @@
 """Ornstein-Uhlenbeck stochastic process -- general-purpose module (Phase 5.B.1).
 
-This module is the canonical home for the OU process in the IBKR Algo Trader
+This module is the canonical home for the OU process in the RNR-IBKR-Algo-Trader
 codebase.  It provides simulation, OLS-regression-based fitting, and
 closed-form maximum-likelihood fitting.
 

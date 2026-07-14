@@ -1,4 +1,4 @@
-"""Dashboard REST API for the IBKR Algo Trader.
+"""Dashboard REST API for the RNR-IBKR-Algo-Trader.
 
 Provides endpoints for portfolio overview, positions, orders, strategies,
 risk metrics, P&L, system health, audit trail, compliance, and manual order submission.
@@ -203,7 +203,7 @@ class DashboardAPI:
     def create_app(self) -> FastAPI:
         """Create and configure the FastAPI application."""
         app = FastAPI(
-            title="IBKR Algo Trader Dashboard",
+            title="RNR-IBKR-Algo-Trader Dashboard",
             version="1.0.0",
             description="REST API for the trading dashboard",
         )

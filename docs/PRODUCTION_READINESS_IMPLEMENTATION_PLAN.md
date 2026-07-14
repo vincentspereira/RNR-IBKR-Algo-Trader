@@ -1,4 +1,4 @@
-# IBKR Algo Trader - Production Readiness Implementation Plan
+# RNR-IBKR-Algo-Trader - Production Readiness Implementation Plan
 
 **Date:** April 6, 2026
 **Based on:** Comprehensive Production Readiness Audit

@@ -1,4 +1,4 @@
-# Graph Report - C:\Users\vince\Projects\Trading\IBKR - Algo Trader  (2026-07-02)
+# Graph Report - /home/vincentspereira/Projects/Trading/RNR-IBKR-Algo-Trader  (2026-07-02)
 
 ## Corpus Check
 - 536 files · ~5,392,352 words
@@ -717,15 +717,15 @@
 
 ## Surprising Connections (you probably didn't know these)
 - `IBKRAdapter` --uses--> `TWS paper-trading smoke test (PRODUCTION_PUNCH_LIST section 4 goal).  Loop: conn`  [INFERRED]
-  C:\Users\vince\Projects\Trading\IBKR - Algo Trader\core_trading\adapters\ibkr_adapter.py → C:\Users\vince\Projects\Trading\IBKR - Algo Trader\tools\tws_smoke_test.py
+  /home/vincentspereira/Projects/Trading/RNR-IBKR-Algo-Trader/core_trading/adapters/ibkr_adapter.py → /home/vincentspereira/Projects/Trading/RNR-IBKR-Algo-Trader/tools/tws_smoke_test.py
 - `IBKRAdapter` --uses--> `Mask an account id for safe logging.`  [INFERRED]
-  C:\Users\vince\Projects\Trading\IBKR - Algo Trader\core_trading\adapters\ibkr_adapter.py → C:\Users\vince\Projects\Trading\IBKR - Algo Trader\tools\tws_smoke_test.py
+  /home/vincentspereira/Projects/Trading/RNR-IBKR-Algo-Trader/core_trading/adapters/ibkr_adapter.py → /home/vincentspereira/Projects/Trading/RNR-IBKR-Algo-Trader/tools/tws_smoke_test.py
 - `IBKRAdapter` --uses--> `Read IBKR_ACCOUNT_ID_PAPER from .env without printing it.`  [INFERRED]
-  C:\Users\vince\Projects\Trading\IBKR - Algo Trader\core_trading\adapters\ibkr_adapter.py → C:\Users\vince\Projects\Trading\IBKR - Algo Trader\tools\tws_smoke_test.py
+  /home/vincentspereira/Projects/Trading/RNR-IBKR-Algo-Trader/core_trading/adapters/ibkr_adapter.py → /home/vincentspereira/Projects/Trading/RNR-IBKR-Algo-Trader/tools/tws_smoke_test.py
 - `Historical Value-at-Risk at ``alpha`` as a positive loss fraction.` --uses--> `Trade`  [INFERRED]
-  C:\Users\vince\Projects\Trading\IBKR - Algo Trader\core_trading\backtest\metrics.py → C:\Users\vince\Projects\Trading\IBKR - Algo Trader\core_trading\backtest\orders.py
+  /home/vincentspereira/Projects/Trading/RNR-IBKR-Algo-Trader/core_trading/backtest/metrics.py → /home/vincentspereira/Projects/Trading/RNR-IBKR-Algo-Trader/core_trading/backtest/orders.py
 - `Standardised performance summary for a backtest.` --uses--> `Trade`  [INFERRED]
-  C:\Users\vince\Projects\Trading\IBKR - Algo Trader\core_trading\backtest\metrics.py → C:\Users\vince\Projects\Trading\IBKR - Algo Trader\core_trading\backtest\orders.py
+  /home/vincentspereira/Projects/Trading/RNR-IBKR-Algo-Trader/core_trading/backtest/metrics.py → /home/vincentspereira/Projects/Trading/RNR-IBKR-Algo-Trader/core_trading/backtest/orders.py
 
 ## Hyperedges (group relationships)
 - **SDLC MCP System Architecture** — sdlc_cognee_memory_system, sdlc_claude_code_routing, sdlc_gemini_mcp_integration, sdlc_mcp_architecture_enterprise, sdlc_mcp_3_tier_llm_fallback, sdlc_mcp_weighted_scoring, sdlc_mcp_postgresql_pgvector_schema, sdlc_mcp_19_curated_mcps [EXTRACTED 1.00]
@@ -972,7 +972,7 @@ Nodes (33): corwin_schultz_spread(), Spread modelling for pairs trading (master 
 
 ### Community 55 - "Community 55"
 Cohesion: 0.04
-Nodes (68): Agentic AI Algorithmic Trading System v5.0, Code Standards (Black, isort, mypy, pylint), Database Stack (5 databases), Project Overview (28 Microservices), Testing Guidelines (95% coverage), AI/ML Stack (LangGraph, PyTorch, FinRL), IBKR Algo-Trader v5.0 System Overview, Fundamental Analysis (50+ ratios) (+60 more)
+Nodes (68): Agentic AI Algorithmic Trading System v5.0, Code Standards (Black, isort, mypy, pylint), Database Stack (5 databases), Project Overview (28 Microservices), Testing Guidelines (95% coverage), AI/ML Stack (LangGraph, PyTorch, FinRL), RNR-IBKR-Algo-Trader v5.0 System Overview, Fundamental Analysis (50+ ratios) (+60 more)
 
 ### Community 56 - "Community 56"
 Cohesion: 0.06

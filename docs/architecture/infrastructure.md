@@ -325,7 +325,7 @@ system.*
 
 **Configuration**:
 
-- **Location**: `C:\Users\vince\Projects\AI Agents\RNR Enhanced Cognee`
+- **Location**: `/home/vincentspereira/Projects/AI Agents/RNR Enhanced Cognee`
 - **Type**: MCP Server
 - **Storage**: Local filesystem
 

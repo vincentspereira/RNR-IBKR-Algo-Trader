@@ -1,6 +1,6 @@
 """Geometric Brownian Motion stochastic process module (Phase 5.B.4).
 
-This module is the canonical GBM baseline for the IBKR Algo Trader codebase.
+This module is the canonical GBM baseline for the RNR-IBKR-Algo-Trader codebase.
 It provides simulation, MLE-based fitting, and an optional log-likelihood
 helper.  GBM is the standard continuous-time model for asset prices used in
 the Black-Scholes framework; the lognormal step is computed exactly (no

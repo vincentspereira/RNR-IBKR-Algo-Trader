@@ -148,7 +148,7 @@
 ### Immediate: Start Phase 1 (Week 1-2)
 
 **Workspace**: Continue in existing workspace  
-**Path**: `C:\Users\vince\Projects\AI Agents\Multi-Agent System\agents\agent - sdlc`
+**Path**: `/home/vincentspereira/Projects/AI Agents/Multi-Agent System/agents/agent - sdlc`
 
 ### Phase 1 Checklist
 
@@ -238,7 +238,7 @@ agent - sdlc/
 **Why**:
 
 1. ✅ Planning documents are already in:  
-   `C:\Users\vince\Projects\AI Agents\Multi-Agent System\agents\agent - sdlc\docs\architecture - sdlc mcp\`
+   `/home/vincentspereira/Projects/AI Agents/Multi-Agent System/agents/agent - sdlc/docs/architecture - sdlc mcp/`
 
 2. ✅ This IS the correct workspace for SDLC MCP server
 
@@ -270,7 +270,7 @@ Multi-Agent System/
 
 ```bash
 # Navigate to project root
-cd "C:\Users\vince\Projects\AI Agents\Multi-Agent System\agents\agent - sdlc"
+cd "/home/vincentspereira/Projects/AI Agents/Multi-Agent System/agents/agent - sdlc"
 
 # Create docker-compose.yml
 # (Use reference from SDLC_MCP_ARCHITECTURE.md or create from scratch)

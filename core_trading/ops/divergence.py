@@ -366,7 +366,7 @@ def _fmt(value: float) -> str:
 def render_divergence(verdict: DivergenceVerdict) -> str:
     """Render a :class:`DivergenceVerdict` as an ASCII-only one-pager.
 
-    All output is 7-bit ASCII (ord < 128) -- suitable for Windows cp1252
+    All output is 7-bit ASCII (ord < 128) -- suitable for terminal portability
     consoles, ops email bodies and log files, matching the renderer convention
     in :mod:`core_trading.risk.daily_report`.
 

@@ -836,7 +836,7 @@ def _fmt_observed(value: float | None) -> str:
 def render_robustness_report(report: RobustnessReport) -> str:
     """Render a :class:`RobustnessReport` as an ASCII-only string.
 
-    All output is 7-bit ASCII (``ord < 128``), suitable for Windows cp1252
+    All output is 7-bit ASCII (``ord < 128``), suitable for terminal portability
     consoles, ops email bodies, and log files. Mirrors the renderer pattern of
     :func:`core_trading.risk.daily_report.render_daily_risk_report_markdown`.
 

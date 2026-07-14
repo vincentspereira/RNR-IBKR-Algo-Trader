@@ -13,8 +13,8 @@ state, so it cannot interfere with the runners or burn a TWS client id.
 Bind is localhost-only.
 
 Run:
-    .venv/Scripts/python.exe tools/dashboard_server.py            # http://127.0.0.1:8642
-    .venv/Scripts/python.exe tools/dashboard_server.py --port 9000
+    .venv/bin/python tools/dashboard_server.py            # http://127.0.0.1:8642
+    .venv/bin/python tools/dashboard_server.py --port 9000
 """
 from __future__ import annotations
 
@@ -33,7 +33,7 @@ from core_trading.ops.paper_telemetry import summarise_books  # noqa: E402
 
 LOGS_ROOT = REPO_ROOT / "logs"
 
-app = FastAPI(title="IBKR Algo Trader -- Operator Dashboard", docs_url=None, redoc_url=None)
+app = FastAPI(title="RNR-IBKR-Algo-Trader -- Operator Dashboard", docs_url=None, redoc_url=None)
 
 _PAGE = """<!DOCTYPE html>
 <html lang="en">

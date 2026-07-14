@@ -1,6 +1,6 @@
 """Quick smoke test: download 30 days of daily bars for AAPL via yfinance.
 
-Run with: .venv/Scripts/python.exe tools/smoke_yfinance.py
+Run with: .venv/bin/python tools/smoke_yfinance.py
 """
 from __future__ import annotations
 
