@@ -598,8 +598,8 @@ class TestKillSwitchIntegration:
         """Activating the kill switch places opposing market orders to close positions."""
         mock_broker_adapter.get_open_orders.return_value = []
         mock_broker_adapter.get_positions.return_value = [
-            {"symbol": "AAPL", "quantity": 100},
-            {"symbol": "GOOG", "quantity": -25},
+            {"symbol": "AAPL", "quantity": 100, "avg_cost": 190.0},
+            {"symbol": "GOOG", "quantity": -25, "avg_cost": 2800.0},
         ]
         mock_broker_adapter.place_order.return_value = {"status": "submitted"}
 
@@ -751,7 +751,7 @@ class TestKillSwitchIntegration:
             {"order_id": order.broker_order_id or order.order_id},
         ]
         mock_broker_adapter.get_positions.return_value = [
-            {"symbol": "AAPL", "quantity": 100},
+            {"symbol": "AAPL", "quantity": 100, "avg_cost": 190.0},
         ]
         mock_broker_adapter.place_order.return_value = {"status": "submitted"}
 
