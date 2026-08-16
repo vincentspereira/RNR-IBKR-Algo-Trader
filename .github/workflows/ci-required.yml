@@ -1,0 +1,58 @@
+# Required CI gate for RNR-IBKR-Algo-Trader (VIN-39).
+# Single fast job: install + unit tests. Verified locally 2026-08-16:
+# 1260 passed in 13.64s with Python 3.12.
+# Scope grows over time; a red build is a fact, not an obstacle.
+name: Required CI
+
+on:
+  pull_request:
+    branches: [master, main, develop]
+  push:
+    branches: [master, main, develop]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: required-ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  required-ci:
+    name: Required CI (unit tests)
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: 'pip'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          # Full pinned set from pyproject (source of truth) via poetry export artifact
+          pip install -r requirements.txt
+          pip install pytest pytest-asyncio pytest-mock
+
+      - name: Run unit tests
+        run: |
+          pytest tests/unit/ -v \
+            --cov=libs --cov=services --cov-report=term \
+            -p no:cacheprovider \
+            --override-ini="addopts="
+
+      - name: Upload test evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-evidence
+          path: |
+            .coverage
+            htmlcov/
+          retention-days: 14
