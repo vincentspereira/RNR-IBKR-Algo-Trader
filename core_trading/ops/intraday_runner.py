@@ -271,6 +271,9 @@ class IntradayRunner:
                     "side": "buy" if delta > 0 else "sell",
                     "quantity": abs(delta),
                     "order_type": "market",
+                    # Reference price for the adapter's pre-trade notional
+                    # sizing; market orders without it are rejected there.
+                    "price": float(prices[sym]),
                 }
             )
 

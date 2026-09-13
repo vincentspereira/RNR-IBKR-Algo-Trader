@@ -902,6 +902,13 @@ class ExecutionEngine:
             return False
         if order.order_type in (OrderType.STOP, OrderType.STOP_LIMIT) and not order.stop_price:
             return False
+        # Fail closed on unsizable market orders (VIN-40 F1): without a
+        # reference price the broker-side pre-trade notional check cannot
+        # bound position size, so any quantity would pass.
+        if order.order_type == OrderType.MARKET and not (
+            order.price and order.price > 0
+        ):
+            return False
         return True
 
     def _estimate_slippage(

@@ -632,13 +632,26 @@ class PairsLiveRunner:
 
     @staticmethod
     def _delta_orders(
-        current: dict[str, int], target: dict[str, int]
+        current: dict[str, int], target: dict[str, int], closes: dict[str, float] | None = None
     ) -> list[dict[str, Any]]:
-        """Market orders that move the book from ``current`` to ``target``."""
+        """Market orders that move the book from ``current`` to ``target``.
+
+        ``closes`` supplies the reference price the adapter's pre-trade
+        notional sizing needs (market orders without a price estimate are
+        rejected there -- VIN-40 F1). A leg without a reference price cannot
+        be sized, so it is dropped rather than sent unsizable.
+        """
         orders: list[dict[str, Any]] = []
+        if closes is None:
+            closes = {}
         for sym in sorted(set(current) | set(target)):
             delta = target.get(sym, 0) - current.get(sym, 0)
             if delta == 0:
+                continue
+            price = float(closes.get(sym, 0.0))
+            if price <= 0:
+                # Unsizable leg: the adapter would reject it anyway; skip
+                # so the run book stays consistent with what was sent.
                 continue
             orders.append(
                 {
@@ -646,6 +659,7 @@ class PairsLiveRunner:
                     "side": "buy" if delta > 0 else "sell",
                     "quantity": abs(delta),
                     "order_type": "market",
+                    "price": price,
                 }
             )
         return orders
@@ -768,7 +782,7 @@ class PairsLiveRunner:
 
         # ---------------------------------------------------------- sizing
         targets, rounding = self._target_shares(target_row, today_closes, equity_pre)
-        orders = self._delta_orders(state.positions, targets)
+        orders = self._delta_orders(state.positions, targets, today_closes)
 
         # -------------------------------------------------------- execution
         fills: list[dict[str, Any]] = []

@@ -263,8 +263,8 @@ class TestKillSwitch:
         broker = AsyncMock()
         broker.get_open_orders = AsyncMock(return_value=[])
         broker.get_positions = AsyncMock(return_value=[
-            {"symbol": "AAPL", "quantity": 100},
-            {"symbol": "MSFT", "quantity": -50},
+            {"symbol": "AAPL", "quantity": 100, "avg_cost": 190.0},
+            {"symbol": "MSFT", "quantity": -50, "avg_cost": 300.0},
         ])
         broker.place_order = AsyncMock(return_value={"status": "submitted"})
 

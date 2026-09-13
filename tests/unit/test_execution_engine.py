@@ -219,8 +219,15 @@ class TestValidateOrder:
 
     def test_valid_market_order(self):
         engine = ExecutionEngine(broker_adapter=None, event_bus=EventBus())
-        order = _make_order(order_type=OrderType.MARKET, price=None)
+        # Market orders need a reference price for pre-trade notional sizing
+        # (VIN-40 F1): without one the broker-side limit cannot bound size.
+        order = _make_order(order_type=OrderType.MARKET, price=100.0)
         assert engine._validate_order(order) is True
+
+    def test_reject_market_order_without_price(self):
+        engine = ExecutionEngine(broker_adapter=None, event_bus=EventBus())
+        order = _make_order(order_type=OrderType.MARKET, price=None)
+        assert engine._validate_order(order) is False
 
     def test_reject_empty_instrument(self):
         engine = ExecutionEngine(broker_adapter=None, event_bus=EventBus())

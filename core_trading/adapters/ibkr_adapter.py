@@ -360,9 +360,17 @@ class IBKRAdapter(BaseBrokerAdapter):
             logger.warning("Risk limit: max daily trades exceeded")
             return False
 
-        # Check position size
+        # Check position size. Fail closed: a market order without a price
+        # estimate used to compute notional 0 and bypass this limit entirely
+        # (VIN-40 F1). Reject instead of guessing a size.
         quantity = order_data.get("quantity", 0)
-        price = order_data.get("price", 0)
+        price = order_data.get("price", 0) or order_data.get("stop_price", 0)
+        if not price or price <= 0:
+            logger.warning(
+                "Risk limit: order lacks a positive price/stop_price estimate; "
+                "cannot size position (rejecting)"
+            )
+            return False
         if quantity * price > self.risk_limits.max_position_size:
             logger.warning(
                 f"Risk limit: position size {quantity * price} exceeds "
@@ -501,13 +509,21 @@ class IBKRAdapter(BaseBrokerAdapter):
         try:
             trade = order_record.get("trade")
             if trade:
+                # BrokerLike contract (core_trading/ops/pairs_live_runner.py):
+                # consumers read ``filled_quantity`` and ``avg_fill_price``.
+                # Emitting any other fill-quantity key leaves every consumer
+                # parsing 0.0 fills and the position book never updating.
                 return {
                     "status": trade.orderStatus.status.lower(),
-                    "filled": trade.orderStatus.filled,
-                    "remaining": trade.orderStatus.remaining,
+                    "filled_quantity": trade.orderStatus.filled,
                     "avg_fill_price": trade.orderStatus.avgFillPrice,
+                    "remaining": trade.orderStatus.remaining,
                 }
-            return {"status": order_record["status"]}
+            return {
+                "status": order_record["status"],
+                "filled_quantity": 0.0,
+                "avg_fill_price": 0.0,
+            }
         except Exception as e:
             return {"status": "error", "error": str(e)}
 

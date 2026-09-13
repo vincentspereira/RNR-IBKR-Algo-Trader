@@ -403,6 +403,7 @@ class TestIBKRAdapterOrders:
             "side": "buy",
             "quantity": 10,
             "order_type": "market",
+            "price": 90.0,  # sizing reference (10 * 90 = 900 <= 1000)
         })
         assert result["status"] == "submitted"
         assert result["order_id"] is not None
@@ -429,9 +430,9 @@ class TestIBKRAdapterOrders:
         result = await adapter.place_order({
             "symbol": "AAPL",
             "side": "buy",
-            "quantity": 10,
+            "quantity": 5,
             "order_type": "stop",
-            "stop_price": 140.0,
+            "stop_price": 140.0,  # 5 * 140 = 700 <= 1000 (sizing reference)
         })
         assert result["status"] == "submitted"
 
@@ -537,6 +538,7 @@ class TestIBKRAdapterOrders:
         patched_ib.placeOrder.return_value = _make_trade()
         result = await adapter.place_order({
             "symbol": "AAPL", "side": "buy", "quantity": 10, "order_type": "market",
+            "price": 90.0,
         })
         order_id = result["order_id"]
         assert order_id in adapter._orders
@@ -563,6 +565,7 @@ class TestIBKRAdapterOrderManagement:
         patched_ib.placeOrder.return_value = _make_trade()
         result = await adapter.place_order({
             "symbol": "AAPL", "side": "buy", "quantity": 10, "order_type": "market",
+            "price": 90.0,
         })
         cancel_result = await adapter.cancel_order(result["order_id"])
         assert cancel_result is True
@@ -601,11 +604,14 @@ class TestIBKRAdapterOrderManagement:
         )
         result = await adapter.place_order({
             "symbol": "AAPL", "side": "buy", "quantity": 10, "order_type": "market",
+            "price": 90.0,  # 10 * 90 = 900 <= 1000 sizing limit
         })
         status = await adapter.get_order_status(result["order_id"])
         # status string is lower-cased from the ib_insync OrderStatus.status.
         assert status["status"] == "submitted"
-        assert status["filled"] == 0
+        # BrokerLike contract: consumers read filled_quantity, not "filled".
+        assert status["filled_quantity"] == 0
+        assert status["avg_fill_price"] == 0.0
         assert status["remaining"] == 10
 
     @pytest.mark.usefixtures("patched_ib")

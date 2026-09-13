@@ -163,11 +163,25 @@ class KillSwitch:
                 try:
                     # Close position with opposing market order
                     closing_side = "sell" if quantity > 0 else "buy"
+                    # Reference price for the adapter's pre-trade notional
+                    # sizing (market orders without one are rejected). Prefer
+                    # a live market price, fall back to average cost. A zero
+                    # reference means the flatten cannot be sized -- surface
+                    # it as an error rather than silently skipping.
+                    ref_price = float(
+                        pos.get("market_price") or pos.get("avg_cost") or 0.0
+                    )
+                    if ref_price <= 0:
+                        errors.append(
+                            f"Cannot size flatten for {symbol}: no market_price/avg_cost"
+                        )
+                        continue
                     order_data = {
                         "symbol": symbol,
                         "side": closing_side,
                         "order_type": "market",
                         "quantity": abs(quantity),
+                        "price": ref_price,
                     }
                     result = await self._broker.place_order(order_data)
 
